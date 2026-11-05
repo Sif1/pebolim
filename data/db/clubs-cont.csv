@@ -1,0 +1,79 @@
+key,name,short,country,state,city,lat,lon,color1,color2,stadium,capacity,rep,league,estadual,continent,contonly
+colocolo,Colo-Colo,CCO,CHI,,Santiago,-33.51,-70.61,#ffffff,#111111,Monumental David Arellano,47347,66,,,SA,1
+uchile,Universidad de Chile,UCH,CHI,,Santiago,-33.46,-70.61,#0033a0,#e4002b,Estadio Nacional,48665,64,,,SA,1
+ucatolica,Universidad Católica,UCA,CHI,,Santiago,-33.39,-70.51,#ffffff,#0033a0,Claro Arena,20000,62,,,SA,1
+palestino,Palestino,PAL,CHI,,Santiago,-33.53,-70.66,#ffffff,#00843d,Municipal de La Cisterna,12000,56,,,SA,1
+audax,Audax Italiano,AUD,CHI,,Santiago,-33.52,-70.60,#00843d,#ffffff,Bicentenario La Florida,12000,54,,,SA,1
+cobresal,Cobresal,COB,CHI,,El Salvador,-26.25,-69.62,#f97316,#ffffff,El Cobre,12000,52,,,SA,1
+atlnacional,Atlético Nacional,NAC,COL,,Medellín,6.26,-75.59,#00843d,#ffffff,Atanasio Girardot,40943,66,,,SA,1
+millonarios,Millonarios,MIL,COL,,Bogotá,4.65,-74.08,#0033a0,#ffffff,El Campín,36343,64,,,SA,1
+americacali,América de Cali,AME,COL,,Cali,3.43,-76.54,#e4002b,#ffffff,Pascual Guerrero,33130,63,,,SA,1
+junior,Junior,JUN,COL,,Barranquilla,10.93,-74.80,#e4002b,#0033a0,Roberto Meléndez,46692,63,,,SA,1
+santafe,Independiente Santa Fe,SFE,COL,,Bogotá,4.65,-74.08,#e4002b,#ffffff,El Campín,36343,62,,,SA,1
+tolima,Deportes Tolima,TOL,COL,,Ibagué,4.43,-75.22,#7a0026,#ffd200,Manuel Murillo Toro,28100,60,,,SA,1
+dim,Independiente Medellín,DIM,COL,,Medellín,6.26,-75.59,#e4002b,#0033a0,Atanasio Girardot,40943,60,,,SA,1
+cerroporteno,Cerro Porteño,CCP,PAR,,Assunção,-25.30,-57.62,#0033a0,#e4002b,La Nueva Olla,45000,65,,,SA,1
+olimpia,Olimpia,OLI,PAR,,Assunção,-25.27,-57.60,#ffffff,#111111,Manuel Ferreira,15000,64,,,SA,1
+libertad,Libertad,LIB,PAR,,Assunção,-25.29,-57.62,#111111,#ffffff,La Huerta,10000,64,,,SA,1
+guaranipar,Guaraní,GUA,PAR,,Assunção,-25.29,-57.61,#ffd200,#111111,Rogelio Livieres,8000,56,,,SA,1
+nacionalpar,Nacional (PAR),NAP,PAR,,Assunção,-25.31,-57.64,#ffffff,#0033a0,Arsenio Erico,4000,54,,,SA,1
+ldu,LDU Quito,LDU,ECU,,Quito,-0.11,-78.49,#ffffff,#e4002b,Rodrigo Paz Delgado,41575,68,,,SA,1
+idv,Independiente del Valle,IDV,ECU,,Sangolquí,-0.31,-78.45,#111111,#0033a0,Banco Guayaquil,12000,68,,,SA,1
+barcelonasc,Barcelona SC,BSC,ECU,,Guayaquil,-2.19,-79.92,#ffd200,#111111,Monumental Isidro Romero,57267,64,,,SA,1
+emelec,Emelec,EME,ECU,,Guayaquil,-2.20,-79.90,#0033a0,#ffffff,George Capwell,40000,60,,,SA,1
+aucas,Aucas,AUC,ECU,,Quito,-0.25,-78.53,#ffd200,#e4002b,Gonzalo Pozo Ripalda,18800,56,,,SA,1
+cuenca,Deportivo Cuenca,CUE,ECU,,Cuenca,-2.90,-79.00,#e4002b,#ffffff,Alejandro Serrano Aguilar,16540,54,,,SA,1
+universitario,Universitario,UNI,PER,,Lima,-12.06,-76.94,#fffdd0,#7a0026,Monumental,80093,64,,,SA,1
+alianzalima,Alianza Lima,ALI,PER,,Lima,-12.07,-77.02,#0033a0,#ffffff,Alejandro Villanueva,33938,62,,,SA,1
+cristal,Sporting Cristal,SCR,PER,,Lima,-12.03,-77.05,#6cace4,#ffffff,Alberto Gallardo,18000,60,,,SA,1
+melgar,Melgar,MEL,PER,,Arequipa,-16.40,-71.53,#e4002b,#111111,Monumental UNSA,40217,56,,,SA,1
+bolivar,Bolívar,BOL,BOL,,La Paz,-16.50,-68.12,#6cace4,#ffffff,Hernando Siles,41143,58,,,SA,1
+strongest,The Strongest,STR,BOL,,La Paz,-16.50,-68.12,#ffd200,#111111,Hernando Siles,41143,56,,,SA,1
+alwaysready,Always Ready,ARE,BOL,,El Alto,-16.50,-68.16,#ffffff,#e4002b,Municipal de El Alto,25000,54,,,SA,1
+blooming,Blooming,BLO,BOL,,Santa Cruz de la Sierra,-17.78,-63.18,#6cace4,#ffffff,Tahuichi Aguilera,38000,50,,,SA,1
+caracas,Caracas FC,CAR,VEN,,Caracas,10.49,-66.88,#e4002b,#ffffff,Olímpico UCV,23940,52,,,SA,1
+tachira,Deportivo Táchira,TAC,VEN,,San Cristóbal,7.77,-72.22,#ffd200,#111111,Pueblo Nuevo,38755,52,,,SA,1
+ucv,Universidad Central,UCV,VEN,,Caracas,10.49,-66.89,#7a0026,#ffffff,Olímpico UCV,23940,50,,,SA,1
+monagas,Monagas,MON,VEN,,Maturín,9.75,-63.18,#0033a0,#ffffff,Monumental de Maturín,51796,48,,,SA,1
+benfica,Benfica,SLB,POR,,Lisboa,38.75,-9.18,#e4002b,#ffffff,Estádio da Luz,64642,85,,,EU,1
+porto,Porto,FCP,POR,,Porto,41.16,-8.58,#0033a0,#ffffff,Estádio do Dragão,50033,84,,,EU,1
+sportingcp,Sporting CP,SCP,POR,,Lisboa,38.76,-9.16,#00843d,#ffffff,José Alvalade,50095,84,,,EU,1
+braga,Braga,SCB,POR,,Braga,41.56,-8.43,#e4002b,#ffffff,Municipal de Braga,30286,76,,,EU,1
+vitoriasc,Vitória de Guimarães,VSC,POR,,Guimarães,41.45,-8.30,#ffffff,#111111,D. Afonso Henriques,30029,70,,,EU,1
+famalicao,Famalicão,FAM,POR,,Vila Nova de Famalicão,41.40,-8.52,#0033a0,#ffffff,Municipal 22 de Junho,5307,66,,,EU,1
+ajax,Ajax,AJA,NED,,Amsterdã,52.31,4.94,#ffffff,#d2122e,Johan Cruijff ArenA,55500,82,,,EU,1
+psv,PSV,PSV,NED,,Eindhoven,51.44,5.47,#e4002b,#ffffff,Philips Stadion,35000,82,,,EU,1
+feyenoord,Feyenoord,FEY,NED,,Roterdã,51.89,4.52,#ffffff,#e4002b,De Kuip,47500,81,,,EU,1
+az,AZ Alkmaar,AZ,NED,,Alkmaar,52.61,4.74,#e4002b,#ffffff,AFAS Stadion,19478,76,,,EU,1
+twente,Twente,TWE,NED,,Enschede,52.24,6.84,#e4002b,#ffffff,De Grolsch Veste,30205,72,,,EU,1
+brugge,Club Brugge,CLB,BEL,,Bruges,51.19,3.18,#0033a0,#111111,Jan Breydel,29062,80,,,EU,1
+anderlecht,Anderlecht,AND,BEL,,Bruxelas,50.83,4.30,#5f259f,#ffffff,Lotto Park,21500,76,,,EU,1
+unionsg,Union Saint-Gilloise,USG,BEL,,Bruxelas,50.82,4.33,#ffd200,#0033a0,Joseph Marien,9400,75,,,EU,1
+genk,Genk,GNK,BEL,,Genk,50.99,5.53,#0033a0,#ffffff,Cegeka Arena,23718,74,,,EU,1
+gent,Gent,GNT,BEL,,Gante,51.02,3.73,#0033a0,#ffffff,Planet Group Arena,20000,72,,,EU,1
+celtic,Celtic,CEL,SCO,,Glasgow,55.85,-4.21,#00843d,#ffffff,Celtic Park,60411,80,,,EU,1
+rangers,Rangers,RAN,SCO,,Glasgow,55.85,-4.31,#1b458f,#ffffff,Ibrox,50817,78,,,EU,1
+hearts,Hearts,HEA,SCO,,Edimburgo,55.94,-3.23,#7a0026,#ffffff,Tynecastle,19852,66,,,EU,1
+galatasaray,Galatasaray,GAL,TUR,,Istambul,41.10,28.99,#a90432,#fdb912,RAMS Park,52280,84,,,EU,1
+fenerbahce,Fenerbahçe,FEN,TUR,,Istambul,40.99,29.04,#ffd200,#0033a0,Şükrü Saracoğlu,47430,83,,,EU,1
+besiktas,Beşiktaş,BJK,TUR,,Istambul,41.04,29.00,#111111,#ffffff,Tüpraş Stadyumu,42590,80,,,EU,1
+trabzonspor,Trabzonspor,TRA,TUR,,Trabzon,41.00,39.72,#7a0026,#6cace4,Papara Park,40782,74,,,EU,1
+salzburg,Red Bull Salzburg,RBS,AUT,,Salzburgo,47.82,13.00,#ffffff,#e4002b,Red Bull Arena (Salzburgo),30188,78,,,EU,1
+sturmgraz,Sturm Graz,STU,AUT,,Graz,47.05,15.45,#111111,#ffffff,Merkur Arena,16364,72,,,EU,1
+rapidwien,Rapid Viena,RAP,AUT,,Viena,48.20,16.27,#00843d,#ffffff,Allianz Stadion,28345,70,,,EU,1
+youngboys,Young Boys,YB,SUI,,Berna,46.96,7.46,#ffd200,#111111,Wankdorf,32000,74,,,EU,1
+basel,Basel,FCB,SUI,,Basileia,47.54,7.62,#e4002b,#0033a0,St. Jakob-Park,38512,72,,,EU,1
+olympiacos,Olympiacos,OLY,GRE,,Pireu,37.95,23.66,#e4002b,#ffffff,Karaiskakis,32115,80,,,EU,1
+paok,PAOK,PAOK,GRE,,Tessalônica,40.61,22.97,#111111,#ffffff,Toumba,28703,76,,,EU,1
+aek,AEK Atenas,AEK,GRE,,Atenas,38.04,23.73,#ffd200,#111111,OPAP Arena,32500,76,,,EU,1
+panathinaikos,Panathinaikos,PAO,GRE,,Atenas,38.00,23.75,#00843d,#ffffff,Apostolos Nikolaidis,16003,75,,,EU,1
+slavia,Slavia Praga,SLA,CZE,,Praga,50.07,14.47,#e4002b,#ffffff,Fortuna Arena,19370,76,,,EU,1
+sparta,Sparta Praga,SPA,CZE,,Praga,50.10,14.42,#7a0026,#ffffff,epet ARENA,18887,75,,,EU,1
+plzen,Viktoria Plzeň,PLZ,CZE,,Plzeň,49.75,13.39,#e4002b,#0033a0,Doosan Arena,11700,72,,,EU,1
+copenhagen,Copenhague,FCK,DEN,,Copenhague,55.70,12.57,#ffffff,#0033a0,Parken,38065,76,,,EU,1
+midtjylland,Midtjylland,FCM,DEN,,Herning,56.14,9.12,#111111,#e4002b,MCH Arena,11800,74,,,EU,1
+shakhtar,Shakhtar Donetsk,SHA,UKR,,Lviv,49.84,24.03,#f97316,#111111,Arena Lviv,34915,76,,,EU,1
+dinamozagreb,Dinamo Zagreb,DZG,CRO,,Zagreb,45.82,16.02,#0033a0,#ffffff,Maksimir,24851,76,,,EU,1
+crvenazvezda,Estrela Vermelha,CZV,SRB,,Belgrado,44.78,20.46,#e4002b,#ffffff,Rajko Mitić,51755,78,,,EU,1
+bodoglimt,Bodø/Glimt,BOD,NOR,,Bodø,67.28,14.41,#ffd200,#111111,Aspmyra,8270,74,,,EU,1
+malmo,Malmö,MFF,SWE,,Malmö,55.59,13.00,#6cace4,#ffffff,Eleda Stadion,22500,70,,,EU,1

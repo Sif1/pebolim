@@ -1,0 +1,159 @@
+import type { Rng } from './rng';
+import { poolFor } from './names';
+import type { GameState, Player, Pos, Trait } from './types';
+import { clamp, expectedWage } from './util';
+
+const TRAITS_BY_POS: Record<Pos, Trait[]> = {
+  GOL: ['reflexos', 'lideranca', 'reflexos'],
+  ZAG: ['cabeceio', 'marcacao', 'lideranca', 'velocidade'],
+  LAT: ['velocidade', 'passe', 'marcacao', 'drible'],
+  VOL: ['marcacao', 'passe', 'lideranca', 'cobrancas'],
+  MEI: ['passe', 'drible', 'cobrancas', 'finalizacao', 'velocidade'],
+  ATA: ['finalizacao', 'cabeceio', 'velocidade', 'drible'],
+};
+
+export function randomTraits(pos: Pos, str: number, rng: Rng): Trait[] {
+  const p1 = clamp((str - 52) / 35, 0.05, 0.9);
+  const out: Trait[] = [];
+  if (rng.chance(p1)) out.push(rng.pick(TRAITS_BY_POS[pos]));
+  if (rng.chance(p1 * 0.45)) {
+    const t = rng.pick(TRAITS_BY_POS[pos]);
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+export function randomName(state: Pick<GameState, 'names'>, nat: string, rng: Rng): string {
+  const pool = state.names[poolFor(nat)] ?? state.names.ENG ?? Object.values(state.names)[0];
+  return `${rng.pick(pool.first)} ${rng.pick(pool.last)}`;
+}
+
+export function potentialFor(str: number, ageY: number, rng: Rng): number {
+  if (ageY <= 23) return clamp(Math.round(str + rng.range(2, 16) * ((25 - ageY) / 6)), str, 97);
+  if (ageY <= 26) return clamp(Math.round(str + rng.range(0, 5)), str, 97);
+  return Math.round(str);
+}
+
+export interface GenOpts {
+  pos: Pos;
+  str: number;
+  nat: string;
+  ageY: number;
+  clubId: number | null;
+  clubRep: number;
+}
+
+export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
+  const season = state.meta.season;
+  const p: Player = {
+    id: state.meta.next.player++,
+    name: randomName(state, o.nat, rng),
+    nat: o.nat,
+    pos: o.pos,
+    birth: season - o.ageY,
+    str: clamp(Math.round(o.str), 25, 95),
+    pot: 0,
+    traits: [],
+    clubId: o.clubId,
+    wage: 0,
+    contractEnd: season + rng.int(0, 3),
+    fitness: rng.int(88, 100),
+    morale: rng.int(50, 70),
+    injury: 0,
+    ban: {},
+    yel: {},
+    listed: false,
+    loan: null,
+    s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0 },
+    c: { apps: 0, goals: 0 },
+    num: 0,
+    idle: 0,
+  };
+  p.pot = potentialFor(p.str, o.ageY, rng);
+  p.traits = randomTraits(o.pos, p.str, rng);
+  p.wage = expectedWage(p, season, o.clubRep);
+  return p;
+}
+
+/** Squad composition target. */
+export const SQUAD_SHAPE: Record<Pos, number> = { GOL: 3, ZAG: 4, LAT: 4, VOL: 4, MEI: 5, ATA: 5 };
+
+/** Young and veteran fillers are a bit weaker than prime-age ones. */
+export function ageAdjust(ageY: number): number {
+  if (ageY <= 19) return -8;
+  if (ageY <= 21) return -5;
+  if (ageY <= 23) return -2;
+  if (ageY >= 34) return -3;
+  return 0;
+}
+
+export function randomAge(rng: Rng): number {
+  return clamp(Math.round(rng.normal(25.5, 4)), 17, 36);
+}
+
+/** Expected squad level for a club reputation. */
+export const strForRep = (rep: number) => 44 + rep * 0.42;
+
+/** Fill a club's squad up to the target shape with generated players around `level`. */
+export function fillSquad(state: GameState, rng: Rng, clubId: number, existing: Player[], level: number, foreignShare: number, target = 25) {
+  const club = state.clubs[clubId];
+  const homeNat = natOfCountry(club.country);
+  const counts: Record<Pos, number> = { GOL: 0, ZAG: 0, LAT: 0, VOL: 0, MEI: 0, ATA: 0 };
+  for (const p of existing) counts[p.pos]++;
+  let total = existing.length;
+  const scale = target / 25;
+  for (const pos of Object.keys(SQUAD_SHAPE) as Pos[]) {
+    const want = Math.max(pos === 'GOL' ? 2 : 1, Math.round(SQUAD_SHAPE[pos] * scale));
+    while (counts[pos] < want && total < target + 3) {
+      const nat = rng.chance(foreignShare) ? foreignNat(club.continent, homeNat, rng) : homeNat;
+      const ageY = randomAge(rng);
+      const p = generatePlayer(state, rng, {
+        pos,
+        str: rng.normal(level + ageAdjust(ageY), 4.5),
+        nat,
+        ageY,
+        clubId,
+        clubRep: club.rep,
+      });
+      state.players[p.id] = p;
+      counts[pos]++;
+      total++;
+    }
+  }
+}
+
+export function natOfCountry(country: string): string {
+  return country;
+}
+
+export function foreignNat(continent: 'SA' | 'EU', home: string, rng: Rng): string {
+  const sa = ['BRA', 'ARG', 'URU', 'COL', 'PAR', 'CHI', 'ECU'];
+  const eu = ['BRA', 'ARG', 'FRA', 'ESP', 'POR', 'NED', 'GER', 'ITA', 'ENG', 'BEL', 'URU', 'COL'];
+  const list = (continent === 'SA' ? sa : eu).filter((n) => n !== home);
+  return rng.pick(list);
+}
+
+/** Assign unique shirt numbers within a club by position order. */
+export function assignNumbers(players: Player[]) {
+  const order: Pos[] = ['GOL', 'LAT', 'ZAG', 'VOL', 'MEI', 'ATA'];
+  const pref: Record<Pos, number[]> = {
+    GOL: [1, 12, 23, 40],
+    LAT: [2, 6, 13, 16, 26],
+    ZAG: [3, 4, 5, 14, 15, 24, 33],
+    VOL: [5, 8, 15, 18, 25, 28],
+    MEI: [10, 8, 7, 11, 17, 20, 22, 30],
+    ATA: [9, 11, 7, 19, 21, 27, 29, 99],
+  };
+  const used = new Set(players.filter((p) => p.num > 0).map((p) => p.num));
+  const sorted = [...players].sort((a, b) => order.indexOf(a.pos) - order.indexOf(b.pos) || b.str - a.str);
+  for (const p of sorted) {
+    if (p.num > 0) continue;
+    let n = pref[p.pos].find((x) => !used.has(x));
+    if (n == null) {
+      n = 2;
+      while (used.has(n)) n++;
+    }
+    p.num = n;
+    used.add(n);
+  }
+}

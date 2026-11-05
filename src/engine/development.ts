@@ -1,0 +1,49 @@
+import { DATES_PER_SEASON, TC_DEV, TC_REC } from './economy';
+import type { Rng } from './rng';
+import type { GameState } from './types';
+import { age } from './util';
+
+/** Yearly strength change by age (before training-centre and playing-time factors). */
+function yearlyDelta(a: number): number {
+  if (a <= 20) return 4;
+  if (a <= 23) return 2.5;
+  if (a <= 27) return 0.8;
+  if (a <= 30) return 0;
+  if (a <= 32) return -1.5;
+  if (a <= 34) return -3;
+  return -5;
+}
+
+/** Per-date player updates: recovery, injuries, development. */
+export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number>) {
+  const season = state.meta.season;
+  const date = Math.max(1, state.meta.date);
+  for (const id in state.players) {
+    const p = state.players[id];
+    const club = p.clubId != null ? state.clubs[p.clubId] : null;
+    const lvl = club?.tc.level ?? 1;
+    const focus = club?.focus ?? 'equilibrado';
+    // recovery
+    let rec = 12.5 * TC_REC[lvl] * (focus === 'fisico' ? 1.2 : focus === 'tecnico' ? 0.9 : 1);
+    if (playedToday.has(p.id)) rec *= 0.85;
+    if (p.injury > 0) {
+      p.injury--;
+      if (p.injury > 0 && rng.chance((lvl - 1) * 0.06)) p.injury--;
+      p.fitness = Math.min(80, p.fitness + rec * 0.5);
+    } else {
+      p.fitness = Math.min(100, p.fitness + rec);
+    }
+    // morale drifts back toward 60
+    p.morale += (60 - p.morale) * 0.03;
+    // development
+    if (!club) continue;
+    const a = age(p, season);
+    let d = yearlyDelta(a);
+    if (d > 0) {
+      const play = Math.min(1, p.s.apps / (date * 0.45 + 1));
+      d *= TC_DEV[lvl] * (focus === 'tecnico' ? 1.15 : focus === 'fisico' ? 0.9 : 1) * (0.55 + 0.6 * play);
+      if (p.str >= p.pot) d *= 0.1;
+    }
+    p.str = Math.max(25, Math.min(97, p.str + d / DATES_PER_SEASON + rng.range(-0.04, 0.04)));
+  }
+}
