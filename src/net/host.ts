@@ -1,5 +1,6 @@
 import { enablePatches, produceWithPatches, setAutoFreeze } from 'immer';
 import { finishDate, simulateBackground } from '../engine/advance';
+import { lineupIssues } from '../engine/ai/lineup';
 import { bottomLeagues } from '../engine/commands';
 import { createCustomClub, createManager, runCommand, type CmdResult } from '../engine/commands';
 import type { MatchResult } from '../engine/match/core';
@@ -205,11 +206,26 @@ export class HostSession {
           console.error('command failed', e);
           res = { ok: false, msg: 'Não foi possível fazer isso agora.' };
         }
-        return this.send(rec, { t: 'ack', seq: msg.seq, ok: res.ok, msg: res.msg });
+        this.send(rec, { t: 'ack', seq: msg.seq, ok: res.ok, msg: res.msg });
+        // a manager who was ready and then broke his lineup is no longer ready
+        if (rec.ready && msg.cmd.c === 'setLineup') {
+          const club = this.state.managers[mid]?.clubId;
+          if (club != null && lineupIssues(this.state, club).length) {
+            rec.ready = false;
+            this.notice(rec, 'Escalação com problemas: você não está mais pronto.', 'error');
+            this.broadcastLobby();
+          }
+        }
+        return;
       }
-      case 'ready':
+      case 'ready': {
+        // nobody starts a match day with an injured or suspended player in the team
+        const club = rec.managerId ? this.state?.managers[rec.managerId]?.clubId : null;
+        const issues = msg.ready && club != null && this.state ? lineupIssues(this.state, club) : [];
+        if (issues.length) return this.notice(rec, `Arrume a escalação antes: ${issues[0]}.`, 'error');
         rec.ready = msg.ready;
         return this.broadcastLobby();
+      }
       case 'match':
         return this.matchAction(rec, msg.fixtureId, msg.action);
       case 'resync': {
@@ -432,13 +448,20 @@ export class HostSession {
         err = m.resume(s);
         break;
       case 'sub':
-        err = m.sim.sub(s, action.out, action.in);
+        err = m.inShootout ? 'Não há substituições na disputa de pênaltis.' : m.sim.sub(s, action.out, action.in);
         break;
       case 'swap':
         err = m.sim.swapSlots(s, action.s1, action.s2);
         break;
       case 'tactics':
+        if (m.inShootout) return;
         m.sim.setTactics(s, action.tactics);
+        break;
+      case 'pkOrder':
+        err = m.pkOrder(s, action.order);
+        break;
+      case 'pkAim':
+        err = m.pkAim(s, action.dir);
         break;
       case 'quick': {
         m.quickReq[s] = true;

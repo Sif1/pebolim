@@ -1,3 +1,4 @@
+import { resolveAuctions } from './transfers';
 import { autoLineup, bestFormation, lineupRating, repairLineup } from './ai/lineup';
 import { AI_COACH, aiPlan, naturalStyle, preferredFormations, strengthEdge } from './ai/tactics';
 import { deciderFor } from './competitions';
@@ -7,7 +8,7 @@ import type { Rng } from './rng';
 import type { Club, Fixture, GameState, Player, Tactics } from './types';
 import { age, squadIndex } from './util';
 
-export const HOME_ADV = 1.07;
+export const HOME_ADV = 1.055;
 
 export function fixturesOnDate(state: GameState, date: number): Fixture[] {
   return Object.values(state.fixtures).filter((f) => f.date === date && f.hg == null);
@@ -121,6 +122,8 @@ export interface MatchdayPlan {
  * Mutates state (travel costs, fatigue, human lineups repaired), so run it on the host inside a producer.
  */
 export function prepareMatchday(state: GameState, rng: Rng, present: Set<string>): MatchdayPlan {
+  // auctions opened before this match day close now
+  resolveAuctions(state, rng);
   const date = state.meta.date;
   const fixtures = fixturesOnDate(state, date);
   const idx = squadIndex(state);

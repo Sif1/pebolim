@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { windowOpen } from '../../engine/transfers';
-import { POSITIONS, type Player, type Pos } from '../../engine/types';
+import { POSITIONS, TRAITS, type Player, type Pos, type Trait } from '../../engine/types';
 import { age, formatMoney, playerValue } from '../../engine/util';
 import { useMe } from '../../store';
-import { ClubBadge, COUNTRY_NAME, PosTag, Str, useSort } from '../common';
-import { PlayerModal, potentialHint, traitLabel } from '../PlayerModal';
+import { ClubBadge, COUNTRY_NAME, Flag, PosTag, Stars, Str, useSort } from '../common';
+import { MarketPills, PlayerModal, Traits, traitLabel } from '../PlayerModal';
+
 
 interface Filters {
   q: string;
@@ -16,10 +17,25 @@ interface Filters {
   maxValue: number;
   nat: string;
   league: string;
-  status: 'todos' | 'livres' | 'fim' | 'venda';
+  status: 'todos' | 'livres' | 'fim' | 'venda' | 'emprestimo' | 'leilao' | 'negociaveis';
+  trait: Trait | '';
+  stars: number;
 }
 
-const DEFAULT: Filters = { q: '', pos: '', ageMin: 16, ageMax: 40, strMin: 1, strMax: 99, maxValue: 0, nat: '', league: '', status: 'todos' };
+const DEFAULT: Filters = {
+  q: '',
+  pos: '',
+  ageMin: 16,
+  ageMax: 40,
+  strMin: 1,
+  strMax: 99,
+  maxValue: 0,
+  nat: '',
+  league: '',
+  status: 'todos',
+  trait: '',
+  stars: 0,
+};
 
 /** Brasfoot-style player search. Runs entirely on this player's replica: nobody else sees it. */
 export function Mercado() {
@@ -63,7 +79,12 @@ export function Mercado() {
       }
       if (f.status === 'livres' && p.clubId != null) continue;
       if (f.status === 'fim' && !(p.clubId != null && p.contractEnd <= season)) continue;
-      if (f.status === 'venda' && !p.listed) continue;
+      if (f.status === 'venda' && p.salePrice == null) continue;
+      if (f.status === 'emprestimo' && !p.loanListed) continue;
+      if (f.status === 'leilao' && !p.auction) continue;
+      if (f.status === 'negociaveis' && p.salePrice == null && !p.loanListed && !p.auction) continue;
+      if (f.trait && !p.traits.includes(f.trait)) continue;
+      if (f.stars && p.stars < f.stars) continue;
       if (f.maxValue > 0 && playerValue(p, season) > f.maxValue) continue;
       out.push(p);
     }
@@ -75,6 +96,9 @@ export function Mercado() {
     pos: (p) => p.pos,
     age: (p) => age(p, season),
     str: (p) => p.str,
+    pot: (p) => p.stars * 100 + p.pot,
+    nat: (p) => COUNTRY_NAME[p.nat] ?? p.nat,
+    ask: (p) => p.auction?.min ?? p.salePrice ?? playerValue(p, season),
     val: (p) => playerValue(p, season),
     wage: (p) => p.wage,
     club: (p) => (p.clubId != null ? state!.clubs[p.clubId].name : ''),
@@ -121,9 +145,28 @@ export function Mercado() {
           </select>
           <select value={f.status} onChange={(e) => set({ status: e.target.value as Filters['status'] })}>
             <option value="todos">Todos</option>
+            <option value="negociaveis">À venda, empréstimo ou leilão</option>
             <option value="venda">À venda</option>
+            <option value="emprestimo">Para empréstimo</option>
+            <option value="leilao">Em leilão</option>
             <option value="livres">Livres</option>
             <option value="fim">Fim de contrato</option>
+          </select>
+          <select value={f.trait} onChange={(e) => set({ trait: e.target.value as Trait | '' })}>
+            <option value="">Qualquer característica</option>
+            {TRAITS.map((t) => (
+              <option key={t} value={t}>
+                {traitLabel(t)}
+              </option>
+            ))}
+          </select>
+          <select value={f.stars} onChange={(e) => set({ stars: Number(e.target.value) })}>
+            <option value={0}>Qualquer potencial</option>
+            {[1, 2, 3, 4, 5].map((s) => (
+              <option key={s} value={s}>
+                {'★'.repeat(s)} ou mais
+              </option>
+            ))}
           </select>
         </div>
         <div className="row">
@@ -138,7 +181,7 @@ export function Mercado() {
             <input type="number" value={f.strMax} min={1} max={99} style={{ width: 64 }} onChange={(e) => set({ strMax: Number(e.target.value) })} />
           </label>
           <label className="row small">
-            Valor máx. (R$ mi)
+            Valor máx. (US$ mi)
             <input
               type="number"
               value={f.maxValue ? f.maxValue / 1_000_000 : ''}
@@ -166,11 +209,13 @@ export function Mercado() {
               {th('name', 'Nome')}
               {th('age', 'Idade', 'center')}
               {th('str', 'Força', 'center')}
-              <th className="center">Pot.</th>
+              {th('pot', 'Pot.', 'center')}
+              {th('nat', 'Nac.')}
               {th('club', 'Clube')}
               {th('con', 'Contrato', 'center')}
               {th('wage', 'Salário', 'right')}
               {th('val', 'Valor', 'right')}
+              {th('ask', 'Pedida', 'right')}
             </tr>
           </thead>
           <tbody>
@@ -182,15 +227,20 @@ export function Mercado() {
                     <PosTag pos={p.pos} />
                   </td>
                   <td>
-                    {p.name} <span className="faint small">{p.nat}</span>
-                    {p.listed && <span className="pill good" style={{ marginLeft: 6 }}>à venda</span>}
-                    {p.traits.length > 0 && <div className="small faint">{p.traits.map(traitLabel).join(', ')}</div>}
+                    <span className="row" style={{ gap: 4 }}>
+                      <span className="nowrap">{p.name}</span>
+                      <MarketPills p={p} state={state} compact />
+                    </span>
+                    <Traits traits={p.traits} small />
                   </td>
                   <td className="center num">{age(p, season)}</td>
                   <td className="center">
                     <Str v={p.str} />
                   </td>
-                  <td className="center small warn">{potentialHint(p.str, p.pot, age(p, season))}</td>
+                  <td className="center"><Stars n={p.stars} /></td>
+                  <td>
+                    <Flag nat={p.nat} />
+                  </td>
                   <td>
                     {pc ? (
                       <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
@@ -205,6 +255,19 @@ export function Mercado() {
                   <td className={`center num ${p.clubId != null && p.contractEnd <= season ? 'warn' : ''}`}>{p.clubId != null ? p.contractEnd : '—'}</td>
                   <td className="right small num">{formatMoney(p.wage)}</td>
                   <td className="right small num">{formatMoney(playerValue(p, season))}</td>
+                  <td className="right small num">
+                    {p.auction ? (
+                      <span className="warn" title="Lance mínimo do leilão">
+                        {formatMoney(p.auction.min)}
+                      </span>
+                    ) : p.salePrice != null ? (
+                      <span className="good">{formatMoney(p.salePrice)}</span>
+                    ) : p.loanListed ? (
+                      <span className="info">empr.</span>
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}

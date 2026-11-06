@@ -116,20 +116,25 @@ function NextMatch() {
   return (
     <div className="panel col">
       <h3>{f.date === state.meta.date ? 'Jogo de hoje' : 'Próximo jogo'}</h3>
-      <div className="row">
-        <ClubBadge club={state.clubs[f.home]} size={40} />
-        <div className="grow center">
-          <div style={{ fontWeight: 800, fontSize: 16 }}>
-            {state.clubs[f.home].short} x {state.clubs[f.away].short}
-          </div>
-          <div className="small muted">
+      <div className="fixture-card">
+        <div className="fc-team">
+          <ClubBadge club={state.clubs[f.home]} size={58} />
+          <span>{state.clubs[f.home].name}</span>
+        </div>
+        <div className="fc-mid">
+          <div className="fc-vs">X</div>
+          <div className="fc-comp">
             {compLabel(state, f.comp)}
             {f.stage != null ? ` · ${state.comps[f.comp]?.stages[f.stage]?.name ?? ''}` : f.round ? ` · rodada ${f.round}` : ''}
             {f.leg === 2 ? ' (volta)' : ''}
           </div>
           <div className="small">{dateLabel(state, f.date)}</div>
+          <div className="small faint">{state.clubs[f.home].stadium}</div>
         </div>
-        <ClubBadge club={state.clubs[f.away]} size={40} />
+        <div className="fc-team">
+          <ClubBadge club={state.clubs[f.away]} size={58} />
+          <span>{state.clubs[f.away].name}</span>
+        </div>
       </div>
       <div className="small muted">
         Adversário: <ClubName id={opp.id} state={state} badge={false} /> · força <Str v={opp.power} /> (a sua: <Str v={club.power} />)

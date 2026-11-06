@@ -1,6 +1,6 @@
-import type { Rng } from './rng';
+import { Rng as RngImpl, type Rng } from './rng';
 import type { Club, Competition, Fixture, GameState, SectorPrices, TravelMode } from './types';
-import { addNews, clamp, distanceKm } from './util';
+import { addNews, clamp, distanceKm, squadIndex } from './util';
 import { defaultTicket } from './world';
 
 // ---------- travel ----------
@@ -12,10 +12,10 @@ export const TRAVEL_LABEL: Record<TravelMode, string> = {
 };
 
 export function travelCost(mode: TravelMode, km: number): number {
-  if (km < 30) return 2_000;
-  if (mode === 'onibus') return Math.round(8_000 + km * 35);
-  if (mode === 'comercial') return Math.round(40_000 + km * 90);
-  return Math.round(150_000 + km * 220);
+  if (km < 30) return 400;
+  if (mode === 'onibus') return Math.round(1_500 + km * 6.5);
+  if (mode === 'comercial') return Math.round(7_400 + km * 17);
+  return Math.round(28_000 + km * 41);
 }
 
 /** Fitness points every squad player loses on the trip. */
@@ -32,7 +32,7 @@ export function busAllowed(km: number) {
 
 export function autoTravel(club: Club, km: number): TravelMode {
   if (km < 450) return 'onibus';
-  if (club.baseIncome > 150_000_000 && club.balance > 0) return 'fretado';
+  if (roughIncome(club) > 40_000_000 && club.balance > 0) return 'fretado';
   return 'comercial';
 }
 
@@ -113,7 +113,7 @@ export interface Gate {
   /** fans per sector */
   att: [number, number, number, number];
   total: number;
-  /** ticket revenue in R$ */
+  /** ticket revenue in US$ */
   revenue: number;
 }
 
@@ -151,6 +151,14 @@ export function attendance(state: GameState, f: Fixture, rng: Rng): Gate {
   return gateFor(home, interest, pricesFor(home, f.comp), big || comp?.cfg.scope === 'continental', rng.range(0.9, 1.1));
 }
 
+/**
+ * The gate of a fixture: the same numbers whenever it is asked (seeded by the fixture), so the match screen
+ * can show tickets sold before kick-off and the money booked afterwards matches.
+ */
+export function gateOf(state: GameState, f: Fixture): Gate {
+  return attendance(state, f, RngImpl.fromSeed(`gate:${state.meta.season}:${f.id}`));
+}
+
 /** Expected gate for a typical home match in a competition (no randomness), for the finance screen. */
 export function estimateGate(state: GameState, club: Club, compId: string, prices: SectorPrices): Gate {
   const comp = state.comps[compId];
@@ -168,8 +176,8 @@ export function clubComps(state: GameState, clubId: number): Competition[] {
 
 export const DATES_PER_SEASON = 78;
 
-export const TC_UPKEEP = [0, 40_000, 100_000, 220_000, 450_000, 800_000];
-export const TC_COST = [0, 0, 10_000_000, 25_000_000, 60_000_000, 140_000_000];
+export const TC_UPKEEP = [0, 7_500, 18_500, 41_000, 83_000, 148_000];
+export const TC_COST = [0, 0, 1_850_000, 4_600_000, 11_000_000, 26_000_000];
 /** dates (rounds on the calendar, about 78 a season) the works for each level take */
 export const TC_BUILD = [0, 0, 8, 12, 16, 20];
 /** development multiplier per training-centre level */
@@ -207,7 +215,7 @@ export function tcUpgradeCost(club: Club): number {
 }
 
 export function seatCost(club: Club): number {
-  return club.continent === 'EU' ? 25_000 : 12_000;
+  return club.continent === 'EU' ? 4_600 : 2_200;
 }
 
 export function dailyFinances(state: GameState, squadWages: Map<number, number>) {
@@ -216,7 +224,7 @@ export function dailyFinances(state: GameState, squadWages: Map<number, number>)
     const income = Math.round(c.baseIncome / DATES_PER_SEASON);
     const sponsors = Math.round(income * 0.55);
     const tv = income - sponsors;
-    const upkeep = Math.round(c.capacity * 0.6 + TC_UPKEEP[c.tc.level]);
+    const upkeep = Math.round(c.capacity * 0.11 + TC_UPKEEP[c.tc.level]);
     c.balance += sponsors + tv - wages - upkeep;
     c.ledger.sponsors += sponsors;
     c.ledger.tv += tv;
@@ -239,5 +247,82 @@ export function dailyFinances(state: GameState, squadWages: Map<number, number>)
         c.stadiumWork = null;
       }
     }
+  }
+}
+
+// ---------- club budgets ----------
+
+/** Home games per club and competition among this season's fixtures (cup rounds appear as they are drawn). */
+export function homeGameCounts(state: GameState): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const f of Object.values(state.fixtures)) m.set(`${f.home}:${f.comp}`, (m.get(`${f.home}:${f.comp}`) ?? 0) + 1);
+  return m;
+}
+
+/** Ticket money a club can expect in a season at its current prices (cups: a typical run). */
+export function expectedTickets(state: GameState, club: Club, homes = homeGameCounts(state)): number {
+  let total = 0;
+  for (const comp of clubComps(state, club.id)) {
+    let n = homes.get(`${club.id}:${comp.id}`) ?? 0;
+    // knockout rounds are drawn as the season goes: assume a typical run
+    if (!n) n = comp.cfg.kind === 'league' ? Math.max(1, comp.clubs.length - 1) : comp.cfg.scope === 'continental' ? 3.5 : 1.5;
+    total += estimateGate(state, club, comp.id, pricesFor(club, comp.id)).revenue * n;
+  }
+  return total;
+}
+
+/** Quick estimate of a season's income (sponsors, TV and about 17 full-price home gates), for daily checks. */
+export function roughIncome(club: Club): number {
+  return club.baseIncome + club.capacity * defaultTicket(club) * 17;
+}
+
+/** Season costs besides wages: stadium and CT upkeep plus typical away trips. */
+export function runningCosts(club: Club): number {
+  const upkeep = (club.capacity * 0.11 + TC_UPKEEP[club.tc.level]) * DATES_PER_SEASON;
+  const travel = 19 * travelCost('comercial', club.continent === 'SA' ? 900 : 600);
+  return upkeep + travel;
+}
+
+/**
+ * Sponsors and TV money sized so a club with its current squad and stadium roughly breaks even before
+ * prize money and cup runs: clubs that fill big stadiums need less of it. Never below 30% of the wage bill.
+ */
+export function calibrateIncome(state: GameState, club: Club, yearlyWages: number, homes?: Map<string, number>): number {
+  const tickets = expectedTickets(state, club, homes);
+  return Math.round(Math.max(yearlyWages * 0.3, (yearlyWages + runningCosts(club)) * 1.0 - tickets));
+}
+
+/** Set every club's income and starting cash from its real costs (new game). */
+export function calibrateAll(state: GameState, rng: Rng) {
+  const homes = homeGameCounts(state);
+  const idx = squadIndex(state);
+  for (const c of Object.values(state.clubs)) {
+    const wages = (idx.get(c.id) ?? []).reduce((a, p) => a + p.wage, 0) * 12;
+    c.baseIncome = Math.round(calibrateIncome(state, c, wages, homes) * rng.range(0.97, 1.03));
+    c.balance = Math.round((c.baseIncome + expectedTickets(state, c, homes)) * rng.range(0.1, 0.3));
+  }
+}
+
+/**
+ * What an AI club can spend on wages per season: its income after running costs, plus a slice of any
+ * savings above half a season's income (so rich clubs slowly spend their cash on better-paid players).
+ */
+export function wageBudget(state: GameState, club: Club, homes?: Map<string, number>): number {
+  const income = club.baseIncome + expectedTickets(state, club, homes);
+  const spare = Math.max(0, club.balance - 0.5 * income);
+  return Math.max(0, (income - runningCosts(club)) * 1.02 + spare * 0.25);
+}
+
+/** AI clubs with plenty of cash invest in their training centre (checked once per date, a few clubs at a time). */
+export function aiInvest(state: GameState, rng: Rng) {
+  for (const c of Object.values(state.clubs)) {
+    if (c.managerId || c.tc.building > 0 || c.tc.level >= 5 || !(c.league || c.contOnly)) continue;
+    if (!rng.chance(0.03)) continue;
+    const cost = tcUpgradeCost(c);
+    if (c.balance < Math.max(cost * 2.5, c.baseIncome * 0.6)) continue;
+    c.balance -= cost;
+    c.ledger.works += cost;
+    c.tc.building = TC_BUILD[c.tc.level + 1];
+    c.tc.total = c.tc.building;
   }
 }

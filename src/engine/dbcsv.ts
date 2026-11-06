@@ -44,8 +44,8 @@ function records(text: string): Record<string, string>[] {
   return rows.slice(1).map((r) => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
 }
 
-export const CLUB_COLUMNS = ['key', 'name', 'short', 'country', 'state', 'city', 'lat', 'lon', 'color1', 'color2', 'stadium', 'capacity', 'rep', 'league', 'estadual', 'continent', 'contonly'];
-export const PLAYER_COLUMNS = ['club', 'name', 'pos', 'birth', 'str', 'nat', 'traits', 'pot'];
+export const CLUB_COLUMNS = ['key', 'name', 'short', 'country', 'state', 'city', 'lat', 'lon', 'color1', 'color2', 'stadium', 'capacity', 'rep', 'league', 'estadual', 'continent', 'contonly', 'crest'];
+export const PLAYER_COLUMNS = ['club', 'name', 'pos', 'birth', 'str', 'nat', 'traits', 'pot', 'stars'];
 
 export interface DbIssues {
   errors: string[];
@@ -78,6 +78,7 @@ export function clubsFromCsv(text: string, issues: DbIssues): DbClub[] {
       estadual: r.estadual || undefined,
       continent,
       contOnly: ['1', 'true', 'sim', 'yes', 'x'].includes((r.contonly || '').toLowerCase()),
+      ...(/^https?:\/\//.test(r.crest || '') ? { crest: r.crest } : {}),
     });
   });
   return out;
@@ -107,6 +108,7 @@ export function playersFromCsv(text: string, clubKeys: Set<string>, issues: DbIs
       nat: (r.nat || 'BRA').toUpperCase(),
       traits: r.traits ? traits : undefined,
       pot: r.pot ? Number(r.pot) : undefined,
+      stars: r.stars !== undefined && r.stars !== '' ? Math.max(0, Math.min(5, Math.round(Number(r.stars)))) : undefined,
     });
   });
   return out;

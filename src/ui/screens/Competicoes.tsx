@@ -3,7 +3,7 @@ import { tieWinner } from '../../engine/competitions';
 import type { Competition, GameState, TableRow } from '../../engine/types';
 import { dateLabel, sortTable } from '../../engine/util';
 import { useApp, useMe } from '../../store';
-import { ClubBadge, ClubName, COUNTRY_NAME, Empty } from '../common';
+import { ClubBadge, ClubName, COUNTRY_NAME, Empty, useSort } from '../common';
 import { FixtureRow } from './Resumo';
 
 function zone(comp: Competition, pos: number, n: number): string {
@@ -17,30 +17,45 @@ function zone(comp: Competition, pos: number, n: number): string {
 export function StandingsTable({ table, state, comp, compact, highlight }: { table: Record<number, TableRow>; state: GameState; comp?: Competition; compact?: boolean; highlight?: number | null }) {
   const openClub = useApp((s) => s.openClub);
   const order = sortTable(table, state.clubs);
+  const rank = new Map(order.map((cid, i) => [cid, i + 1]));
+  // click a header to sort by it; the # column always shows the official position
+  const { sorted, th } = useSort(order, { key: 'rank', dir: 1 }, {
+    rank: (cid) => rank.get(cid)!,
+    club: (cid) => state.clubs[cid].name,
+    pts: (cid) => table[cid].pts * 1000 - rank.get(cid)!,
+    p: (cid) => table[cid].p,
+    w: (cid) => table[cid].w,
+    d: (cid) => table[cid].d,
+    l: (cid) => table[cid].l,
+    gf: (cid) => table[cid].gf,
+    ga: (cid) => table[cid].ga,
+    sg: (cid) => table[cid].gf - table[cid].ga,
+  });
   return (
     <table className="t">
       <thead>
         <tr>
-          <th className="center">#</th>
-          <th>Clube</th>
-          <th className="center">P</th>
-          <th className="center">J</th>
+          {th('rank', '#', 'center')}
+          {th('club', 'Clube')}
+          {th('pts', 'P', 'center')}
+          {th('p', 'J', 'center')}
           {!compact && (
             <>
-              <th className="center">V</th>
-              <th className="center">E</th>
-              <th className="center">D</th>
-              <th className="center">GP</th>
-              <th className="center">GC</th>
+              {th('w', 'V', 'center')}
+              {th('d', 'E', 'center')}
+              {th('l', 'D', 'center')}
+              {th('gf', 'GP', 'center')}
+              {th('ga', 'GC', 'center')}
             </>
           )}
-          <th className="center">SG</th>
+          {th('sg', 'SG', 'center')}
         </tr>
       </thead>
       <tbody>
-        {order.map((cid, i) => {
+        {sorted.map((cid) => {
           const r = table[cid];
           const c = state.clubs[cid];
+          const i = rank.get(cid)! - 1;
           return (
             <tr key={cid} className={`click ${comp ? zone(comp, i + 1, order.length) : ''} ${highlight === cid ? 'me' : ''}`} onClick={() => openClub(cid)}>
               <td className="center num faint">{i + 1}</td>
@@ -84,7 +99,17 @@ export function Competicoes() {
   const { state, club } = useMe();
   const comps = useMemo(() => (state ? Object.values(state.comps) : []), [state]);
   const mine = club ? comps.filter((c) => c.clubs.includes(club.id)) : [];
-  const [sel, setSel] = useState<string>(() => mine[0]?.id ?? comps[0]?.id ?? '');
+  // open on the competition the club played last (else its next one, else its league)
+  const [sel, setSel] = useState<string>(() => {
+    if (state && club) {
+      const own = Object.values(state.fixtures).filter((f) => f.home === club.id || f.away === club.id);
+      const last = own.filter((f) => f.hg != null).sort((a, b) => b.date - a.date)[0];
+      const next = own.filter((f) => f.hg == null).sort((a, b) => a.date - b.date)[0];
+      const pick = last?.comp ?? next?.comp ?? club.league;
+      if (pick && state.comps[pick]) return pick;
+    }
+    return mine[0]?.id ?? comps[0]?.id ?? '';
+  });
   const [tab, setTab] = useState<'tabela' | 'jogos' | 'artilharia'>('tabela');
   if (!state) return null;
   const comp = state.comps[sel] ?? comps[0];
@@ -255,18 +280,34 @@ function Scorers({ comp }: { comp: Competition }) {
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25);
   }, [state, comp.id]);
+  const { sorted, th } = useSort(rows, { key: 'g', dir: -1 }, {
+    g: ([, g]) => g,
+    name: ([pid]) => state?.players[pid]?.name ?? '',
+    club: ([pid]) => {
+      const cid = state?.players[pid]?.clubId;
+      return cid != null ? (state?.clubs[cid]?.name ?? '') : '';
+    },
+  });
   if (!state) return null;
   if (!rows.length) return <Empty>Nenhum gol ainda.</Empty>;
   return (
     <div className="panel tight">
       <table className="t">
+        <thead>
+          <tr>
+            <th className="center">#</th>
+            {th('name', 'Jogador')}
+            {th('club', 'Clube')}
+            {th('g', 'Gols', 'right')}
+          </tr>
+        </thead>
         <tbody>
-          {rows.map(([pid, g], i) => {
+          {sorted.map(([pid, g]) => {
             const p = state.players[pid];
             return (
               <tr key={pid}>
                 <td className="faint num center" style={{ width: 30 }}>
-                  {i + 1}
+                  {rows.findIndex((r) => r[0] === pid) + 1}
                 </td>
                 <td>{p?.name ?? '?'}</td>
                 <td>{p?.clubId != null ? <ClubName id={p.clubId} state={state} /> : '—'}</td>

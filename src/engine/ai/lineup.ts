@@ -1,4 +1,4 @@
-import type { Formation, Lineup, Player, Pos, Tactics } from '../types';
+import type { Formation, GameState, Lineup, Player, Pos, Tactics } from '../types';
 import { FORMATION_LIST, slotsFor, type Slot } from '../match/formations';
 import { computeRatings, effective, overall } from '../match/ratings';
 
@@ -112,4 +112,36 @@ export function repairLineup(squad: Player[], lineup: Lineup, shape: Shape, comp
     }
   }
   return { xi, bench: bench.slice(0, BENCH_SIZE) };
+}
+
+/**
+ * What stops a manager's own lineup from being used today: empty starter slots, and injured, suspended
+ * or departed players in the team or on the bench. Empty when the club plays no match today or picks
+ * its team automatically.
+ */
+export function lineupIssues(state: GameState, clubId: number, draft?: { lineup: Lineup; auto: boolean }): string[] {
+  const club = state.clubs[clubId];
+  const lineup = draft?.lineup ?? club?.lineup;
+  if (!club || !lineup || (draft ? draft.auto : club.autoLineup)) return [];
+  const f = Object.values(state.fixtures).find((x) => x.date === state.meta.date && x.hg == null && (x.home === clubId || x.away === clubId));
+  if (!f) return [];
+  const out: string[] = [];
+  const why = (id: number): string | null => {
+    const p = state.players[id];
+    if (!p || p.clubId !== clubId) return `${p?.name ?? 'Um jogador'} não é mais do clube`;
+    if (p.injury > 0) return `${p.name} está lesionado`;
+    if ((p.ban[f.comp] ?? 0) > 0) return `${p.name} está suspenso`;
+    return null;
+  };
+  const empty = lineup.xi.filter((x) => x == null).length + Math.max(0, 11 - lineup.xi.length);
+  if (empty) out.push(`Falta${empty > 1 ? 'm' : ''} ${empty} titular${empty > 1 ? 'es' : ''}`);
+  for (const id of lineup.xi) {
+    const w = id != null ? why(id) : null;
+    if (w) out.push(`${w} e está entre os titulares`);
+  }
+  for (const id of lineup.bench) {
+    const w = why(id);
+    if (w) out.push(`${w} e está no banco`);
+  }
+  return out;
 }

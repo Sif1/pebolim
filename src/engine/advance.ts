@@ -1,12 +1,13 @@
 import { boardAfterMatch, boardChecks, boardFinanceCheck } from './board';
 import { applyFixtureToTables, progressComps } from './competitions';
 import { dailyPlayers } from './development';
-import { attendance, dailyFinances } from './economy';
+import { monthEnds, monthlyAwards, tallyMatch } from './awards';
+import { aiInvest, dailyFinances, gateOf } from './economy';
 import { MatchSim, type MatchResult, type MatchSetup } from './match/core';
 import type { MatchdayPlan } from './matchday';
 import { Rng } from './rng';
 import { endSeason } from './season';
-import { aiTransfers, expireBids } from './transfers';
+import { aiTransfers, expireBids, returnLoans } from './transfers';
 import type { GameState } from './types';
 import { addNews, squadIndex } from './util';
 
@@ -39,7 +40,7 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
     f.goals = r.goals;
     f.reds = [r.stats[0].red, r.stats[1].red];
     const home = state.clubs[f.home];
-    const gate = attendance(state, f, rng);
+    const gate = gateOf(state, f);
     f.att = gate.total;
     home.balance += gate.revenue;
     home.ledger.tickets += gate.revenue;
@@ -78,6 +79,7 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
       }
     }
     // morale and form
+    const formBefore: [string, string] = [state.clubs[f.home].form, state.clubs[f.away].form];
     for (const side of [0, 1] as const) {
       const club = state.clubs[side === 0 ? f.home : f.away];
       const gf = side === 0 ? r.hg : r.ag;
@@ -91,6 +93,7 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
       }
     }
     boardAfterMatch(state, f);
+    tallyMatch(state, f, r, formBefore);
   }
   return played;
 }
@@ -104,6 +107,7 @@ export function finishDate(state: GameState, results: MatchResult[], present: Se
   const played = applyResults(state, results, rng);
   progressComps(state, rng);
   dailyPlayers(state, rng, played);
+  if (monthEnds(state)) monthlyAwards(state);
   const wages = new Map<number, number>();
   for (const id in state.players) {
     const p = state.players[id];
@@ -113,7 +117,9 @@ export function finishDate(state: GameState, results: MatchResult[], present: Se
   for (const c of Object.values(state.clubs)) boardFinanceCheck(c);
   boardChecks(state, rng, present);
   aiTransfers(state, rng);
+  aiInvest(state, rng);
   expireBids(state);
+  returnLoans(state);
   state.meta.date++;
   if (state.meta.date >= state.calendar.length) endSeason(state, rng, present);
   state.meta.rng = rng.state();

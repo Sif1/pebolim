@@ -1,4 +1,5 @@
 import { DATES_PER_SEASON, TC_DEV, TC_INJ, TC_REC } from './economy';
+import { declineMult, growthMult } from './potential';
 import type { Rng } from './rng';
 import type { GameState } from './types';
 import { age } from './util';
@@ -40,9 +41,13 @@ export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number
     const a = age(p, season);
     let d = yearlyDelta(a);
     if (d > 0) {
+      // growth: training centre, focus, playing time and potential stars (faster, and up to a higher ceiling)
       const play = Math.min(1, p.s.apps / (date * 0.45 + 1));
-      d *= TC_DEV[lvl] * (focus === 'tecnico' ? 1.15 : focus === 'fisico' ? 0.9 : 1) * (0.55 + 0.6 * play);
+      d *= TC_DEV[lvl] * (focus === 'tecnico' ? 1.15 : focus === 'fisico' ? 0.9 : 1) * (0.55 + 0.6 * play) * growthMult(p.stars ?? 2);
       if (p.str >= p.pot) d *= 0.1;
+    } else if (d < 0) {
+      // decline after 30: more stars, slower decline
+      d *= declineMult(p.stars ?? 2);
     }
     p.str = Math.max(25, Math.min(97, p.str + d / DATES_PER_SEASON + rng.range(-0.04, 0.04)));
   }

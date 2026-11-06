@@ -27,6 +27,7 @@ export function Noticias() {
             <span className="small faint num" style={{ width: 80 }}>
               {n.season !== state.meta.season ? n.season : dateLabel(state, Math.min(n.date, state.calendar.length - 1)).slice(0, 5)}
             </span>
+            {n.kind === 'award' && <span title="Prêmios e destaques">🏅</span>}
             {n.to && <span className="pill info">privado</span>}
             <span className="grow">{n.text}</span>
           </div>

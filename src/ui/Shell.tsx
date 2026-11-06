@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react';
 import type { GameState } from '../engine/types';
 import { dateLabel, formatMoney } from '../engine/util';
 import { downloadSave, leaveGame, useApp, useMe, type Screen } from '../store';
+import { lineupIssues } from '../engine/ai/lineup';
+import { AuctionList, AuctionPopup, openAuctions } from './Auctions';
 import { ClubBadge, compLabel, Modal } from './common';
 import { ClaimPanel } from './Lobby';
 import { Calendario } from './screens/Calendario';
@@ -81,6 +83,7 @@ export function Shell() {
   const counters = club ? Object.values(state.bids).filter((b) => b.buyer === club.id && b.status === 'contraproposta').length : 0;
   const offers = manager?.offers.length ?? 0;
   const expiring = club ? Object.values(state.players).filter((p) => p.clubId === club.id && !p.loan && p.contractEnd <= state.meta.season).length : 0;
+  const auctions = club ? openAuctions(state).filter((p) => p.clubId !== club.id).length : 0;
 
   if (!managerId) {
     return (
@@ -108,6 +111,16 @@ export function Shell() {
             screen="mercado"
             tabs={[
               { id: 'buscar', label: 'Buscar jogadores', render: () => <Mercado /> },
+              {
+                id: 'leiloes',
+                label: 'Leilões',
+                count: auctions,
+                render: () => (
+                  <div className="panel tight scroll">
+                    <AuctionList />
+                  </div>
+                ),
+              },
               { id: 'propostas', label: 'Propostas', count: pendingBids + counters, render: () => <Propostas /> },
               { id: 'contratos', label: 'Contratos', count: expiring, render: () => <Contratos /> },
             ]}
@@ -150,7 +163,7 @@ export function Shell() {
   })();
 
   return (
-    <div className="shell" style={club ? ({ '--club1': club.colors[0], '--club2': club.colors[1] } as React.CSSProperties) : undefined}>
+    <div className="shell">
       <TopBar />
       <nav className="sidebar">
         {NAV.map((it, i) => {
@@ -166,6 +179,7 @@ export function Shell() {
         })}
       </nav>
       <main className="content">{body}</main>
+      {club && <AuctionPopup />}
     </div>
   );
 }
@@ -210,6 +224,7 @@ function TopBar() {
   const client = useApp((s) => s.client)!;
   const host = useApp((s) => s.host);
   const online = useApp((s) => s.online);
+  const setScreen = useApp((s) => s.setScreen);
   const [confirm, setConfirm] = useState(false);
   if (!state || !lobby) return null;
   const me = lobby.players.find((p) => p.clientId === client.clientId);
@@ -219,28 +234,29 @@ function TopBar() {
   const nf = club ? nextFixture(state, club.id) : null;
   const opp = nf && club ? state.clubs[nf.home === club.id ? nf.away : nf.home] : null;
   const cal = state.calendar[state.meta.date];
+  const issues = club ? lineupIssues(state, club.id) : [];
 
   return (
     <header className="topbar">
       {club ? (
         <>
           <div className="club-strip" style={{ background: `linear-gradient(${club.colors[0]}, ${club.colors[1]})` }} />
-          <ClubBadge club={club} size={38} />
+          <ClubBadge club={club} size={44} />
           <div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{club.name}</div>
-            <div className="small muted">
-              {manager?.name} · {formatMoney(club.balance)}
+            <div className="tb-club">{club.name}</div>
+            <div className="tb-sub">
+              {manager?.name} · Caixa {formatMoney(club.balance)}
             </div>
           </div>
         </>
       ) : (
         <div>
-          <div style={{ fontWeight: 800 }}>{manager?.name ?? 'Espectador'}</div>
-          <div className="small muted">Sem clube</div>
+          <div className="tb-club">{manager?.name ?? 'Espectador'}</div>
+          <div className="tb-sub">Sem clube</div>
         </div>
       )}
       <div className="grow" />
-      <div className="small right">
+      <div className="tb-info">
         <div>
           {cal ? (
             <>
@@ -251,7 +267,7 @@ function TopBar() {
           )}
           {cal?.window && state.meta.settings.windows && <span className="pill good" style={{ marginLeft: 6 }}>janela aberta</span>}
         </div>
-        <div className="muted">
+        <div style={{ color: 'rgba(255,255,255,0.8)' }}>
           {nf && opp ? (
             nf.date === state.meta.date ? (
               <>
@@ -269,12 +285,22 @@ function TopBar() {
       </div>
       <PlayersOnline />
       <div className="row" style={{ gap: 6 }}>
-        <button className={`btn ${me?.ready ? '' : 'primary'}`} onClick={() => client.ready(!me?.ready)}>
+        {issues.length > 0 && !me?.ready && (
+          <button className="btn danger sm" title={issues.join('\n')} onClick={() => setScreen('escalacao')}>
+            ⚠ Escalação
+          </button>
+        )}
+        <button
+          className={`btn ${me?.ready ? '' : 'primary'}`}
+          disabled={!me?.ready && issues.length > 0}
+          title={!me?.ready && issues.length ? `Arrume a escalação antes: ${issues.join('; ')}` : undefined}
+          onClick={() => client.ready(!me?.ready)}
+        >
           {me?.ready ? 'Cancelar pronto' : 'Pronto ✓'}
         </button>
         {host && (
-          <button className="btn primary" onClick={() => (allReady ? client.hostAction('matchday') : setConfirm(true))}>
-            Jogar rodada ▶
+          <button className="btn primary lg" title="Jogar a próxima rodada" onClick={() => (allReady ? client.hostAction('matchday') : setConfirm(true))}>
+            Continuar ▶
           </button>
         )}
         <button className="btn ghost sm" title="Baixar o arquivo do jogo (.pebolim)" onClick={() => void downloadSave()}>

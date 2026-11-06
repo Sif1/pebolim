@@ -1,6 +1,6 @@
 import type { RngState } from './rng';
 
-export const SAVE_FORMAT_VERSION = 2;
+export const SAVE_FORMAT_VERSION = 3;
 
 export type Pos = 'GOL' | 'LAT' | 'ZAG' | 'VOL' | 'MEI' | 'ATA';
 export const POSITIONS: Pos[] = ['GOL', 'LAT', 'ZAG', 'VOL', 'MEI', 'ATA'];
@@ -45,11 +45,13 @@ export interface Player {
   birth: number;
   /** força, 1-99 (kept as float, shown rounded) */
   str: number;
-  /** hidden potential */
+  /** potential, 0-5 stars (see potential.ts) */
+  stars: number;
+  /** highest força he can reach (from his stars) */
   pot: number;
   traits: Trait[];
   clubId: number | null;
-  /** monthly wage in R$ */
+  /** monthly wage in US$ */
   wage: number;
   /** last season covered by the contract */
   contractEnd: number;
@@ -61,7 +63,13 @@ export interface Player {
   ban: Record<string, number>;
   /** compId -> yellow cards accumulated */
   yel: Record<string, number>;
-  listed: boolean;
+  /** asking price while listed for sale (null = not for sale) */
+  salePrice: number | null;
+  /** available on loan for this many months (null = not) */
+  loanListed: 6 | 12 | null;
+  /** up for auction: minimum price and when it opened */
+  auction: { min: number; season: number; date: number } | null;
+  /** on loan from `from` until the absolute date `until` (season*100+date) */
   loan: { from: number; until: number } | null;
   s: SeasonStats;
   c: { apps: number; goals: number };
@@ -131,6 +139,8 @@ export interface Club {
   lat: number;
   lon: number;
   colors: [string, string];
+  /** crest image URL; clubs without one get a shield in their colours */
+  crest?: string;
   stadium: string;
   capacity: number;
   /** reputation 1-100 */
@@ -202,7 +212,7 @@ export interface CompConfig {
   koLegs?: 1 | 2;
   entrants?: EntrantRule[];
   size?: number;
-  /** champion prize money in R$ */
+  /** champion prize money in US$ */
   prize: number;
   color?: string;
 }
@@ -315,6 +325,8 @@ export interface Bid {
   buyer: number;
   seller: number | null;
   kind: 'compra' | 'emprestimo';
+  /** loan length */
+  months?: 6 | 12;
   fee: number;
   wage: number;
   years: number;
@@ -338,7 +350,8 @@ export type NewsKind =
   | 'offer'
   | 'bid'
   | 'contract'
-  | 'finance';
+  | 'finance'
+  | 'award';
 
 export interface News {
   id: number;
@@ -387,6 +400,10 @@ export interface GameState {
   calendar: CalDate[];
   managers: Record<string, Manager>;
   bids: Record<number, Bid>;
+  /** sealed auction bids: player id -> club id -> amount */
+  auctionBids: Record<number, Record<number, number>>;
+  /** this month's numbers of top-division players, for the monthly awards: [games, rating×10, goals, assists] */
+  monthly?: { month: number; players: Record<number, [number, number, number, number]> };
   news: News[];
   history: SeasonHistory[];
   /** last season's final league order and cup winners, used for qualification */

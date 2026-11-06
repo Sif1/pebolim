@@ -70,12 +70,19 @@ export function validCommand(v: unknown): Command | null {
       return { c: 'upgradeTC' };
     case 'expandStadium':
       return int(v.seats, 1000, 30000) ? { c: 'expandStadium', seats: v.seats } : null;
-    case 'listPlayer':
-      return int(v.pid, 0, ID) && typeof v.listed === 'boolean' ? { c: 'listPlayer', pid: v.pid, listed: v.listed } : null;
+    case 'setSale':
+      return int(v.pid, 0, ID) && (v.price === null || num(v.price, 0, MONEY)) ? { c: 'setSale', pid: v.pid, price: v.price as number | null } : null;
+    case 'setLoanList':
+      return int(v.pid, 0, ID) && (v.months === null || v.months === 6 || v.months === 12) ? { c: 'setLoanList', pid: v.pid, months: v.months } : null;
+    case 'startAuction':
+      return int(v.pid, 0, ID) && num(v.min, 0, MONEY) ? { c: 'startAuction', pid: v.pid, min: v.min } : null;
+    case 'auctionBid':
+      return int(v.pid, 0, ID) && (v.amount === null || num(v.amount, 0, MONEY)) ? { c: 'auctionBid', pid: v.pid, amount: v.amount as number | null } : null;
     case 'bid':
       if (!int(v.pid, 0, ID) || !oneOf(v.kind, ['compra', 'emprestimo'] as const)) return null;
       if (!num(v.fee, 0, MONEY) || !num(v.wage, 1, MONEY) || !int(v.years, 1, 5)) return null;
-      return { c: 'bid', pid: v.pid, kind: v.kind, fee: v.fee, wage: v.wage, years: v.years };
+      if (v.months != null && v.months !== 6 && v.months !== 12) return null;
+      return { c: 'bid', pid: v.pid, kind: v.kind, fee: v.fee, wage: v.wage, years: v.years, ...(v.months ? { months: v.months as 6 | 12 } : {}) };
     case 'respondBid':
       if (!int(v.bid, 0, ID) || !oneOf(v.action, ['aceitar', 'recusar', 'contraproposta'] as const)) return null;
       if (v.fee != null && !num(v.fee, 0, MONEY)) return null;
@@ -112,6 +119,10 @@ export function validMatchAction(v: unknown): MatchAction | null {
       const t = validTactics(v.tactics);
       return t ? { a: 'tactics', tactics: t } : null;
     }
+    case 'pkOrder':
+      return Array.isArray(v.order) && v.order.length <= 11 && v.order.every((x) => int(x, 0, ID)) ? { a: 'pkOrder', order: [...(v.order as number[])] } : null;
+    case 'pkAim':
+      return v.dir === 0 || v.dir === 1 || v.dir === 2 ? { a: 'pkAim', dir: v.dir } : null;
     default:
       return null;
   }

@@ -3,8 +3,29 @@ import type { Club, GameState, Pos } from '../engine/types';
 import { formatMoney } from '../engine/util';
 import { useApp } from '../store';
 
-export function ClubBadge({ club, size = 28 }: { club: Pick<Club, 'short' | 'colors'> | null | undefined; size?: number }) {
+/** Crest images that failed to load (offline, moved file): draw the shield instead. */
+const brokenCrests = new Set<string>();
+
+export function ClubBadge({ club, size = 28 }: { club: (Pick<Club, 'short' | 'colors'> & { crest?: string }) | null | undefined; size?: number }) {
+  const [, setFailed] = useState(0);
   if (!club) return null;
+  if (club.crest && !brokenCrests.has(club.crest)) {
+    return (
+      <img
+        className="crest"
+        src={club.crest}
+        alt={club.short}
+        width={size}
+        height={size}
+        loading="lazy"
+        draggable={false}
+        onError={() => {
+          brokenCrests.add(club.crest!);
+          setFailed((n) => n + 1);
+        }}
+      />
+    );
+  }
   return (
     <span
       className="badge"
@@ -29,6 +50,28 @@ export function awayKit(home: [string, string], away: [string, string]): [string
   return colorDist(home[0], '#1d4ed8') > 110 ? ['#1d4ed8', '#ffffff'] : ['#f97316', '#111111'];
 }
 
+/**
+ * Chrome colours for a club: the main colour (or the second one, for white/very light clubs)
+ * darkened until white text reads well on it.
+ */
+export function clubTheme(colors: [string, string]): { dark: string; deep: string } {
+  const lum = (c: number[]) => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255;
+  let base: number[];
+  try {
+    const a = rgb(colors[0]);
+    const b = rgb(colors[1]);
+    base = lum(a) > 0.72 && lum(b) < 0.6 ? b : a;
+  } catch {
+    base = [29, 79, 138];
+  }
+  const night = [8, 17, 29];
+  const mix = (w: number) => base.map((v, i) => Math.round(v * w + night[i] * (1 - w)));
+  let w = 0.75;
+  while (w > 0.2 && lum(mix(w)) > 0.3) w -= 0.05;
+  const hex = (c: number[]) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+  return { dark: hex(mix(w)), deep: hex(mix(w * 0.45)) };
+}
+
 function rgb(hex: string): number[] {
   const h = hex.replace('#', '');
   return h.length === 3 ? h.split('').map((c) => parseInt(c + c, 16)) : [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -45,6 +88,53 @@ function colorDist(a: string, b: string): number {
 }
 
 /** Pick the second color unless it has poor contrast with the background, else black/white. */
+/** A team colour that shows on the dark interface (the second colour, or grey, if the first is too dark). */
+export function visibleOnDark(colors: [string, string]): string {
+  const lum = (hex: string) => {
+    try {
+      const v = rgb(hex);
+      return (0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2]) / 255;
+    } catch {
+      return 1;
+    }
+  };
+  if (lum(colors[0]) >= 0.22) return colors[0];
+  if (lum(colors[1]) >= 0.22) return colors[1];
+  return '#9fb0c4';
+}
+
+/** Two colours for home/away that show on the dark interface and can't be mixed up. */
+export function contrastPair(home: [string, string], away: [string, string]): [string, string] {
+  const h = visibleOnDark(home);
+  const lumOk = (c: string) => {
+    try {
+      const v = rgb(c);
+      return (0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2]) / 255 >= 0.22;
+    } catch {
+      return false;
+    }
+  };
+  for (const c of [away[0], away[1], '#f2f2f2', '#4cc3ff', '#f5c518']) if (lumOk(c) && colorDist(c, h) > 120) return [h, c];
+  return [h, '#f2f2f2'];
+}
+
+const SUFFIX = new Set(['Júnior', 'Junior', 'Jr.', 'Filho', 'Neto', 'Sobrinho']);
+
+/**
+ * Name for tight spots (the pitch, the tactics board): the known name when it is short
+ * ("Bruno Henrique", "Flaco López"), otherwise the last word ("Pereira"), keeping suffixes ("Vinícius Jr.").
+ */
+export function shortName(name: string): string {
+  const w = name.trim().split(/\s+/);
+  if (w.length <= 1 || name.length <= 14) return name;
+  const last = w[w.length - 1];
+  if (SUFFIX.has(last)) return `${w[w.length - 2]} ${last === 'Júnior' || last === 'Junior' ? 'Jr.' : last}`;
+  // particles belong to the surname: "De la Cruz", "Di María", "van Dijk"
+  const parts = [last];
+  for (let i = w.length - 2; i > 0 && /^(de|da|do|dos|das|del|la|di|van|von|der|den|le|ter|mac|mc)$/i.test(w[i]); i--) parts.unshift(w[i]);
+  return parts.join(' ');
+}
+
 export function readable(bg: string, fg: string): string {
   const lum = (hex: string) => {
     const h = hex.replace('#', '');
@@ -106,6 +196,17 @@ export function Bar({ v, max = 100, color }: { v: number; max?: number; color?: 
     <div className="bar">
       <div style={{ width: `${pct}%`, background: c }} />
     </div>
+  );
+}
+
+/** Potential as 0-5 stars. */
+export function Stars({ n, title }: { n: number; title?: string }) {
+  const k = Math.max(0, Math.min(5, Math.round(n ?? 0)));
+  return (
+    <span className="stars" title={title ?? `Potencial: ${k} de 5 estrelas`}>
+      <span className="on">{'★'.repeat(k)}</span>
+      <span className="off">{'★'.repeat(5 - k)}</span>
+    </span>
   );
 }
 
@@ -214,4 +315,89 @@ export const COUNTRY_NAME: Record<string, string> = {
   PER: 'Peru',
   BOL: 'Bolívia',
   VEN: 'Venezuela',
+  USA: 'Estados Unidos',
+  NOR: 'Noruega',
+  SWE: 'Suécia',
+  MAR: 'Marrocos',
+  NGA: 'Nigéria',
+  JPN: 'Japão',
+  SEN: 'Senegal',
+  POL: 'Polônia',
+  CIV: 'Costa do Marfim',
+  GHA: 'Gana',
+  ALG: 'Argélia',
+  SVK: 'Eslováquia',
+  IRL: 'Irlanda',
+  WAL: 'País de Gales',
+  CMR: 'Camarões',
+  ROU: 'Romênia',
+  KOS: 'Kosovo',
+  KOR: 'Coreia do Sul',
+  ALB: 'Albânia',
+  MEX: 'México',
+  HUN: 'Hungria',
+  GEO: 'Geórgia',
+  CAN: 'Canadá',
+  BIH: 'Bósnia',
+  ANG: 'Angola',
+  SVN: 'Eslovênia',
+  MLI: 'Mali',
+  AUS: 'Austrália',
+  NIR: 'Irlanda do Norte',
+  MNE: 'Montenegro',
+  GUI: 'Guiné',
+  EGY: 'Egito',
+  COD: 'RD Congo',
+  RUS: 'Rússia',
+  ISL: 'Islândia',
+  FIN: 'Finlândia',
+  BFA: 'Burkina Faso',
 };
+
+/** FIFA code → ISO 3166 code used by the flag images (UK nations have their own). */
+const ISO2: Record<string, string> = {
+  BRA: 'br', ARG: 'ar', URU: 'uy', ENG: 'gb-eng', SCO: 'gb-sct', WAL: 'gb-wls', NIR: 'gb-nir', ESP: 'es', ITA: 'it', GER: 'de',
+  FRA: 'fr', POR: 'pt', NED: 'nl', BEL: 'be', TUR: 'tr', AUT: 'at', SUI: 'ch', GRE: 'gr', CZE: 'cz', DEN: 'dk', UKR: 'ua',
+  CRO: 'hr', SRB: 'rs', CHI: 'cl', COL: 'co', PAR: 'py', ECU: 'ec', PER: 'pe', BOL: 'bo', VEN: 've', USA: 'us', NOR: 'no',
+  SWE: 'se', MAR: 'ma', NGA: 'ng', JPN: 'jp', SEN: 'sn', POL: 'pl', CIV: 'ci', GHA: 'gh', ALG: 'dz', SVK: 'sk', IRL: 'ie',
+  CMR: 'cm', ROU: 'ro', KOS: 'xk', KOR: 'kr', ALB: 'al', MEX: 'mx', HUN: 'hu', GEO: 'ge', CAN: 'ca', BIH: 'ba', ANG: 'ao',
+  SVN: 'si', MLI: 'ml', AUS: 'au', MNE: 'me', GUI: 'gn', EGY: 'eg', COD: 'cd', RUS: 'ru', ISL: 'is', FIN: 'fi', BFA: 'bf',
+  ZIM: 'zw', ZAM: 'zm', UZB: 'uz', TUN: 'tn', TOG: 'tg', RSA: 'za', PAN: 'pa', NZL: 'nz', MOZ: 'mz', MKD: 'mk', LUX: 'lu',
+  JOR: 'jo', ISR: 'il', IDN: 'id', HAI: 'ht', GNQ: 'gq', GNB: 'gw', GAM: 'gm', GAB: 'ga', CPV: 'cv', CGO: 'cg', CAF: 'cf',
+  BUL: 'bg', BEN: 'bj', BDI: 'bi', ARM: 'am', CRC: 'cr', HON: 'hn', JAM: 'jm', IRN: 'ir', KSA: 'sa', QAT: 'qa', CHN: 'cn',
+  LTU: 'lt', LVA: 'lv', EST: 'ee', BLR: 'by', CYP: 'cy', MLT: 'mt', SLV: 'sv', GUA: 'gt', CUB: 'cu', DOM: 'do', SLE: 'sl',
+  LBR: 'lr', KEN: 'ke', TAN: 'tz', UGA: 'ug', ETH: 'et', SUD: 'sd', LBY: 'ly', MTN: 'mr', NIG: 'ne', SUR: 'sr', GUY: 'gy',
+};
+
+const brokenFlags = new Set<string>();
+
+/** Country flag next to a nationality (falls back to the code when the image can't load). */
+export function Flag({ nat, label = false }: { nat: string; label?: boolean }) {
+  const [, setFailed] = useState(0);
+  const iso = ISO2[nat];
+  const name = COUNTRY_NAME[nat] ?? nat;
+  const img =
+    iso && !brokenFlags.has(iso) ? (
+      <img
+        className="flag"
+        src={`https://flagcdn.com/w40/${iso}.png`}
+        alt={nat}
+        title={name}
+        loading="lazy"
+        onError={() => {
+          brokenFlags.add(iso);
+          setFailed((n) => n + 1);
+        }}
+      />
+    ) : (
+      <span className="flag-code" title={name}>
+        {nat}
+      </span>
+    );
+  return (
+    <span className="nat">
+      {img}
+      {label && <span className="small muted">{name}</span>}
+    </span>
+  );
+}

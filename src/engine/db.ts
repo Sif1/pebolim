@@ -20,6 +20,8 @@ export interface DbClub {
   estadual?: string;
   continent: 'SA' | 'EU';
   contOnly?: boolean;
+  /** crest image URL (from data/db/crests.csv or a crest column) */
+  crest?: string;
 }
 
 export interface DbPlayer {
@@ -31,6 +33,8 @@ export interface DbPlayer {
   nat: string;
   traits?: Trait[];
   pot?: number;
+  /** potential stars 0-5 (wins over pot) */
+  stars?: number;
 }
 
 export interface Database {

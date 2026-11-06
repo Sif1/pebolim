@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { Player } from '../../engine/types';
 import { age, formatMoney, playerValue, squadOf } from '../../engine/util';
 import { useMe } from '../../store';
-import { Bar, compLabel, Energy, PosTag, Rating, Str, useSort } from '../common';
-import { PlayerModal, potentialHint, traitLabel } from '../PlayerModal';
+import { Bar, compLabel, Energy, Flag, PosTag, Rating, Stars, Str, useSort } from '../common';
+import { MarketPills, PlayerModal, Traits } from '../PlayerModal';
 
 const POS_ORDER = { GOL: 0, LAT: 1, ZAG: 2, VOL: 3, MEI: 4, ATA: 5 };
 
@@ -15,6 +15,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
     pos: (p) => POS_ORDER[p.pos] * 100 - p.str,
     age: (p) => age(p, season),
     str: (p) => p.str,
+    pot: (p) => p.stars * 100 + p.pot,
     fit: (p) => p.fitness,
     mor: (p) => p.morale,
     con: (p) => p.contractEnd,
@@ -36,7 +37,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
             {th('name', 'Nome')}
             {th('age', 'Idade', 'center')}
             {th('str', 'Força', 'center')}
-            <th className="center">Pot.</th>
+            {th('pot', 'Pot.', 'center')}
             {th('fit', 'Físico')}
             {th('mor', 'Moral')}
             <th>Situação</th>
@@ -52,20 +53,24 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
           {sorted.map((p) => {
             const bans = Object.entries(p.ban).filter(([, n]) => n > 0);
             return (
-              <tr key={p.id} className={`click ${xi.has(p.id) ? 'me' : ''}`} onClick={() => onOpen(p.id)}>
+              <tr key={p.id} className={`click ${xi.has(p.id) ? 'starter' : ''}`} onClick={() => onOpen(p.id)}>
                 <td className="faint num">{p.num}</td>
                 <td>
                   <PosTag pos={p.pos} />
                 </td>
                 <td>
-                  <span className="nowrap">{p.name}</span>
-                  {p.traits.length > 0 && <div className="small faint">{p.traits.map(traitLabel).join(', ')}</div>}
+                  <span className="nowrap">{p.name}</span> <Flag nat={p.nat} />
+                  {p.traits.length > 0 && (
+                    <div>
+                      <Traits traits={p.traits} small />
+                    </div>
+                  )}
                 </td>
                 <td className="center num">{age(p, season)}</td>
                 <td className="center">
                   <Str v={p.str} />
                 </td>
-                <td className="center small warn">{potentialHint(p.str, p.pot, age(p, season))}</td>
+                <td className="center"><Stars n={p.stars} /></td>
                 <td style={{ width: 70 }}>
                   <Energy v={p.fitness} />
                 </td>
@@ -79,8 +84,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
                       susp. {n}
                     </span>
                   ))}
-                  {p.listed && <span className="pill good">à venda</span>}
-                  {p.loan && <span className="pill info">emprest.</span>}
+                  <MarketPills p={p} state={state} compact />
                 </td>
                 <td className="center num">{p.s.apps}</td>
                 <td className="center num">{p.s.goals}</td>

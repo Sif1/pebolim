@@ -1,14 +1,24 @@
 import { useState } from 'react';
-import { age, expectedWage, formatMoney, squadOf } from '../../engine/util';
+import { absDateLabel, age, expectedWage, formatMoney, squadOf } from '../../engine/util';
 import { command, useMe } from '../../store';
-import { PosTag, Str } from '../common';
+import { Flag, PosTag, Str, useSort } from '../common';
 
 export function Contratos() {
   const { state, club } = useMe();
   const [offer, setOffer] = useState<Record<number, { wage: number; years: number }>>({});
+  const season = state?.meta.season ?? 0;
+  const demandOf = (p: Parameters<typeof expectedWage>[0]) => expectedWage(p, season, club?.rep ?? 50) * (age(p, season) < 30 ? 1.1 : 1);
+  const { sorted: squad, th } = useSort(state && club ? squadOf(state, club.id) : [], { key: 'con', dir: 1 }, {
+    pos: (p) => ({ GOL: 0, LAT: 1, ZAG: 2, VOL: 3, MEI: 4, ATA: 5 })[p.pos] * 100 - p.str,
+    name: (p) => p.name,
+    age: (p) => age(p, season),
+    str: (p) => p.str,
+    // loans end mid-season: sort them by their return date
+    con: (p) => (p.loan ? p.loan.until / 100 - 0.5 : p.contractEnd) * 1000 - p.str,
+    wage: (p) => p.wage,
+    demand: (p) => demandOf(p),
+  });
   if (!state || !club) return null;
-  const season = state.meta.season;
-  const squad = squadOf(state, club.id).sort((a, b) => a.contractEnd - b.contractEnd || b.str - a.str);
 
   return (
     <div className="col">
@@ -20,20 +30,20 @@ export function Contratos() {
         <table className="t">
           <thead>
             <tr>
-              <th>Pos</th>
-              <th>Nome</th>
-              <th className="center">Idade</th>
-              <th className="center">Força</th>
-              <th className="center">Contrato</th>
-              <th className="right">Salário</th>
-              <th className="right">Pretensão</th>
+              {th('pos', 'Pos')}
+              {th('name', 'Nome')}
+              {th('age', 'Idade', 'center')}
+              {th('str', 'Força', 'center')}
+              {th('con', 'Contrato', 'center')}
+              {th('wage', 'Salário', 'right')}
+              {th('demand', 'Pretensão', 'right')}
               <th>Renovar</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {squad.map((p) => {
-              const demand = expectedWage(p, season, club.rep) * (age(p, season) < 30 ? 1.1 : 1);
+              const demand = demandOf(p);
               const o = offer[p.id] ?? { wage: Math.round(demand / 1000) * 1000, years: age(p, season) >= 33 ? 1 : 3 };
               return (
                 <tr key={p.id}>
@@ -41,14 +51,14 @@ export function Contratos() {
                     <PosTag pos={p.pos} />
                   </td>
                   <td>
-                    {p.name}
+                    {p.name} <Flag nat={p.nat} />
                     {p.loan && <span className="pill info" style={{ marginLeft: 6 }}>emprestado</span>}
                   </td>
                   <td className="center num">{age(p, season)}</td>
                   <td className="center">
                     <Str v={p.str} />
                   </td>
-                  <td className={`center num ${p.contractEnd <= season ? 'warn' : ''}`}>{p.loan ? `fim ${p.loan.until}` : p.contractEnd}</td>
+                  <td className={`center num ${p.contractEnd <= season ? 'warn' : ''}`}>{p.loan ? `volta ${absDateLabel(state, p.loan.until).slice(0, 5)}` : p.contractEnd}</td>
                   <td className="right small num">{formatMoney(p.wage)}</td>
                   <td className="right small num muted">~{formatMoney(demand)}</td>
                   <td>

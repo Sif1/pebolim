@@ -5,11 +5,11 @@ export const clamp = (v: number, lo: number, hi: number) => (Number.isNaN(v) ? l
 
 export const age = (p: Player, season: number) => season - p.birth;
 
-/** Market value in R$, from strength, age and potential. */
+/** Market value in US$, from strength, age and potential. */
 export function playerValue(p: Player, season: number): number {
   const a = age(p, season);
   const s = p.str;
-  let v = 250_000 * Math.pow(10, (s - 40) / 15);
+  let v = 46_000 * Math.pow(10, (s - 40) / 15);
   if (a <= 21) v *= 1.3 + Math.max(0, p.pot - s) / 25;
   else if (a <= 24) v *= 1.25 + Math.max(0, p.pot - s) / 40;
   else if (a <= 28) v *= 1.1;
@@ -18,14 +18,14 @@ export function playerValue(p: Player, season: number): number {
   else v *= 0.3;
   if (p.pos === 'GOL') v *= 0.75;
   if (p.injury > 10) v *= 0.85;
-  return roundMoney(Math.max(50_000, v));
+  return roundMoney(Math.max(10_000, v));
 }
 
 /** Monthly wage a player expects at a club of the given reputation. */
 export function expectedWage(p: Player, season: number, clubRep = 60): number {
   const v = playerValue(p, season);
   const repF = 0.6 + clubRep / 125;
-  return roundMoney(Math.max(4_000, (v * 0.011 + 6_000) * repF));
+  return roundMoney(Math.max(750, (v * 0.011 + 1_100) * repF));
 }
 
 export function roundMoney(v: number): number {
@@ -43,7 +43,7 @@ export function formatMoney(v: number): string {
   else if (a >= 1_000_000) s = (a / 1_000_000).toFixed(a >= 100_000_000 ? 0 : 1).replace('.', ',') + ' mi';
   else if (a >= 1_000) s = Math.round(a / 1_000) + ' mil';
   else s = String(Math.round(a));
-  return (neg ? '-R$ ' : 'R$ ') + s;
+  return (neg ? '-US$ ' : 'US$ ') + s;
 }
 
 /** Great-circle distance in km. */
@@ -118,6 +118,14 @@ export function dateLabel(state: GameState, idx: number): string {
 
 /** Absolute date number across seasons, used for tenure. */
 export const absDate = (season: number, date: number) => season * 100 + date;
+
+/** dd/mm/yyyy for an absolute date (the calendar template is the same every season). */
+export function absDateLabel(state: GameState, abs: number): string {
+  const season = Math.floor(abs / 100);
+  const d = state.calendar[Math.min(state.calendar.length - 1, abs % 100)];
+  if (!d) return String(season);
+  return `${String(d.day).padStart(2, '0')}/${String(d.month).padStart(2, '0')}/${season}`;
+}
 
 export function addNews(
   state: GameState,

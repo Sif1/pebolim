@@ -1,9 +1,11 @@
+import { ceilingFor, starsFor } from './potential';
 import { fireManager } from './board';
+import { homeGameCounts, wageBudget } from './economy';
 import { foreignShareFor, startSeason } from './world';
 import { assignNumbers, fillSquad, generatePlayer, strForRep } from './generator';
 import type { Rng } from './rng';
 import type { Club, GameState, Player, SeasonHistory } from './types';
-import { addNews, age, clamp, expectedWage, roundMoney, sortTable, squadIndex } from './util';
+import { absDate, addNews, age, clamp, expectedWage, roundMoney, sortTable, squadIndex } from './util';
 
 /** Run end-of-season processing and start the next season. */
 export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
@@ -131,8 +133,19 @@ function promotionsAndRelegations(state: GameState, ranks: Record<string, number
 function contractsAndLoans(state: GameState, rng: Rng) {
   const next = state.meta.season + 1;
   const idx = squadIndex(state);
+  const homes = homeGameCounts(state);
+  // yearly wage room per AI club: over budget, only key players get new contracts
+  const room = new Map<number, number>();
+  const roomOf = (c: Club) => {
+    let r = room.get(c.id);
+    if (r == null) {
+      r = wageBudget(state, c, homes) - (idx.get(c.id) ?? []).reduce((a, p) => a + p.wage, 0) * 12;
+      room.set(c.id, r);
+    }
+    return r;
+  };
   for (const p of Object.values(state.players)) {
-    if (p.loan && p.loan.until < next) {
+    if (p.loan && p.loan.until < absDate(next, 0)) {
       const back = state.clubs[p.loan.from];
       p.loan = null;
       p.clubId = back ? back.id : null;
@@ -149,15 +162,24 @@ function contractsAndLoans(state: GameState, rng: Rng) {
     if (!club.managerId) {
       const squad = idx.get(club.id) ?? [];
       const median = [...squad].sort((x, y) => y.str - x.str)[Math.floor(squad.length / 2)]?.str ?? 50;
-      if (a < 33 && p.str >= median - 3 && rng.chance(0.75)) {
+      const tight = roomOf(club) < 0;
+      if (a < 33 && p.str >= median + (tight ? 2 : -3) && rng.chance(tight ? 0.6 : 0.75)) {
+        // clubs with plenty of room in the budget pay above the going rate to keep their players
+        const rich = roomOf(club) > 0.15 * wageBudget(state, club, homes);
+        const wage = roundMoney(expectedWage(p, next, club.rep) * (rich ? rng.range(1.05, 1.3) : 1));
+        room.set(club.id, roomOf(club) - (wage - p.wage) * 12);
         p.contractEnd = next + rng.int(0, 3);
-        p.wage = expectedWage(p, next, club.rep);
+        p.wage = wage;
         continue;
       }
+      // the player leaves: his wages free up room
+      room.set(club.id, roomOf(club) + p.wage * 12);
     }
     if (club.managerId) addNews(state, 'contract', `${p.name} deixa o ${club.name} ao fim do contrato.`, [club.id], club.managerId);
     p.clubId = null;
-    p.listed = false;
+    p.salePrice = null;
+    p.loanListed = null;
+    p.auction = null;
     p.idle = 0;
     p.num = 0;
   }
@@ -202,11 +224,13 @@ function youthIntake(state: GameState, rng: Rng) {
         clubId: c.id,
         clubRep: c.rep,
       });
-      p.pot = Math.min(97, Math.round(p.str + rng.range(8, 26) + c.tc.level * 1.5));
+      // academy prospects: a better training centre turns up more stars
+      p.stars = starsFor(p.str, ageY - 1, rng, c.tc.level);
+      p.pot = Math.max(p.str, ceilingFor(p.stars));
       p.contractEnd = nextSeason + 2;
-      p.wage = roundMoney(Math.max(3_000, expectedWage(p, nextSeason, c.rep) * 0.6));
+      p.wage = roundMoney(Math.max(550, expectedWage(p, nextSeason, c.rep) * 0.6));
       state.players[p.id] = p;
-      if (c.managerId && p.pot >= 78) addNews(state, 'info', `Revelação da base: ${p.name} (${p.pos}) sobe ao profissional.`, [c.id], c.managerId);
+      if (c.managerId && p.stars >= 4) addNews(state, 'info', `Revelação da base: ${p.name} (${p.pos}, ${'★'.repeat(p.stars)}) sobe ao profissional.`, [c.id], c.managerId);
     }
   }
 }

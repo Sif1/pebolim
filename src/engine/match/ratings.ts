@@ -18,8 +18,9 @@ export interface SectorRatings {
   att: number;
 }
 
-// How much a slot of each position contributes to [def, mid, att].
-const SECTOR_W: Record<Pos, [number, number, number]> = {
+// How a slot of each position splits its contribution between [def, mid, att].
+// Every row sums to 1, so a formation decides where the strength goes, not how much there is.
+const RAW_W: Record<Pos, [number, number, number]> = {
   GOL: [0, 0, 0],
   ZAG: [1, 0.1, 0],
   LAT: [0.7, 0.3, 0.15],
@@ -27,6 +28,12 @@ const SECTOR_W: Record<Pos, [number, number, number]> = {
   MEI: [0, 1, 0.5],
   ATA: [0, 0.15, 1],
 };
+const SECTOR_W = Object.fromEntries(
+  Object.entries(RAW_W).map(([k, w]) => {
+    const t = w[0] + w[1] + w[2];
+    return [k, t ? (w.map((v) => v / t) as [number, number, number]) : w];
+  }),
+) as Record<Pos, [number, number, number]>;
 
 const REF = (() => {
   const r = [0, 0, 0];
@@ -38,6 +45,7 @@ const REF = (() => {
   }
   return r;
 })();
+
 
 const ADJ: Partial<Record<Pos, Partial<Record<Pos, number>>>> = {
   ZAG: { LAT: 0.88, VOL: 0.85 },
@@ -54,8 +62,12 @@ export function posFactor(p: Pos, slot: Pos): number {
   return ADJ[p]?.[slot] ?? 0.7;
 }
 
+/** Tiredness: effectiveness falls 0.3 per 100% of energy, and faster (+steep) below the knee. */
+export const FATIGUE = { knee: 0.8, steep: 0.6 };
+
 export function effective(p: RatedPlayer, slot: Pos): number {
-  const fit = 0.7 + 0.3 * (p.fitness / 100);
+  const f = p.fitness / 100;
+  const fit = 0.7 + 0.3 * f - FATIGUE.steep * Math.max(0, FATIGUE.knee - f);
   const mor = 0.95 + 0.1 * (p.morale / 100);
   return p.str * posFactor(p.pos, slot) * fit * mor;
 }
@@ -85,6 +97,7 @@ export function computeRatings(slots: Slot[], onPitch: (RatedPlayer | null)[], t
   const sector = (k: number) => {
     if (wsum[k] === 0) return 20;
     const avg = sum[k] / wsum[k]; // missing players count as zero -> big penalty
+    // a thin (or short-handed) sector loses up to 40%, a stacked one gains the same way
     return avg * (0.6 + (0.4 * present[k]) / REF[k]);
   };
   // a leader on the pitch lifts everyone a little

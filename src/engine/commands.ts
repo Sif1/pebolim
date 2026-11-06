@@ -1,12 +1,12 @@
 import { squadStrength } from './ai/lineup';
 import { takeJob } from './board';
-import { clubComps, seatCost, sectorBounds, sectorRefs, stadiumBuildDates, TC_BUILD, tcUpgradeCost } from './economy';
+import { calibrateIncome, clubComps, roughIncome, seatCost, sectorBounds, sectorRefs, stadiumBuildDates, TC_BUILD, tcUpgradeCost } from './economy';
 import { assignNumbers, fillSquad, strForRep } from './generator';
 import { FORMATIONS, slotsFor, validShape } from './match/formations';
 import { Rng } from './rng';
-import { executeTransfer, resolveAiBid, wageDemand, windowOpen } from './transfers';
+import { auctionCanClose, executeTransfer, resolveAiBid, unlist, wageDemand, windowOpen } from './transfers';
 import type { Bid, GameState, Lineup, Manager, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
-import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, squadOf } from './util';
+import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from './util';
 
 export type Command =
   | { c: 'setTactics'; tactics: Tactics }
@@ -17,8 +17,14 @@ export type Command =
   | { c: 'setTravel'; mode: TravelMode | 'auto' }
   | { c: 'upgradeTC' }
   | { c: 'expandStadium'; seats: number }
-  | { c: 'listPlayer'; pid: number; listed: boolean }
-  | { c: 'bid'; pid: number; kind: 'compra' | 'emprestimo'; fee: number; wage: number; years: number }
+  /** price null = take him off the sale list */
+  | { c: 'setSale'; pid: number; price: number | null }
+  /** months null = not available on loan */
+  | { c: 'setLoanList'; pid: number; months: 6 | 12 | null }
+  | { c: 'startAuction'; pid: number; min: number }
+  /** sealed bid on someone else's auction (amount null = withdraw) */
+  | { c: 'auctionBid'; pid: number; amount: number | null }
+  | { c: 'bid'; pid: number; kind: 'compra' | 'emprestimo'; fee: number; wage: number; years: number; months?: 6 | 12 }
   | { c: 'respondBid'; bid: number; action: 'aceitar' | 'recusar' | 'contraproposta'; fee?: number }
   | { c: 'acceptCounter'; bid: number }
   | { c: 'cancelBid'; bid: number }
@@ -141,11 +147,52 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       club.stadiumWork = { seats, left: dates, total: dates };
       return ok(`Ampliação de ${seats.toLocaleString('pt-BR')} lugares iniciada: ${dates} rodadas, com 10% do estádio fechado durante as obras.`);
     }
-    case 'listPlayer': {
+    case 'setSale': {
       const p = state.players[cmd.pid];
-      if (!p || p.clubId !== club.id) return fail('Jogador não é do seu clube.');
-      p.listed = cmd.listed;
-      return ok(cmd.listed ? `${p.name} está à venda.` : `${p.name} saiu da lista de vendas.`);
+      if (!p || p.clubId !== club.id || p.loan) return fail('Jogador não é do seu clube.');
+      if (p.auction) return fail(`${p.name} está em leilão.`);
+      if (cmd.price == null) {
+        p.salePrice = null;
+        return ok(`${p.name} saiu da lista de vendas.`);
+      }
+      const v = playerValue(p, state.meta.season);
+      p.salePrice = roundMoney(clamp(cmd.price, 10_000, Math.max(v * 10, 100_000)));
+      return ok(`${p.name} está à venda por ${formatMoney(p.salePrice)}.`);
+    }
+    case 'setLoanList': {
+      const p = state.players[cmd.pid];
+      if (!p || p.clubId !== club.id || p.loan) return fail('Jogador não é do seu clube.');
+      if (p.auction) return fail(`${p.name} está em leilão.`);
+      p.loanListed = cmd.months;
+      return ok(cmd.months ? `${p.name} está disponível para empréstimo de ${cmd.months} meses.` : `${p.name} não está mais disponível para empréstimo.`);
+    }
+    case 'startAuction': {
+      const p = state.players[cmd.pid];
+      if (!p || p.clubId !== club.id || p.loan) return fail('Jogador não é do seu clube.');
+      if (p.auction) return fail(`${p.name} já está em leilão.`);
+      if (!windowOpen(state)) return fail('Leilões só com a janela de transferências aberta.');
+      if (!auctionCanClose(state)) return fail('A janela fecha antes da próxima rodada: não daria tempo de fechar o leilão.');
+      if (squadOf(state, club.id).length <= 17) return fail('Elenco muito curto para leiloar jogadores.');
+      const v = playerValue(p, state.meta.season);
+      p.salePrice = null;
+      p.loanListed = null;
+      p.auction = { min: roundMoney(clamp(cmd.min, 10_000, Math.max(v * 5, 100_000))), season: state.meta.season, date: state.meta.date };
+      addNews(state, 'transfer', `Leilão: ${club.name} oferece ${p.name} (${p.pos}, força ${Math.round(p.str)}), lance mínimo ${formatMoney(p.auction.min)}.`, [club.id]);
+      return ok(`${p.name} vai a leilão. Os lances fecham no início da próxima rodada.`);
+    }
+    case 'auctionBid': {
+      const p = state.players[cmd.pid];
+      if (!p?.auction || p.clubId === club.id) return fail('Leilão não encontrado.');
+      const bids = (state.auctionBids[p.id] ??= {});
+      if (cmd.amount == null) {
+        delete bids[club.id];
+        return ok('Lance retirado.');
+      }
+      const amount = roundMoney(cmd.amount);
+      if (amount < p.auction.min) return fail(`O lance mínimo é ${formatMoney(p.auction.min)}.`);
+      if (amount > club.balance) return fail('Saldo insuficiente.');
+      bids[club.id] = amount;
+      return ok(`Lance de ${formatMoney(amount)} registrado. O resultado sai no início da próxima rodada.`);
     }
     case 'renew': {
       const p = state.players[cmd.pid];
@@ -168,6 +215,9 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
         p.clubId = p.loan.from;
         p.loan = null;
         p.num = 0;
+        club.lineup.xi = club.lineup.xi.map((x) => (x === p.id ? null : x));
+        club.lineup.bench = club.lineup.bench.filter((x) => x !== p.id);
+        if (state.clubs[p.clubId]) assignNumbers(squadOf(state, p.clubId));
         return ok(`${p.name} devolvido ao clube de origem.`);
       }
       const years = Math.max(0, p.contractEnd - state.meta.season) + (1 - state.meta.date / 78);
@@ -175,7 +225,7 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       club.balance -= comp;
       club.ledger.wages += comp;
       p.clubId = null;
-      p.listed = false;
+      unlist(state, p);
       p.idle = 0;
       p.num = 0;
       club.lineup.xi = club.lineup.xi.map((x) => (x === p.id ? null : x));
@@ -207,6 +257,7 @@ function makeBid(state: GameState, m: Manager, cmd: Extract<Command, { c: 'bid' 
   if (!p) return fail('Jogador não encontrado.');
   if (p.clubId === club.id) return fail('Ele já é do seu clube.');
   if (p.loan) return fail('Jogador emprestado, não pode ser negociado agora.');
+  if (p.auction) return fail(`${p.name} está em leilão: dê um lance no leilão.`);
   if (p.clubId != null && !windowOpen(state)) return fail('A janela de transferências está fechada.');
   if (cmd.fee > club.balance) return fail('Saldo insuficiente.');
   if (squadOf(state, club.id).length >= 40) return fail('Elenco cheio (máximo 40).');
@@ -219,9 +270,11 @@ function makeBid(state: GameState, m: Manager, cmd: Extract<Command, { c: 'bid' 
     buyer: club.id,
     seller: p.clubId,
     kind: p.clubId == null ? 'compra' : cmd.kind,
-    fee: p.clubId == null ? 0 : Math.max(0, Math.round(cmd.fee)),
-    wage: Math.round(cmd.wage),
+    // a loan costs no fee: the borrower pays the player's current wage for 6 or 12 months
+    fee: p.clubId == null || cmd.kind === 'emprestimo' ? 0 : Math.max(0, Math.round(cmd.fee)),
+    wage: cmd.kind === 'emprestimo' && p.clubId != null ? p.wage : Math.round(cmd.wage),
     years: clamp(Math.round(cmd.years), 1, 5),
+    ...(cmd.kind === 'emprestimo' && p.clubId != null ? { months: p.loanListed ?? cmd.months ?? 12 } : {}),
     status: 'pendente',
     counter: null,
     date: state.meta.date,
@@ -231,8 +284,16 @@ function makeBid(state: GameState, m: Manager, cmd: Extract<Command, { c: 'bid' 
   state.bids[id] = bid;
   const seller = p.clubId != null ? state.clubs[p.clubId] : null;
   if (seller?.managerId) {
+    // the seller already named his terms: meeting them closes the deal at once
+    const meetsListing = bid.kind === 'emprestimo' ? !!p.loanListed : p.salePrice != null && bid.fee >= p.salePrice;
+    if (meetsListing) {
+      const r = closeBid(state, bid, rng, bid.kind === 'compra');
+      if (r.ok) addNews(state, 'transfer', `${p.name} ${bid.kind === 'emprestimo' ? 'foi emprestado' : 'foi vendido'} ao ${club.name}${bid.fee ? ` por ${formatMoney(bid.fee)}` : ''}.`, [seller.id], seller.managerId);
+      return r;
+    }
     // human seller decides later
-    addNews(state, 'bid', `O ${club.name} ofereceu ${formatMoney(bid.fee)} por ${p.name}.`, [seller.id, club.id], seller.managerId);
+    const what = bid.kind === 'emprestimo' ? `pediu ${p.name} emprestado por ${bid.months} meses` : `ofereceu ${formatMoney(bid.fee)} por ${p.name}`;
+    addNews(state, 'bid', `O ${club.name} ${what}.`, [seller.id, club.id], seller.managerId);
     bid.msg = 'Aguardando resposta do outro treinador.';
     return ok('Proposta enviada ao outro treinador.');
   }
@@ -266,7 +327,7 @@ function closeBid(state: GameState, b: Bid, rng: Rng, checkPlayer: boolean): Cmd
   }
   b.status = 'aceita';
   b.msg = 'Negócio fechado.';
-  executeTransfer(state, p, buyer, b.fee, b.wage, b.years, b.kind === 'emprestimo');
+  executeTransfer(state, p, buyer, b.fee, b.wage, b.years, b.kind === 'emprestimo', b.months ?? 12);
   // other open bids for this player are void
   for (const o of Object.values(state.bids)) {
     if (o.id !== b.id && o.player === p.id && (o.status === 'pendente' || o.status === 'contraproposta')) o.status = 'expirada';
@@ -368,6 +429,7 @@ export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpe
   club.name = name.slice(0, 32);
   club.short = (spec.short.trim() || name.slice(0, 3)).toUpperCase().slice(0, 4);
   club.colors = spec.colors;
+  delete club.crest;
   club.city = spec.city.trim().slice(0, 32) || club.city;
   club.stadium = spec.stadium.trim().slice(0, 40) || `Estádio ${club.name}`;
   club.custom = true;
@@ -384,7 +446,7 @@ export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpe
       p.loan = null;
     } else {
       p.clubId = null;
-      p.listed = false;
+      unlist(state, p);
       p.idle = 0;
       p.num = 0;
     }
@@ -400,9 +462,9 @@ export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpe
   const squad = squadOf(state, club.id);
   assignNumbers(squad);
   const monthly = squad.reduce((a, p) => a + p.wage, 0);
-  club.baseIncome = Math.round((monthly * 12) / 0.85);
-  club.balance = Math.round(club.baseIncome * 0.15);
   club.tickets = { base: sectorRefs(club), comps: {} };
+  club.baseIncome = calibrateIncome(state, club, monthly * 12);
+  club.balance = Math.round(roughIncome(club) * 0.12);
   club.stadiumWork = null;
   club.ledger = emptyLedger();
   club.power = squadStrength(squad);

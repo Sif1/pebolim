@@ -1,3 +1,4 @@
+import { ceilingFor, starsFor } from './potential';
 import type { Rng } from './rng';
 import { poolFor } from './names';
 import type { GameState, Player, Pos, Trait } from './types';
@@ -28,11 +29,6 @@ export function randomName(state: Pick<GameState, 'names'>, nat: string, rng: Rn
   return `${rng.pick(pool.first)} ${rng.pick(pool.last)}`;
 }
 
-export function potentialFor(str: number, ageY: number, rng: Rng): number {
-  if (ageY <= 23) return clamp(Math.round(str + rng.range(2, 16) * ((25 - ageY) / 6)), str, 97);
-  if (ageY <= 26) return clamp(Math.round(str + rng.range(0, 5)), str, 97);
-  return Math.round(str);
-}
 
 export interface GenOpts {
   pos: Pos;
@@ -52,6 +48,7 @@ export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
     pos: o.pos,
     birth: season - o.ageY,
     str: clamp(Math.round(o.str), 25, 95),
+    stars: 0,
     pot: 0,
     traits: [],
     clubId: o.clubId,
@@ -62,14 +59,17 @@ export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
     injury: 0,
     ban: {},
     yel: {},
-    listed: false,
+    salePrice: null,
+    loanListed: null,
+    auction: null,
     loan: null,
     s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0, rt: 0 },
     c: { apps: 0, goals: 0 },
     num: 0,
     idle: 0,
   };
-  p.pot = potentialFor(p.str, o.ageY, rng);
+  p.stars = starsFor(p.str, o.ageY, rng);
+  p.pot = ceilingFor(p.stars);
   p.traits = randomTraits(o.pos, p.str, rng);
   p.wage = expectedWage(p, season, o.clubRep);
   return p;
@@ -109,7 +109,8 @@ export function fillSquad(state: GameState, rng: Rng, clubId: number, existing: 
       const ageY = randomAge(rng);
       const p = generatePlayer(state, rng, {
         pos,
-        str: rng.normal(level + ageAdjust(ageY), 4.5),
+        // squad depth: around the club's level, never a made-up star above its real ones
+        str: Math.min(level + 5, rng.normal(level + ageAdjust(ageY), 4)),
         nat,
         ageY,
         clubId,

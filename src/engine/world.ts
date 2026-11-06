@@ -2,19 +2,22 @@ import { autoLineup, bestFormation, squadStrength } from './ai/lineup';
 import { buildCalendar } from './calendar';
 import { createSeasonComps } from './competitions';
 import type { Database } from './db';
-import { assignNumbers, fillSquad, potentialFor, randomTraits, strForRep } from './generator';
+import { assignNumbers, fillSquad, randomTraits, strForRep } from './generator';
+import { ceilingFor, starsFor, tierOf } from './potential';
 import { defaultNamePools } from './names';
 import { Rng } from './rng';
 import { SAVE_FORMAT_VERSION, type Club, type GameState, type Objective, type Player, type Settings } from './types';
 import { clamp, emptyLedger, expectedWage, squadIndex } from './util';
-import { sectorRefs } from './economy';
+import { calibrateAll, sectorRefs } from './economy';
 
 export const DEFAULT_SETTINGS: Settings = { matchMinutes: 5, windows: true };
 
 export function defaultTicket(c: Pick<Club, 'country' | 'rep' | 'continent' | 'contOnly'>): number {
-  if (c.continent === 'EU') return Math.round(c.contOnly ? 80 + c.rep * 1.5 : 110 + c.rep * 2.6);
-  if (c.country === 'BRA') return Math.round(18 + c.rep * 0.9);
-  return Math.round(14 + c.rep * 0.6);
+  // US$
+  // Europe: steep with reputation (about US$ 25 at a small top-flight club, 54 at the biggest)
+  if (c.continent === 'EU') return Math.round(c.contOnly ? Math.max(12, c.rep * 0.55 - 14) : Math.max(14, c.rep * 0.88 - 28));
+  if (c.country === 'BRA') return Math.round(3.3 + c.rep * 0.17);
+  return Math.round(2.6 + c.rep * 0.11);
 }
 
 export function foreignShareFor(c: Club): number {
@@ -52,6 +55,7 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
     calendar: [],
     managers: {},
     bids: {},
+    auctionBids: {},
     news: [],
     history: [],
     prev: { ranks: {}, winners: {} },
@@ -74,6 +78,7 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
       lat: dc.lat,
       lon: dc.lon,
       colors: dc.colors,
+      ...(dc.crest ? { crest: dc.crest } : {}),
       stadium: dc.stadium,
       capacity: dc.capacity,
       rep: dc.rep,
@@ -114,7 +119,8 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
       pos: dp.pos,
       birth: dp.birth,
       str: dp.str,
-      pot: dp.pot ?? potentialFor(dp.str, ageY, rng),
+      stars: 0,
+      pot: 0,
       traits: dp.traits ?? randomTraits(dp.pos, dp.str, rng),
       clubId,
       wage: 0,
@@ -124,13 +130,18 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
       injury: 0,
       ban: {},
       yel: {},
-      listed: false,
+      salePrice: null,
+      loanListed: null,
+      auction: null,
       loan: null,
       s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0, rt: 0 },
       c: { apps: 0, goals: 0 },
       num: 0,
       idle: 0,
     };
+    // stars from the database (or a legacy pot column), otherwise generated from força and age
+    p.stars = dp.stars ?? (dp.pot ? Math.max(tierOf(dp.str), tierOf(dp.pot)) : starsFor(dp.str, ageY, rng));
+    p.pot = Math.max(p.str, ceilingFor(p.stars));
     p.wage = expectedWage(p, season, club?.rep ?? 50);
     state.players[p.id] = p;
   }
@@ -153,14 +164,13 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
   for (const club of Object.values(state.clubs)) {
     const squad = idx.get(club.id) ?? [];
     assignNumbers(squad);
-    const monthly = squad.reduce((a, p) => a + p.wage, 0);
-    club.baseIncome = Math.round(((monthly * 12) / 0.85) * rng.range(0.9, 1.1));
-    club.balance = Math.round(club.baseIncome * rng.range(0.12, 0.35));
     club.tactics.formation = bestFormation(squad);
     club.lineup = autoLineup(squad, club.tactics.formation, null);
   }
 
   startSeason(state, rng);
+  // income and cash sized from each club's real costs, now that its fixtures are known
+  calibrateAll(state, rng);
   state.meta.rng = rng.state();
   return state;
 }

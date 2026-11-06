@@ -1,3 +1,4 @@
+import { HOME_ADV } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
 import type { Formation, Pos, Tactics } from '../src/engine/types';
 import { FORMATIONS } from '../src/engine/match/formations';
@@ -43,7 +44,7 @@ export function synthSetup(hs: number, as: number, seed: number, decider = false
     home: synthTeam(hs, rng),
     away: synthTeam(as, rng),
     seed: rng.fork(),
-    homeAdv: 1.06,
+    homeAdv: HOME_ADV,
     decider: decider ? { aggHome: 0, aggAway: 0 } : null,
   };
 }

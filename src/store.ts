@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { Database } from './engine/db';
+import { loadDefaultDb } from './engine/db';
+import { applyKnownNames } from './engine/renames';
 import { loadFromBytes, saveFileName, saveToBytes } from './engine/save';
 import type { GameState } from './engine/types';
 import { createWorld, type NewWorldOptions } from './engine/world';
@@ -154,7 +156,20 @@ export async function hostNewGame(db: Database, opts: NewWorldOptions, playerNam
 
 export async function hostFromBytes(bytes: Uint8Array, playerName: string, online: boolean) {
   const state = await loadFromBytes(bytes);
+  await refreshFromDb(state);
   await startHosting(state, playerName, online);
+}
+
+/** Bring an older save up to date with the starting database: crests and players' known names. */
+async function refreshFromDb(state: GameState) {
+  applyKnownNames(state.players);
+  try {
+    const db = await loadDefaultDb();
+    const crests = new Map(db.clubs.filter((c) => c.crest).map((c) => [c.key, c.crest!]));
+    for (const c of Object.values(state.clubs)) if (!c.crest && !c.custom && crests.has(c.key)) c.crest = crests.get(c.key);
+  } catch {
+    /* offline: keep the shields */
+  }
 }
 
 export async function joinGame(code: string, playerName: string) {

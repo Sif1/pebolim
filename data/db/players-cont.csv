@@ -1,129 +1,129 @@
 club,name,pos,birth,str,nat,traits
 benfica,Anatoliy Trubin,GOL,2001,81,UKR,reflexos
 benfica,Nicolás Otamendi,ZAG,1988,79,ARG,lideranca
-benfica,António Silva,ZAG,2003,79,POR,
-benfica,Samuel Dahl,LAT,2003,76,SWE,
-benfica,Fredrik Aursnes,MEI,1995,79,NOR,
-benfica,Richard Ríos,VOL,2000,79,COL,
-benfica,Leandro Barreiro,VOL,2000,76,LUX,
+benfica,António Silva,ZAG,2003,79,POR,marcacao|velocidade
+benfica,Samuel Dahl,LAT,2003,76,SWE,drible
+benfica,Fredrik Aursnes,MEI,1995,79,NOR,finalizacao
+benfica,Richard Ríos,VOL,2000,79,COL,passe
+benfica,Leandro Barreiro,VOL,2000,76,LUX,-
 benfica,Georgiy Sudakov,MEI,2002,79,UKR,passe
 benfica,Vangelis Pavlidis,ATA,1998,80,GRE,finalizacao
-benfica,Dodi Lukebakio,ATA,1997,78,BEL,
-benfica,Andreas Schjelderup,ATA,2004,76,NOR,
+benfica,Dodi Lukebakio,ATA,1997,78,BEL,velocidade
+benfica,Andreas Schjelderup,ATA,2004,76,NOR,velocidade
 porto,Diogo Costa,GOL,1999,84,POR,reflexos
-porto,Jan Bednarek,ZAG,1996,77,POL,
-porto,Jakub Kiwior,ZAG,2000,78,POL,
-porto,Nehuén Pérez,ZAG,2000,76,ARG,
-porto,Francisco Moura,LAT,1999,75,POR,
-porto,Alan Varela,VOL,2001,78,ARG,
-porto,Victor Froholdt,MEI,2006,76,DEN,
-porto,Gabri Veiga,MEI,2002,79,ESP,
+porto,Jan Bednarek,ZAG,1996,77,POL,marcacao
+porto,Jakub Kiwior,ZAG,2000,78,POL,cabeceio
+porto,Nehuén Pérez,ZAG,2000,76,ARG,velocidade
+porto,Francisco Moura,LAT,1999,75,POR,velocidade
+porto,Alan Varela,VOL,2001,78,ARG,cobrancas
+porto,Victor Froholdt,MEI,2006,76,DEN,cobrancas
+porto,Gabri Veiga,MEI,2002,79,ESP,drible
 porto,Rodrigo Mora,MEI,2007,76,POR,drible
-porto,Pepê,ATA,1997,78,BRA,
-porto,Samu Aghehowa,ATA,2004,79,ESP,cabeceio
-porto,Borja Sainz,ATA,2001,76,ESP,
-sportingcp,Rui Silva,GOL,1994,79,POR,
-sportingcp,Ousmane Diomande,ZAG,2003,80,CIV,
-sportingcp,Gonçalo Inácio,ZAG,2001,79,POR,
-sportingcp,Zeno Debast,ZAG,2003,77,BEL,
-sportingcp,Maximiliano Araújo,LAT,2000,77,URU,
+porto,Pepê,ATA,1997,78,BRA,velocidade
+porto,Samu,ATA,2004,79,ESP,cabeceio
+porto,Borja Sainz,ATA,2001,76,ESP,-
+sportingcp,Rui Silva,GOL,1994,79,POR,lideranca
+sportingcp,Ousmane Diomande,ZAG,2003,80,CIV,velocidade|marcacao
+sportingcp,Gonçalo Inácio,ZAG,2001,79,POR,marcacao
+sportingcp,Zeno Debast,ZAG,2003,77,BEL,cabeceio|marcacao
+sportingcp,Maximiliano Araújo,LAT,2000,77,URU,-
 sportingcp,Morten Hjulmand,VOL,1999,80,DEN,lideranca
-sportingcp,Hidemasa Morita,MEI,1995,78,JPN,
-sportingcp,Pedro Gonçalves,MEI,1998,80,POR,
+sportingcp,Hidemasa Morita,MEI,1995,78,JPN,cobrancas
+sportingcp,Pedro Gonçalves,MEI,1998,80,POR,finalizacao|passe
 sportingcp,Francisco Trincão,ATA,1999,80,POR,drible
 sportingcp,Luis Javier Suárez,ATA,1997,78,COL,finalizacao
-sportingcp,Fotis Ioannidis,ATA,2000,78,GRE,
-braga,Rodrigo Zalazar,MEI,1999,78,URU,
-braga,Ricardo Horta,ATA,1994,77,POR,
-braga,Bruma,ATA,1994,75,POR,
-ajax,Vítězslav Jaroš,GOL,2001,76,CZE,
-ajax,Josip Šutalo,ZAG,2000,77,CRO,
-ajax,Anton Gaaei,LAT,2002,75,DEN,
-ajax,Davy Klaassen,MEI,1993,77,NED,
-ajax,Kenneth Taylor,MEI,2002,78,NED,
+sportingcp,Fotis Ioannidis,ATA,2000,78,GRE,finalizacao
+braga,Rodrigo Zalazar,MEI,1999,78,URU,-
+braga,Ricardo Horta,ATA,1994,77,POR,drible
+braga,Bruma,ATA,1994,75,POR,-
+ajax,Vítězslav Jaroš,GOL,2001,76,CZE,reflexos
+ajax,Josip Šutalo,ZAG,2000,77,CRO,-
+ajax,Anton Gaaei,LAT,2002,75,DEN,-
+ajax,Davy Klaassen,MEI,1993,77,NED,finalizacao|passe
+ajax,Kenneth Taylor,MEI,2002,78,NED,cobrancas
 ajax,Steven Berghuis,ATA,1991,76,NED,cobrancas
-ajax,Mika Godts,ATA,2005,76,BEL,
+ajax,Mika Godts,ATA,2005,76,BEL,drible|finalizacao
 ajax,Wout Weghorst,ATA,1992,76,NED,cabeceio
-psv,Jerdy Schouten,VOL,1997,78,NED,
+psv,Jerdy Schouten,VOL,1997,78,NED,cobrancas
 psv,Joey Veerman,MEI,1996,78,NED,passe
-psv,Guus Til,MEI,1997,78,NED,
-psv,Ismael Saibari,MEI,2001,79,MAR,
-psv,Sergiño Dest,LAT,2000,77,USA,
-psv,Ryan Flamingo,ZAG,2002,76,NED,
-psv,Ivan Perišić,ATA,1989,76,CRO,
-psv,Ricardo Pepi,ATA,2003,77,USA,
-psv,Dennis Man,ATA,1998,77,ROU,
-feyenoord,Timon Wellenreuther,GOL,1995,76,GER,
-feyenoord,Hwang In-beom,MEI,1996,78,KOR,
-feyenoord,Quinten Timber,VOL,2001,78,NED,
-feyenoord,Anis Hadj Moussa,ATA,2002,77,ALG,
-feyenoord,Ayase Ueda,ATA,1998,77,JPN,
-az,Sven Mijnans,MEI,1999,76,NED,
-az,Troy Parrott,ATA,2002,75,IRL,
-brugge,Simon Mignolet,GOL,1988,77,BEL,
-brugge,Joel Ordóñez,ZAG,2004,77,ECU,
-brugge,Raphael Onyedika,VOL,2001,77,NGA,
+psv,Guus Til,MEI,1997,78,NED,finalizacao|cobrancas
+psv,Ismael Saibari,MEI,2001,79,MAR,passe
+psv,Sergiño Dest,LAT,2000,77,USA,marcacao
+psv,Ryan Flamingo,ZAG,2002,76,NED,cabeceio
+psv,Ivan Perišić,ATA,1989,76,CRO,velocidade
+psv,Ricardo Pepi,ATA,2003,77,USA,velocidade
+psv,Dennis Man,ATA,1998,77,ROU,cabeceio
+feyenoord,Timon Wellenreuther,GOL,1995,76,GER,reflexos
+feyenoord,Hwang In-beom,MEI,1996,78,KOR,-
+feyenoord,Quinten Timber,VOL,2001,78,NED,lideranca
+feyenoord,Anis Hadj Moussa,ATA,2002,77,ALG,-
+feyenoord,Ayase Ueda,ATA,1998,77,JPN,finalizacao
+az,Sven Mijnans,MEI,1999,76,NED,velocidade
+az,Troy Parrott,ATA,2002,75,IRL,-
+brugge,Simon Mignolet,GOL,1988,77,BEL,reflexos
+brugge,Joel Ordóñez,ZAG,2004,77,ECU,cabeceio
+brugge,Raphael Onyedika,VOL,2001,77,NGA,-
 brugge,Hans Vanaken,MEI,1992,78,BEL,passe
 brugge,Christos Tzolis,ATA,2002,79,GRE,drible
-anderlecht,Kasper Dolberg,ATA,1997,75,DEN,
-anderlecht,Leander Dendoncker,VOL,1995,74,BEL,
-unionsg,Promise David,ATA,2001,75,CAN,
-celtic,Kasper Schmeichel,GOL,1986,76,DEN,
-celtic,Cameron Carter-Vickers,ZAG,1997,77,USA,
+anderlecht,Kasper Dolberg,ATA,1997,75,DEN,cabeceio
+anderlecht,Leander Dendoncker,VOL,1995,74,BEL,marcacao
+unionsg,Promise David,ATA,2001,75,CAN,finalizacao
+celtic,Kasper Schmeichel,GOL,1986,76,DEN,reflexos|lideranca
+celtic,Cameron Carter-Vickers,ZAG,1997,77,USA,velocidade
 celtic,Callum McGregor,MEI,1993,77,SCO,lideranca
-celtic,Arne Engels,MEI,2003,76,BEL,
-celtic,Reo Hatate,MEI,1997,77,JPN,
+celtic,Arne Engels,MEI,2003,76,BEL,cobrancas
+celtic,Reo Hatate,MEI,1997,77,JPN,cobrancas
 celtic,Daizen Maeda,ATA,1997,77,JPN,velocidade
-rangers,Jack Butland,GOL,1993,76,ENG,
+rangers,Jack Butland,GOL,1993,76,ENG,-
 rangers,James Tavernier,LAT,1991,75,ENG,cobrancas
-rangers,Nicolas Raskin,VOL,2001,76,BEL,
-rangers,Václav Černý,ATA,1997,75,CZE,
-galatasaray,Uğurcan Çakır,GOL,1996,80,TUR,
-galatasaray,Davinson Sánchez,ZAG,1996,79,COL,
+rangers,Nicolas Raskin,VOL,2001,76,BEL,cobrancas
+rangers,Václav Černý,ATA,1997,75,CZE,drible
+galatasaray,Uğurcan Çakır,GOL,1996,80,TUR,reflexos
+galatasaray,Davinson Sánchez,ZAG,1996,79,COL,marcacao
 galatasaray,Lucas Torreira,VOL,1996,79,URU,marcacao
 galatasaray,İlkay Gündoğan,MEI,1990,80,GER,passe
-galatasaray,Gabriel Sara,MEI,1999,79,BRA,
-galatasaray,Barış Alper Yılmaz,ATA,2000,79,TUR,
+galatasaray,Gabriel Sara,MEI,1999,79,BRA,drible
+galatasaray,Barış Alper Yılmaz,ATA,2000,79,TUR,velocidade
 galatasaray,Leroy Sané,ATA,1996,81,GER,velocidade
 galatasaray,Victor Osimhen,ATA,1998,85,NGA,finalizacao|cabeceio
 galatasaray,Mauro Icardi,ATA,1993,79,ARG,finalizacao
 fenerbahce,Ederson,GOL,1993,83,BRA,reflexos
-fenerbahce,Milan Škriniar,ZAG,1995,80,SVK,
-fenerbahce,Nélson Semedo,LAT,1993,77,POR,
-fenerbahce,Fred,VOL,1993,78,BRA,
-fenerbahce,Edson Álvarez,VOL,1997,79,MEX,
+fenerbahce,Milan Škriniar,ZAG,1995,80,SVK,marcacao|lideranca
+fenerbahce,Nélson Semedo,LAT,1993,77,POR,drible
+fenerbahce,Fred,VOL,1993,78,BRA,marcacao
+fenerbahce,Edson Álvarez,VOL,1997,79,MEX,-
 fenerbahce,Marco Asensio,MEI,1996,80,ESP,cobrancas
-fenerbahce,Anderson Talisca,MEI,1994,77,BRA,
-fenerbahce,Kerem Aktürkoğlu,ATA,1998,79,TUR,
+fenerbahce,Talisca,MEI,1994,77,BRA,finalizacao
+fenerbahce,Kerem Aktürkoğlu,ATA,1998,79,TUR,cabeceio|finalizacao
 fenerbahce,Youssef En-Nesyri,ATA,1997,79,MAR,cabeceio
-fenerbahce,Jhon Durán,ATA,2003,79,COL,
+fenerbahce,Jhon Durán,ATA,2003,79,COL,velocidade|drible
 besiktas,Wilfred Ndidi,VOL,1996,78,NGA,marcacao
 besiktas,Orkun Kökçü,MEI,2000,80,TUR,passe
-besiktas,Tammy Abraham,ATA,1997,78,ENG,
-besiktas,Rafa Silva,ATA,1993,79,POR,
-trabzonspor,André Onana,GOL,1996,78,CMR,
-salzburg,Oscar Gloukh,MEI,2004,77,ISR,
-olympiacos,Konstantinos Tzolakis,GOL,2002,77,GRE,
-olympiacos,Chiquinho,MEI,1995,77,POR,
-olympiacos,Daniel Podence,ATA,1995,77,POR,
+besiktas,Tammy Abraham,ATA,1997,78,ENG,finalizacao|drible
+besiktas,Rafa Silva,ATA,1993,79,POR,velocidade
+trabzonspor,André Onana,GOL,1996,78,CMR,reflexos
+salzburg,Oscar Gloukh,MEI,2004,77,ISR,-
+olympiacos,Konstantinos Tzolakis,GOL,2002,77,GRE,reflexos
+olympiacos,Chiquinho,MEI,1995,77,POR,-
+olympiacos,Daniel Podence,ATA,1995,77,POR,-
 olympiacos,Ayoub El Kaabi,ATA,1993,79,MAR,finalizacao
-olympiacos,Gelson Martins,ATA,1995,77,POR,
-paok,Andrija Živković,ATA,1996,77,SRB,
-paok,Kiril Despodov,ATA,1996,76,BUL,
-aek,Orbelín Pineda,MEI,1996,75,MEX,
-aek,Luka Jović,ATA,1997,76,SRB,
-panathinaikos,Alban Lafont,GOL,1999,77,FRA,
-panathinaikos,Tetê,ATA,2000,76,BRA,
-slavia,Christos Zafeiris,MEI,2003,77,GRE,
-slavia,Lukáš Provod,MEI,1996,76,CZE,
+olympiacos,Gelson Martins,ATA,1995,77,POR,velocidade
+paok,Andrija Živković,ATA,1996,77,SRB,cabeceio|drible
+paok,Kiril Despodov,ATA,1996,76,BUL,finalizacao
+aek,Orbelín Pineda,MEI,1996,75,MEX,passe|finalizacao
+aek,Luka Jović,ATA,1997,76,SRB,velocidade
+panathinaikos,Alban Lafont,GOL,1999,77,FRA,-
+panathinaikos,Tetê,ATA,2000,76,BRA,drible
+slavia,Christos Zafeiris,MEI,2003,77,GRE,-
+slavia,Lukáš Provod,MEI,1996,76,CZE,-
 slavia,Tomáš Chorý,ATA,1995,76,CZE,cabeceio
-sparta,Lukáš Haraslín,ATA,1996,75,SVK,
-sparta,Veljko Birmančević,ATA,1998,76,SRB,
+sparta,Lukáš Haraslín,ATA,1996,75,SVK,finalizacao
+sparta,Veljko Birmančević,ATA,1998,76,SRB,cabeceio
 shakhtar,Kevin,ATA,2003,76,BRA,drible
-shakhtar,Eguinaldo,ATA,2004,75,BRA,
-shakhtar,Pedrinho,MEI,1998,74,BRA,
-crvenazvezda,Mirko Ivanić,MEI,1993,75,MNE,
-bodoglimt,Patrick Berg,VOL,1997,76,NOR,
-bodoglimt,Jens Petter Hauge,ATA,1999,76,NOR,
+shakhtar,Eguinaldo,ATA,2004,75,BRA,velocidade
+shakhtar,Pedrinho,MEI,1998,74,BRA,velocidade
+crvenazvezda,Mirko Ivanić,MEI,1993,75,MNE,drible
+bodoglimt,Patrick Berg,VOL,1997,76,NOR,marcacao
+bodoglimt,Jens Petter Hauge,ATA,1999,76,NOR,cabeceio
 basel,Xherdan Shaqiri,MEI,1991,78,SUI,passe|cobrancas
-midtjylland,Franculino Djú,ATA,2004,75,GNB,
+midtjylland,Franculino,ATA,2004,75,GNB,finalizacao

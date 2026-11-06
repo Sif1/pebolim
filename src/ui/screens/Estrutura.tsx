@@ -65,7 +65,7 @@ export function Estrutura({ part }: { part: 'estadio' | 'viagens' }) {
             <b>{club.stadium}</b> · {club.capacity.toLocaleString('pt-BR')} lugares
             {club.stadiumWork && <span className="small muted"> ({usableCapacity(club).toLocaleString('pt-BR')} liberados durante a obra)</span>}
           </div>
-          <div className="small muted">Manutenção do estádio: {formatMoney(Math.round(club.capacity * 0.6))}/rodada.</div>
+          <div className="small muted">Manutenção do estádio: {formatMoney(Math.round(club.capacity * 0.11))}/rodada.</div>
           {club.stadiumWork ? (
             <Works
               state={state}

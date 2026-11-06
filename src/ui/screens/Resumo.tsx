@@ -3,7 +3,7 @@ import type { Fixture, GameState } from '../../engine/types';
 import { dateLabel } from '../../engine/util';
 import { useMe } from '../../store';
 import { ClubBadge, compLabel, Empty } from '../common';
-import { LeagueTable } from './Competicoes';
+import { StandingsTable } from './Competicoes';
 import { visibleNews } from './Painel';
 
 export function FixtureRow({ f, state, highlight }: { f: Fixture; state: GameState; highlight?: number | null }) {
@@ -106,12 +106,7 @@ export function Resumo() {
           ))}
         </div>
         <div className="col">
-          {club?.league && state.comps[club.league] && (
-            <div className="panel tight">
-              <h3 style={{ padding: '4px 6px' }}>{state.comps[club.league].cfg.name}</h3>
-              <LeagueTable compId={club.league} compact />
-            </div>
-          )}
+          {club && <RoundTable state={state} clubId={club.id} fixture={myFixture} />}
           {news.length > 0 && (
             <div className="panel">
               <h3>Notícias do dia</h3>
@@ -124,6 +119,31 @@ export function Resumo() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Table of the competition just played: the league, or the club's group; after a knockout game, its league. */
+function RoundTable({ state, clubId, fixture }: { state: GameState; clubId: number; fixture: Fixture | null | undefined }) {
+  const club = state.clubs[clubId];
+  const comp = fixture ? state.comps[fixture.comp] : null;
+  const group = comp && fixture?.group != null ? comp.groups.find((g) => clubId in g.table) : undefined;
+  if (comp && group) {
+    return (
+      <div className="panel tight">
+        <h3 style={{ padding: '4px 6px' }}>
+          {comp.cfg.name} · {group.name}
+        </h3>
+        <StandingsTable table={group.table} state={state} compact highlight={clubId} />
+      </div>
+    );
+  }
+  const table = comp?.cfg.kind === 'league' ? comp : club.league ? state.comps[club.league] : null;
+  if (!table) return null;
+  return (
+    <div className="panel tight">
+      <h3 style={{ padding: '4px 6px' }}>{table.cfg.name}</h3>
+      <StandingsTable table={table.table} state={state} comp={table} compact highlight={clubId} />
     </div>
   );
 }

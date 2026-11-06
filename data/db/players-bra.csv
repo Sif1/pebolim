@@ -1,7 +1,7 @@
 club,name,pos,birth,str,nat,traits
-flamengo,Agustín Rossi,GOL,1995,79,ARG,reflexos
-flamengo,Matheus Cunha,GOL,2001,69,BRA,
-flamengo,Guillermo Varela,LAT,1993,75,URU,
+flamengo,Rossi,GOL,1995,79,ARG,reflexos
+flamengo,Matheus Cunha,GOL,2001,69,BRA,-
+flamengo,Varela,LAT,1993,75,URU,drible
 flamengo,Emerson Royal,LAT,1999,74,BRA,velocidade
 flamengo,Alex Sandro,LAT,1991,75,BRA,passe
 flamengo,Ayrton Lucas,LAT,1997,73,BRA,velocidade
@@ -9,277 +9,277 @@ flamengo,Léo Ortiz,ZAG,1996,78,BRA,passe
 flamengo,Léo Pereira,ZAG,1996,77,BRA,cabeceio
 flamengo,Danilo,ZAG,1991,75,BRA,lideranca
 flamengo,Jorginho,VOL,1991,79,ITA,passe|lideranca
-flamengo,Erick Pulgar,VOL,1994,76,CHI,marcacao
-flamengo,Saúl Ñíguez,MEI,1994,76,ESP,passe
-flamengo,Giorgian de Arrascaeta,MEI,1994,82,URU,passe|cobrancas
-flamengo,Jorge Carrascal,MEI,1998,77,COL,drible
-flamengo,Nicolás de la Cruz,MEI,1997,78,URU,passe
+flamengo,Pulgar,VOL,1994,76,CHI,marcacao
+flamengo,Saúl,MEI,1994,76,ESP,passe
+flamengo,Arrascaeta,MEI,1994,82,URU,passe|cobrancas
+flamengo,Carrascal,MEI,1998,77,COL,drible
+flamengo,De la Cruz,MEI,1997,78,URU,passe
 flamengo,Samuel Lino,ATA,1999,77,BRA,velocidade|drible
 flamengo,Luiz Araújo,ATA,1996,76,BRA,cobrancas
 flamengo,Pedro,ATA,1997,79,BRA,finalizacao|cabeceio
 flamengo,Bruno Henrique,ATA,1990,75,BRA,velocidade
-flamengo,Gonzalo Plata,ATA,2000,76,ECU,drible
-flamengo,Wallace Yan,ATA,2004,68,BRA,
+flamengo,Plata,ATA,2000,76,ECU,drible
+flamengo,Wallace Yan,ATA,2004,68,BRA,finalizacao
 palmeiras,Weverton,GOL,1987,77,BRA,reflexos|lideranca
-palmeiras,Carlos Miguel,GOL,1998,74,BRA,
+palmeiras,Carlos Miguel,GOL,1998,74,BRA,lideranca|reflexos
 palmeiras,Gustavo Gómez,ZAG,1993,79,PAR,cabeceio|lideranca
-palmeiras,Murilo,ZAG,1997,76,BRA,
-palmeiras,Bruno Fuchs,ZAG,1999,74,BRA,
-palmeiras,Agustín Giay,LAT,2004,74,ARG,
-palmeiras,Khellven,LAT,2001,72,BRA,
-palmeiras,Joaquín Piquerez,LAT,1998,77,URU,passe
-palmeiras,Jefté,LAT,2003,70,BRA,
+palmeiras,Murilo,ZAG,1997,76,BRA,marcacao
+palmeiras,Bruno Fuchs,ZAG,1999,74,BRA,-
+palmeiras,Giay,LAT,2004,74,ARG,velocidade
+palmeiras,Khellven,LAT,2001,72,BRA,velocidade
+palmeiras,Piquerez,LAT,1998,77,URU,passe
+palmeiras,Jefté,LAT,2003,70,BRA,-
 palmeiras,Aníbal Moreno,VOL,1999,77,ARG,marcacao
-palmeiras,Emiliano Martínez,VOL,1999,76,URU,
-palmeiras,Lucas Evangelista,VOL,1995,74,BRA,
+palmeiras,Emiliano Martínez,VOL,1999,76,URU,lideranca|cobrancas
+palmeiras,Lucas Evangelista,VOL,1995,74,BRA,-
 palmeiras,Andreas Pereira,MEI,1996,78,BRA,passe|cobrancas
 palmeiras,Raphael Veiga,MEI,1995,77,BRA,cobrancas|finalizacao
-palmeiras,Mauricio,MEI,2001,75,BRA,
+palmeiras,Mauricio,MEI,2001,75,BRA,cobrancas
 palmeiras,Felipe Anderson,MEI,1993,76,BRA,drible
 palmeiras,Facundo Torres,ATA,2000,77,URU,drible
 palmeiras,Vitor Roque,ATA,2005,78,BRA,finalizacao|velocidade
-palmeiras,José Manuel López,ATA,2000,77,ARG,finalizacao|cabeceio
+palmeiras,Flaco López,ATA,2000,77,ARG,finalizacao|cabeceio
 palmeiras,Ramón Sosa,ATA,1999,75,PAR,velocidade
-palmeiras,Paulinho,ATA,2000,75,BRA,
-botafogo,John,GOL,1996,76,BRA,
-botafogo,Léo Linck,GOL,2001,70,BRA,
-botafogo,Alexander Barboza,ZAG,1995,76,ARG,cabeceio
-botafogo,Bastos,ZAG,1991,73,ANG,
-botafogo,David Ricardo,ZAG,2003,71,BRA,
+palmeiras,Paulinho,ATA,2000,75,BRA,finalizacao
+botafogo,John,GOL,1996,76,BRA,lideranca
+botafogo,Léo Linck,GOL,2001,70,BRA,lideranca
+botafogo,Barboza,ZAG,1995,76,ARG,cabeceio
+botafogo,Bastos,ZAG,1991,73,ANG,-
+botafogo,David Ricardo,ZAG,2003,71,BRA,lideranca|cabeceio
 botafogo,Vitinho,LAT,1999,74,BRA,velocidade
 botafogo,Alex Telles,LAT,1992,76,BRA,cobrancas|passe
-botafogo,Cuiabano,LAT,2003,71,BRA,
+botafogo,Cuiabano,LAT,2003,71,BRA,marcacao|passe
 botafogo,Marlon Freitas,VOL,1995,76,BRA,passe|lideranca
 botafogo,Gregore,VOL,1994,75,BRA,marcacao
-botafogo,Danilo Barbosa,VOL,1996,73,BRA,
-botafogo,Allan,VOL,1991,72,BRA,
-botafogo,Jefferson Savarino,MEI,1996,77,VEN,drible
-botafogo,Álvaro Montoro,MEI,2006,72,ARG,
-botafogo,Santiago Rodríguez,MEI,2000,74,URU,
-botafogo,Artur,ATA,1998,75,BRA,
+botafogo,Danilo Barbosa,VOL,1996,73,BRA,marcacao|passe
+botafogo,Allan,VOL,1991,72,BRA,cobrancas
+botafogo,Savarino,MEI,1996,77,VEN,drible
+botafogo,Montoro,MEI,2006,72,ARG,passe
+botafogo,Santi Rodríguez,MEI,2000,74,URU,cobrancas
+botafogo,Artur,ATA,1998,75,BRA,-
 botafogo,Arthur Cabral,ATA,1998,75,BRA,finalizacao|cabeceio
-botafogo,Joaquín Correa,ATA,1994,75,ARG,
+botafogo,Correa,ATA,1994,75,ARG,cabeceio
 botafogo,Matheus Martins,ATA,2003,74,BRA,velocidade
-botafogo,Chris Ramos,ATA,1996,72,ESP,
+botafogo,Chris Ramos,ATA,1996,72,ESP,-
 cruzeiro,Cássio,GOL,1987,76,BRA,reflexos|lideranca
-cruzeiro,Léo Aragão,GOL,1999,69,BRA,
+cruzeiro,Léo Aragão,GOL,1999,69,BRA,-
 cruzeiro,Fabrício Bruno,ZAG,1996,76,BRA,cabeceio
-cruzeiro,Jonathan Jesus,ZAG,1999,73,BRA,
-cruzeiro,Fabián Villalba,ZAG,1998,73,PAR,
-cruzeiro,William,LAT,1995,75,BRA,
-cruzeiro,Fagner,LAT,1989,72,BRA,
-cruzeiro,Kaiki,LAT,2003,72,BRA,
+cruzeiro,Jonathan Jesus,ZAG,1999,73,BRA,cabeceio
+cruzeiro,Villalba,ZAG,1998,73,PAR,cabeceio
+cruzeiro,William,LAT,1995,75,BRA,-
+cruzeiro,Fagner,LAT,1989,72,BRA,velocidade
+cruzeiro,Kaiki,LAT,2003,72,BRA,drible
 cruzeiro,Lucas Romero,VOL,1994,76,ARG,marcacao|lideranca
 cruzeiro,Lucas Silva,VOL,1993,74,BRA,passe
-cruzeiro,Walace,VOL,1995,74,BRA,
-cruzeiro,Christian,VOL,2001,73,BRA,
+cruzeiro,Walace,VOL,1995,74,BRA,lideranca
+cruzeiro,Christian,VOL,2001,73,BRA,marcacao
 cruzeiro,Matheus Pereira,MEI,1996,80,BRA,passe|cobrancas
-cruzeiro,Eduardo,MEI,1990,73,BRA,
+cruzeiro,Eduardo,MEI,1990,73,BRA,-
 cruzeiro,Kaio Jorge,ATA,2002,78,BRA,finalizacao
-cruzeiro,Luis Sinisterra,ATA,1999,75,COL,velocidade
-cruzeiro,Keny Arroyo,ATA,2006,73,ECU,velocidade
-cruzeiro,Wanderson,ATA,1994,74,BRA,
-cruzeiro,Gabriel Barbosa,ATA,1996,75,BRA,finalizacao
-cruzeiro,Lautaro Díaz,ATA,1998,72,ARG,
-saopaulo,Rafael,GOL,1989,76,BRA,
-saopaulo,Robert Arboleda,ZAG,1991,75,ECU,cabeceio
-saopaulo,Alan Franco,ZAG,1996,74,ARG,
-saopaulo,Sabino,ZAG,1996,72,BRA,
-saopaulo,Cédric Soares,LAT,1991,72,POR,
-saopaulo,Wendell,LAT,1993,73,BRA,
-saopaulo,Enzo Díaz,LAT,1996,72,ARG,
+cruzeiro,Sinisterra,ATA,1999,75,COL,velocidade
+cruzeiro,Arroyo,ATA,2006,73,ECU,velocidade
+cruzeiro,Wanderson,ATA,1994,74,BRA,velocidade
+cruzeiro,Gabigol,ATA,1996,75,BRA,finalizacao
+cruzeiro,Lautaro Díaz,ATA,1998,72,ARG,drible|finalizacao
+saopaulo,Rafael,GOL,1989,76,BRA,-
+saopaulo,Arboleda,ZAG,1991,75,ECU,cabeceio
+saopaulo,Alan Franco,ZAG,1996,74,ARG,cabeceio
+saopaulo,Sabino,ZAG,1996,72,BRA,lideranca
+saopaulo,Cédric,LAT,1991,72,POR,-
+saopaulo,Wendell,LAT,1993,73,BRA,velocidade
+saopaulo,Enzo Díaz,LAT,1996,72,ARG,-
 saopaulo,Pablo Maia,VOL,2002,76,BRA,marcacao
 saopaulo,Marcos Antônio,VOL,2000,74,BRA,passe
-saopaulo,Damián Bobadilla,VOL,2001,72,PAR,
-saopaulo,Alisson,VOL,1993,72,BRA,
+saopaulo,Bobadilla,VOL,2001,72,PAR,-
+saopaulo,Alisson,VOL,1993,72,BRA,-
 saopaulo,Oscar,MEI,1991,77,BRA,passe
 saopaulo,Lucas Moura,MEI,1992,78,BRA,drible|velocidade
-saopaulo,Jonathan Calleri,ATA,1993,76,ARG,finalizacao|cabeceio
+saopaulo,Calleri,ATA,1993,76,ARG,finalizacao|cabeceio
 saopaulo,Luciano,ATA,1993,75,BRA,finalizacao
 saopaulo,Ferreirinha,ATA,1998,73,BRA,velocidade
-saopaulo,Gonzalo Tapia,ATA,2002,71,CHI,
+saopaulo,Tapia,ATA,2002,71,CHI,-
 corinthians,Hugo Souza,GOL,1999,78,BRA,reflexos
 corinthians,Félix Torres,ZAG,1997,75,ECU,cabeceio
-corinthians,Gustavo Henrique,ZAG,1993,74,BRA,
-corinthians,André Ramalho,ZAG,1992,74,BRA,
+corinthians,Gustavo Henrique,ZAG,1993,74,BRA,lideranca
+corinthians,André Ramalho,ZAG,1992,74,BRA,-
 corinthians,Matheuzinho,LAT,2000,75,BRA,velocidade
-corinthians,Fabrizio Angileri,LAT,1994,73,ARG,
-corinthians,Matheus Bidu,LAT,1999,72,BRA,
+corinthians,Angileri,LAT,1994,73,ARG,velocidade
+corinthians,Matheus Bidu,LAT,1999,72,BRA,passe
 corinthians,Raniele,VOL,1996,74,BRA,marcacao
 corinthians,José Martínez,VOL,1994,74,VEN,marcacao
-corinthians,Breno Bidon,VOL,2005,72,BRA,
-corinthians,Maycon,VOL,1997,73,BRA,
-corinthians,André Carrillo,MEI,1991,74,PER,
-corinthians,Rodrigo Garro,MEI,1998,78,ARG,passe|cobrancas
-corinthians,Memphis Depay,ATA,1994,80,NED,finalizacao|drible
+corinthians,Breno Bidon,VOL,2005,72,BRA,cobrancas
+corinthians,Maycon,VOL,1997,73,BRA,-
+corinthians,Carrillo,MEI,1991,74,PER,velocidade
+corinthians,Garro,MEI,1998,78,ARG,passe|cobrancas
+corinthians,Memphis,ATA,1994,80,NED,finalizacao|drible
 corinthians,Yuri Alberto,ATA,2001,77,BRA,finalizacao|velocidade
-corinthians,Ángel Romero,ATA,1992,73,PAR,
-corinthians,Talles Magno,ATA,2002,71,BRA,
-atleticomg,Everson,GOL,1990,75,BRA,
-atleticomg,Lyanco,ZAG,1997,74,BRA,
+corinthians,Ángel Romero,ATA,1992,73,PAR,-
+corinthians,Talles Magno,ATA,2002,71,BRA,-
+atleticomg,Everson,GOL,1990,75,BRA,lideranca
+atleticomg,Lyanco,ZAG,1997,74,BRA,-
 atleticomg,Junior Alonso,ZAG,1993,75,PAR,lideranca
-atleticomg,Iván Román,ZAG,2006,70,CHI,
-atleticomg,Natanael,LAT,2001,72,BRA,
+atleticomg,Román,ZAG,2006,70,CHI,cabeceio
+atleticomg,Natanael,LAT,2001,72,BRA,-
 atleticomg,Guilherme Arana,LAT,1997,78,BRA,velocidade|passe
-atleticomg,Caio Paulista,LAT,1998,72,BRA,
-atleticomg,Alan Franco,VOL,1998,75,ECU,
-atleticomg,Fausto Vera,VOL,2000,74,ARG,
-atleticomg,Alexsander,VOL,2003,72,BRA,
+atleticomg,Caio Paulista,LAT,1998,72,BRA,drible
+atleticomg,Alan Franco,VOL,1998,75,ECU,marcacao
+atleticomg,Fausto Vera,VOL,2000,74,ARG,marcacao
+atleticomg,Alexsander,VOL,2003,72,BRA,marcacao
 atleticomg,Gustavo Scarpa,MEI,1994,77,BRA,passe|cobrancas
 atleticomg,Bernard,MEI,1992,74,BRA,drible
-atleticomg,Reinier,MEI,2002,72,BRA,
+atleticomg,Reinier,MEI,2002,72,BRA,-
 atleticomg,Hulk,ATA,1986,77,BRA,finalizacao|cobrancas
 atleticomg,Rony,ATA,1995,74,BRA,velocidade
 atleticomg,Dudu,ATA,1992,74,BRA,drible
-atleticomg,Tomás Cuello,ATA,1999,74,ARG,
+atleticomg,Cuello,ATA,1999,74,ARG,cabeceio
 fluminense,Fábio,GOL,1980,72,BRA,lideranca
-fluminense,Vitor Eudes,GOL,1999,68,BRA,
+fluminense,Vitor Eudes,GOL,1999,68,BRA,reflexos
 fluminense,Thiago Silva,ZAG,1984,76,BRA,lideranca|cabeceio
-fluminense,Juan Pablo Freytes,ZAG,2000,74,ARG,
-fluminense,Ignácio,ZAG,1997,73,BRA,
-fluminense,Samuel Xavier,LAT,1990,72,BRA,
-fluminense,Guga,LAT,1998,72,BRA,
-fluminense,Renê,LAT,1992,72,BRA,
-fluminense,Martinelli,VOL,2001,74,BRA,
-fluminense,Hércules,VOL,2001,74,BRA,
-fluminense,Facundo Bernal,VOL,2003,72,URU,
-fluminense,Paulo Henrique Ganso,MEI,1989,75,BRA,passe
-fluminense,Luciano Acosta,MEI,1994,77,ARG,drible|cobrancas
-fluminense,Agustín Canobbio,ATA,1998,75,URU,velocidade
-fluminense,Kevin Serna,ATA,1997,73,COL,
-fluminense,Yeferson Soteldo,ATA,1997,75,VEN,drible
-fluminense,Germán Cano,ATA,1988,73,ARG,finalizacao
-fluminense,John Kennedy,ATA,2002,72,BRA,
-internacional,Sergio Rochet,GOL,1993,77,URU,reflexos
-internacional,Vitão,ZAG,2000,75,BRA,
-internacional,Juninho,ZAG,1995,72,BRA,
-internacional,Gabriel Mercado,ZAG,1987,70,ARG,lideranca
-internacional,Alexandro Bernabei,LAT,2000,75,ARG,passe
-internacional,Braian Aguirre,LAT,2000,72,ARG,
+fluminense,Freytes,ZAG,2000,74,ARG,lideranca
+fluminense,Ignácio,ZAG,1997,73,BRA,cabeceio
+fluminense,Samuel Xavier,LAT,1990,72,BRA,marcacao
+fluminense,Guga,LAT,1998,72,BRA,-
+fluminense,Renê,LAT,1992,72,BRA,-
+fluminense,Martinelli,VOL,2001,74,BRA,lideranca
+fluminense,Hércules,VOL,2001,74,BRA,passe
+fluminense,Bernal,VOL,2003,72,URU,-
+fluminense,Ganso,MEI,1989,75,BRA,passe
+fluminense,Lucho Acosta,MEI,1994,77,ARG,drible|cobrancas
+fluminense,Canobbio,ATA,1998,75,URU,velocidade
+fluminense,Serna,ATA,1997,73,COL,cabeceio|finalizacao
+fluminense,Soteldo,ATA,1997,75,VEN,drible
+fluminense,Cano,ATA,1988,73,ARG,finalizacao
+fluminense,John Kennedy,ATA,2002,72,BRA,velocidade
+internacional,Rochet,GOL,1993,77,URU,reflexos
+internacional,Vitão,ZAG,2000,75,BRA,marcacao
+internacional,Juninho,ZAG,1995,72,BRA,-
+internacional,Mercado,ZAG,1987,70,ARG,lideranca
+internacional,Bernabei,LAT,2000,75,ARG,passe
+internacional,Aguirre,LAT,2000,72,ARG,drible|marcacao
 internacional,Thiago Maia,VOL,1997,74,BRA,marcacao
-internacional,Bruno Henrique,VOL,1989,72,BRA,
-internacional,Fernando,VOL,1987,71,BRA,
+internacional,Bruno Henrique,VOL,1989,72,BRA,lideranca
+internacional,Fernando,VOL,1987,71,BRA,-
 internacional,Alan Patrick,MEI,1991,78,BRA,passe|cobrancas
-internacional,Bruno Tabata,MEI,1997,73,BRA,
+internacional,Bruno Tabata,MEI,1997,73,BRA,velocidade
 internacional,Wesley,ATA,2000,74,BRA,velocidade
-internacional,Rafael Santos Borré,ATA,1995,75,COL,finalizacao
-internacional,Johan Carbonero,ATA,2000,74,COL,drible
+internacional,Borré,ATA,1995,75,COL,finalizacao
+internacional,Carbonero,ATA,2000,74,COL,drible
 internacional,Enner Valencia,ATA,1989,74,ECU,finalizacao
-internacional,Vitinho,ATA,1999,72,BRA,
-gremio,Tiago Volpi,GOL,1991,74,BRA,
-gremio,Walter Kannemann,ZAG,1991,73,ARG,marcacao|lideranca
-gremio,Gustavo Martins,ZAG,2003,72,BRA,
-gremio,Fabián Balbuena,ZAG,1991,73,PAR,
-gremio,Marlon,LAT,1997,71,BRA,
-gremio,João Pedro,LAT,1997,71,BRA,
-gremio,Mathías Villasanti,VOL,1997,76,PAR,marcacao
-gremio,Dodi,VOL,1996,72,BRA,
-gremio,Edenílson,VOL,1989,72,BRA,
-gremio,Franco Cristaldo,MEI,1996,75,ARG,passe
+internacional,Vitinho,ATA,1999,72,BRA,cabeceio
+gremio,Tiago Volpi,GOL,1991,74,BRA,reflexos
+gremio,Kannemann,ZAG,1991,73,ARG,marcacao|lideranca
+gremio,Gustavo Martins,ZAG,2003,72,BRA,-
+gremio,Balbuena,ZAG,1991,73,PAR,lideranca
+gremio,Marlon,LAT,1997,71,BRA,-
+gremio,João Pedro,LAT,1997,71,BRA,marcacao
+gremio,Villasanti,VOL,1997,76,PAR,marcacao
+gremio,Dodi,VOL,1996,72,BRA,cobrancas|marcacao
+gremio,Edenílson,VOL,1989,72,BRA,cobrancas
+gremio,Cristaldo,MEI,1996,75,ARG,passe
 gremio,Arthur,MEI,1996,74,BRA,passe
-gremio,Willian,MEI,1988,73,BRA,
-gremio,Martin Braithwaite,ATA,1991,75,DEN,finalizacao
-gremio,Francis Amuzu,ATA,1999,73,BEL,velocidade
+gremio,Willian,MEI,1988,73,BRA,-
+gremio,Braithwaite,ATA,1991,75,DEN,finalizacao
+gremio,Amuzu,ATA,1999,73,BEL,velocidade
 gremio,Carlos Vinícius,ATA,1995,74,BRA,cabeceio
-bahia,Ronaldo,GOL,1996,73,BRA,
-bahia,Marcos Felipe,GOL,1996,72,BRA,
-bahia,Gabriel Xavier,ZAG,2000,72,BRA,
-bahia,David Duarte,ZAG,1995,73,BRA,
-bahia,Kanu,ZAG,1997,71,BRA,
-bahia,Santiago Arias,LAT,1992,73,COL,
+bahia,Ronaldo,GOL,1996,73,BRA,-
+bahia,Marcos Felipe,GOL,1996,72,BRA,-
+bahia,Gabriel Xavier,ZAG,2000,72,BRA,marcacao
+bahia,David Duarte,ZAG,1995,73,BRA,marcacao|lideranca
+bahia,Kanu,ZAG,1997,71,BRA,-
+bahia,Arias,LAT,1992,73,COL,passe
 bahia,Luciano Juba,LAT,1999,76,BRA,cobrancas
-bahia,Gilberto,LAT,1993,72,BRA,
+bahia,Gilberto,LAT,1993,72,BRA,-
 bahia,Caio Alexandre,VOL,1999,75,BRA,passe
-bahia,Jean Lucas,VOL,1998,75,BRA,
-bahia,Nicolás Acevedo,VOL,1999,73,URU,marcacao
+bahia,Jean Lucas,VOL,1998,75,BRA,-
+bahia,Acevedo,VOL,1999,73,URU,marcacao
 bahia,Everton Ribeiro,MEI,1989,76,BRA,passe|lideranca
 bahia,Cauly,MEI,1995,75,BRA,drible
-bahia,Rodrigo Nestor,MEI,2000,73,BRA,
-bahia,Michel Araújo,MEI,1996,72,URU,
+bahia,Rodrigo Nestor,MEI,2000,73,BRA,passe
+bahia,Michel Araújo,MEI,1996,72,URU,passe
 bahia,Willian José,ATA,1991,73,BRA,cabeceio
 bahia,Erick Pulga,ATA,2002,73,BRA,velocidade
 bahia,Ademir,ATA,1995,73,BRA,velocidade
-bahia,Kayky,ATA,2003,72,BRA,
+bahia,Kayky,ATA,2003,72,BRA,-
 vasco,Léo Jardim,GOL,1995,76,BRA,reflexos
-vasco,Robert Renan,ZAG,2003,72,BRA,
-vasco,Lucas Freitas,ZAG,2003,71,BRA,
-vasco,Carlos Cuesta,ZAG,1999,72,COL,
-vasco,Paulo Henrique,LAT,1996,73,BRA,
-vasco,Puma Rodríguez,LAT,1999,72,URU,
-vasco,Lucas Piton,LAT,2000,74,BRA,
-vasco,Hugo Moura,VOL,1997,72,BRA,
-vasco,Thiago Mendes,VOL,1992,72,BRA,
-vasco,Tchê Tchê,VOL,1992,72,BRA,
-vasco,Philippe Coutinho,MEI,1992,77,BRA,passe|cobrancas
-vasco,Nuno Moreira,MEI,1999,73,POR,
-vasco,Pablo Vegetti,ATA,1988,75,ARG,finalizacao|cabeceio
+vasco,Robert Renan,ZAG,2003,72,BRA,velocidade|marcacao
+vasco,Lucas Freitas,ZAG,2003,71,BRA,marcacao
+vasco,Cuesta,ZAG,1999,72,COL,cabeceio|velocidade
+vasco,Paulo Henrique,LAT,1996,73,BRA,marcacao
+vasco,Puma Rodríguez,LAT,1999,72,URU,marcacao
+vasco,Lucas Piton,LAT,2000,74,BRA,drible
+vasco,Hugo Moura,VOL,1997,72,BRA,cobrancas
+vasco,Thiago Mendes,VOL,1992,72,BRA,-
+vasco,Tchê Tchê,VOL,1992,72,BRA,-
+vasco,Coutinho,MEI,1992,77,BRA,passe|cobrancas
+vasco,Nuno Moreira,MEI,1999,73,POR,finalizacao
+vasco,Vegetti,ATA,1988,75,ARG,finalizacao|cabeceio
 vasco,Andrés Gómez,ATA,2002,73,COL,velocidade
-vasco,David,ATA,1995,71,BRA,
-santos,Gabriel Brazão,GOL,2000,75,BRA,
-santos,Zé Ivaldo,ZAG,1997,72,BRA,
-santos,Luan Peres,ZAG,1994,73,BRA,
-santos,Adonis Frías,ZAG,1998,73,ARG,
-santos,Igor Vinícius,LAT,1997,71,BRA,
-santos,Gonzalo Escobar,LAT,1997,72,ARG,
-santos,Souza,LAT,2006,70,BRA,
-santos,João Schmidt,VOL,1993,73,BRA,
-santos,Zé Rafael,VOL,1993,74,BRA,
-santos,Willian Arão,VOL,1992,73,BRA,
+vasco,David,ATA,1995,71,BRA,velocidade
+santos,Gabriel Brazão,GOL,2000,75,BRA,lideranca
+santos,Zé Ivaldo,ZAG,1997,72,BRA,marcacao
+santos,Luan Peres,ZAG,1994,73,BRA,cabeceio
+santos,Frías,ZAG,1998,73,ARG,marcacao
+santos,Igor Vinícius,LAT,1997,71,BRA,velocidade
+santos,Escobar,LAT,1997,72,ARG,-
+santos,Souza,LAT,2006,70,BRA,-
+santos,João Schmidt,VOL,1993,73,BRA,-
+santos,Zé Rafael,VOL,1993,74,BRA,cobrancas|marcacao
+santos,Willian Arão,VOL,1992,73,BRA,lideranca
 santos,Neymar,MEI,1992,82,BRA,drible|cobrancas
-santos,Benjamín Rollheiser,MEI,2000,74,ARG,
-santos,Álvaro Barreal,ATA,2000,74,ARG,velocidade
-santos,Guilherme,ATA,1995,73,BRA,
+santos,Rollheiser,MEI,2000,74,ARG,passe
+santos,Barreal,ATA,2000,74,ARG,velocidade
+santos,Guilherme,ATA,1995,73,BRA,-
 santos,Tiquinho Soares,ATA,1991,72,BRA,finalizacao
-athletico,Santos,GOL,1990,72,BRA,
+athletico,Santos,GOL,1990,72,BRA,lideranca
 athletico,Thiago Heleno,ZAG,1988,70,BRA,lideranca
-athletico,Kaique Rocha,ZAG,2001,71,BRA,
-athletico,Lucas Esquivel,LAT,2001,70,ARG,
-athletico,Felipinho,VOL,2004,69,BRA,
-athletico,Bruno Zapelli,MEI,2002,72,ARG,
-athletico,Kevin Viveros,ATA,2001,72,COL,finalizacao
-athletico,Julimar,ATA,1998,69,BRA,
-bragantino,Cleiton,GOL,1997,74,BRA,
-bragantino,Pedro Henrique,ZAG,1990,72,BRA,
-bragantino,Gustavo Marques,ZAG,2002,71,BRA,
-bragantino,Juninho Capixaba,LAT,1997,73,BRA,
+athletico,Kaique Rocha,ZAG,2001,71,BRA,-
+athletico,Esquivel,LAT,2001,70,ARG,-
+athletico,Felipinho,VOL,2004,69,BRA,passe|marcacao
+athletico,Zapelli,MEI,2002,72,ARG,-
+athletico,Viveros,ATA,2001,72,COL,finalizacao
+athletico,Julimar,ATA,1998,69,BRA,drible
+bragantino,Cleiton,GOL,1997,74,BRA,-
+bragantino,Pedro Henrique,ZAG,1990,72,BRA,-
+bragantino,Gustavo Marques,ZAG,2002,71,BRA,marcacao|velocidade
+bragantino,Juninho Capixaba,LAT,1997,73,BRA,marcacao
 bragantino,Jhon Jhon,MEI,2002,74,BRA,drible
-bragantino,Gustavinho,MEI,2001,70,BRA,
-bragantino,Eduardo Sasha,ATA,1992,72,BRA,
-bragantino,Isidro Pitta,ATA,1999,73,PAR,finalizacao
-coritiba,Pedro Morisco,GOL,2004,71,BRA,
+bragantino,Gustavinho,MEI,2001,70,BRA,drible
+bragantino,Eduardo Sasha,ATA,1992,72,BRA,-
+bragantino,Pitta,ATA,1999,73,PAR,finalizacao
+coritiba,Pedro Morisco,GOL,2004,71,BRA,lideranca
 coritiba,Maicon,ZAG,1988,71,BRA,lideranca
-coritiba,Sebastián Gómez,VOL,1996,71,COL,
+coritiba,Sebastián Gómez,VOL,1996,71,COL,marcacao|cobrancas
 coritiba,Josué,MEI,1994,71,BRA,passe
-coritiba,Lucas Ronier,ATA,2005,71,BRA,
-coritiba,Clayson,ATA,1995,69,BRA,
-vitoria,Lucas Arcanjo,GOL,1999,73,BRA,
-vitoria,Lucas Halter,ZAG,2000,71,BRA,
-vitoria,Raúl Cáceres,LAT,1991,70,PAR,
-vitoria,Ronald,VOL,2002,71,BRA,
-vitoria,Matheuzinho,MEI,1999,72,BRA,
+coritiba,Lucas Ronier,ATA,2005,71,BRA,cabeceio
+coritiba,Clayson,ATA,1995,69,BRA,velocidade|drible
+vitoria,Lucas Arcanjo,GOL,1999,73,BRA,reflexos
+vitoria,Lucas Halter,ZAG,2000,71,BRA,velocidade
+vitoria,Cáceres,LAT,1991,70,PAR,drible|passe
+vitoria,Ronald,VOL,2002,71,BRA,lideranca
+vitoria,Matheuzinho,MEI,1999,72,BRA,finalizacao
 vitoria,Renato Kayzer,ATA,1996,72,BRA,finalizacao
-vitoria,Osvaldo,ATA,1987,69,BRA,
-mirassol,Walter,GOL,1987,72,BRA,
+vitoria,Osvaldo,ATA,1987,69,BRA,-
+mirassol,Walter,GOL,1987,72,BRA,-
 mirassol,Reinaldo,LAT,1989,73,BRA,cobrancas
-mirassol,Danielzinho,VOL,1995,72,BRA,
-mirassol,Neto Moura,VOL,1996,72,BRA,
-mirassol,Chico da Costa,ATA,1998,72,BRA,
+mirassol,Danielzinho,VOL,1995,72,BRA,passe
+mirassol,Neto Moura,VOL,1996,72,BRA,cobrancas
+mirassol,Chico da Costa,ATA,1998,72,BRA,finalizacao|drible
 mirassol,Negueba,ATA,1993,72,BRA,velocidade
 chapecoense,Giovanni Augusto,MEI,1989,69,BRA,passe
-chapecoense,Mailton,ATA,1999,68,BRA,
-remo,Marcelo Rangel,GOL,1988,69,BRA,
+chapecoense,Mailton,ATA,1999,68,BRA,cabeceio
+remo,Marcelo Rangel,GOL,1988,69,BRA,reflexos
 remo,Pedro Rocha,ATA,1994,70,BRA,velocidade
-fortaleza,Brenno,GOL,1999,72,BRA,
-fortaleza,Emanuel Brítez,LAT,1992,71,ARG,
-fortaleza,Lucas Sasha,VOL,1990,71,BRA,
-fortaleza,Pochettino,MEI,1996,71,ARG,
-fortaleza,Breno Lopes,ATA,1996,70,BRA,
-fortaleza,Juan Martín Lucero,ATA,1991,72,ARG,finalizacao
-ceara,Fernando Sobral,VOL,1994,70,BRA,
-ceara,Lourenço,MEI,1995,69,BRA,
+fortaleza,Brenno,GOL,1999,72,BRA,-
+fortaleza,Brítez,LAT,1992,71,ARG,-
+fortaleza,Lucas Sasha,VOL,1990,71,BRA,-
+fortaleza,Pochettino,MEI,1996,71,ARG,passe
+fortaleza,Breno Lopes,ATA,1996,70,BRA,drible|cabeceio
+fortaleza,Lucero,ATA,1991,72,ARG,finalizacao
+ceara,Fernando Sobral,VOL,1994,70,BRA,-
+ceara,Lourenço,MEI,1995,69,BRA,velocidade
 ceara,Pedro Raul,ATA,1996,71,BRA,finalizacao|cabeceio
 sport,Lucas Lima,MEI,1990,69,BRA,passe
-sport,Gonzalo Barreto,ATA,1992,69,URU,
-juventude,Gabriel Taliari,ATA,2003,68,BRA,
-americamg,Gustavinho,MEI,1998,66,BRA,
-goias,Rafael Gava,MEI,1993,66,BRA,
+sport,Barreto,ATA,1992,69,URU,-
+juventude,Gabriel Taliari,ATA,2003,68,BRA,-
+americamg,Gustavinho,MEI,1998,66,BRA,drible
+goias,Rafael Gava,MEI,1993,66,BRA,-

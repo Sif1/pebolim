@@ -1,7 +1,7 @@
 import { useState, type DragEvent, type ReactNode } from 'react';
 import { cellSlot, GRID_COLS, GRID_ROWS, presetCells, slotsFor } from '../engine/match/formations';
 import type { Pos, Tactics } from '../engine/types';
-import { energyColor, Rating, readable } from './common';
+import { energyColor, Rating, readable, shortName } from './common';
 
 // ---------- drag and drop between the field and player lists ----------
 
@@ -153,7 +153,7 @@ export function TacticsBoard({ tactics, xi, tokens, colors, compact, selected, o
               {p?.num ?? ''}
               {p?.yellow && <span className="yc" />}
             </div>
-            <div className="nm">{p ? p.name.split(' ').slice(-1)[0] : sl.pos}</div>
+            <div className="nm">{p ? shortName(p.name) : sl.pos}</div>
             {p && (p.fitness != null || p.rating !== undefined) && (
               <div className="tok-info">
                 {p.fitness != null && (

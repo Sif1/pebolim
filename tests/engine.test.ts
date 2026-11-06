@@ -14,6 +14,9 @@ import { prepareMatchday } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
 import { gzip, loadFromBytes, packState, saveToBytes } from '../src/engine/save';
 import type { GameState } from '../src/engine/types';
+import { datePlusMonths, resolveAuctions, returnLoans } from '../src/engine/transfers';
+import { autoLineup, lineupIssues } from '../src/engine/ai/lineup';
+import { autoShootout, Shootout } from '../src/engine/match/shootout';
 import { sortTable, squadOf } from '../src/engine/util';
 import { createWorld } from '../src/engine/world';
 import { synthSetup } from './helpers';
@@ -201,6 +204,164 @@ describe('commands', () => {
   });
 });
 
+describe('penalty shootout', () => {
+  it('follows the five-each then sudden-death rules', () => {
+    const so = new Shootout(0, [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]);
+    // home scores three, away misses three: away cannot catch up
+    for (let i = 0; i < 3; i++) {
+      so.record({ side: 0, taker: so.next()!.taker, dir: 0, dive: 2, out: 0 });
+      so.record({ side: 1, taker: so.next()!.taker, dir: 0, dive: 0, out: 1 });
+    }
+    expect(so.decided()).toBe(true);
+    expect(so.next()).toBeNull();
+    // level after five each goes to sudden death, alternating
+    const sd = new Shootout(1, [[1, 2, 3, 4, 5, 11], [6, 7, 8, 9, 10, 12]]);
+    for (let i = 0; i < 10; i++) {
+      const n = sd.next()!;
+      expect(n.side).toBe(i % 2 === 0 ? 1 : 0);
+      sd.record({ side: n.side, taker: n.taker, dir: 0, dive: 2, out: 0 });
+    }
+    expect(sd.decided()).toBe(false);
+    expect(sd.next()!.taker).toBe(12);
+  });
+
+  it('converts about three kicks in four with AI choices', () => {
+    const rng = Rng.fromSeed('pk');
+    let goals = 0;
+    let kicks = 0;
+    for (let i = 0; i < 400; i++) {
+      const takers = new Map(Array.from({ length: 22 }, (_, k) => [k + 1, { id: k + 1, name: '', str: 72, pen: false, gk: false }]));
+      const so = new Shootout(0, [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]]);
+      autoShootout(so, takers, [72, 72], rng);
+      kicks += so.kicks.length;
+      goals += so.kicks.filter((k) => k.out === 0).length;
+    }
+    expect(goals / kicks).toBeGreaterThan(0.68);
+    expect(goals / kicks).toBeLessThan(0.82);
+  });
+
+  it('waits for the managers in a live match and ends with the shootout score', () => {
+    let m: LiveMatch | null = null;
+    for (let seed = 1; seed < 80 && !m; seed++) {
+      const lm = new LiveMatch(synthSetup(70, 70, seed, true), [true, false]);
+      lm.sim.step(99999);
+      if (lm.inShootout) m = lm;
+    }
+    expect(m).not.toBeNull();
+    const live = m!;
+    live.tick(100, 60);
+    const fr = live.frame().pk!;
+    expect(fr.phase).toBe('order');
+    expect(fr.wait).toEqual([true, false]);
+    expect(live.pkOrder(0, fr.order[0].slice(0, 5).reverse())).toBeNull();
+    live.tick(100, 60);
+    expect(live.frame().pk!.phase).toBe('aim');
+    // the human picks every time it is asked; the clock runs the animations
+    for (let i = 0; i < 400 && !live.ended; i++) {
+      live.pkAim(0, (i % 3) as 0 | 1 | 2);
+      live.tick(500, 60);
+    }
+    expect(live.ended).toBe(true);
+    const r = live.sim.result();
+    expect(r.pens).not.toBeNull();
+    expect(r.pens![0]).not.toBe(r.pens![1]);
+  });
+});
+
+describe('market', () => {
+  /** Two human clubs in the same league, transfer windows always open. */
+  function twoManagers() {
+    const s = world();
+    s.meta.settings.windows = false;
+    const rng = new Rng(s.meta.rng);
+    const [ca, cb] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const a = createManager(s, rng, 'A', ca.id);
+    const b = createManager(s, rng, 'B', cb.id);
+    s.meta.rng = rng.state();
+    cb.balance = 1e9;
+    const p = squadOf(s, ca.id).sort((x, y) => x.str - y.str)[5];
+    return { s, ca, cb, a, b, p };
+  }
+
+  it('a listed price closes the deal at once', () => {
+    const { s, ca, cb, a, b, p } = twoManagers();
+    expect(runCommand(s, a.id, { c: 'setSale', pid: p.id, price: 1_500_000 }).ok).toBe(true);
+    expect(p.salePrice).toBe(1_500_000);
+    const before = ca.balance;
+    const r = runCommand(s, b.id, { c: 'bid', pid: p.id, kind: 'compra', fee: 1_500_000, wage: p.wage * 3, years: 3 });
+    expect(r.ok).toBe(true);
+    expect(p.clubId).toBe(cb.id);
+    expect(p.salePrice).toBeNull();
+    expect(ca.balance).toBe(before + 1_500_000);
+  });
+
+  it('loans last 6 or 12 months, the borrower pays the wage, then the player returns', () => {
+    const { s, ca, cb, a, b, p } = twoManagers();
+    expect(runCommand(s, a.id, { c: 'setLoanList', pid: p.id, months: 6 }).ok).toBe(true);
+    const r = runCommand(s, b.id, { c: 'bid', pid: p.id, kind: 'emprestimo', fee: 0, wage: 1, years: 1 });
+    expect(r.ok).toBe(true);
+    expect(p.clubId).toBe(cb.id);
+    expect(p.loan?.from).toBe(ca.id);
+    // half a season later he is back
+    const until = p.loan!.until;
+    expect(until).toBe(datePlusMonths(s, 6));
+    s.meta.season = Math.floor(until / 100);
+    s.meta.date = until % 100;
+    returnLoans(s);
+    expect(p.clubId).toBe(ca.id);
+    expect(p.loan).toBeNull();
+  });
+
+  it('auctions go to the highest sealed bid at the next match day', () => {
+    const { s, cb, a, b, p } = twoManagers();
+    expect(runCommand(s, a.id, { c: 'startAuction', pid: p.id, min: 100_000 }).ok).toBe(true);
+    // no regular bids while in auction, and the owner cannot bid
+    expect(runCommand(s, b.id, { c: 'bid', pid: p.id, kind: 'compra', fee: 1e6, wage: 1e5, years: 2 }).ok).toBe(false);
+    expect(runCommand(s, a.id, { c: 'auctionBid', pid: p.id, amount: 200_000 }).ok).toBe(false);
+    expect(runCommand(s, b.id, { c: 'auctionBid', pid: p.id, amount: 50_000 }).ok).toBe(false);
+    const huge = 50_000_000;
+    expect(runCommand(s, b.id, { c: 'auctionBid', pid: p.id, amount: huge }).ok).toBe(true);
+    // closes only once a date has passed
+    resolveAuctions(s, Rng.fromSeed(1));
+    expect(p.auction).not.toBeNull();
+    s.meta.date++;
+    const before = cb.balance;
+    resolveAuctions(s, Rng.fromSeed(1));
+    expect(p.clubId).toBe(cb.id);
+    expect(p.auction).toBeNull();
+    expect(cb.balance).toBe(before - huge);
+    expect(s.auctionBids[p.id]).toBeUndefined();
+  });
+
+  it('flags injured or suspended players in a manual lineup for today', () => {
+    const s = world();
+    const f = Object.values(s.fixtures).find((x) => x.date === s.meta.date)!;
+    const club = s.clubs[f.home];
+    const squad = squadOf(s, club.id);
+    club.autoLineup = false;
+    club.lineup = autoLineup(squad, club.tactics, f.comp);
+    expect(lineupIssues(s, club.id)).toEqual([]);
+    const [a, b] = club.lineup.xi.filter((x): x is number => x != null).map((id) => s.players[id]);
+    a.injury = 2;
+    b.ban[f.comp] = 1;
+    const issues = lineupIssues(s, club.id);
+    expect(issues.some((t) => t.includes(a.name) && t.includes('lesionado'))).toBe(true);
+    expect(issues.some((t) => t.includes(b.name) && t.includes('suspenso'))).toBe(true);
+    // picking the team automatically sidesteps them
+    club.autoLineup = true;
+    expect(lineupIssues(s, club.id)).toEqual([]);
+  });
+
+  it('checks the new market commands from clients', () => {
+    expect(validCommand({ c: 'setSale', pid: 1, price: 5e5 })).not.toBeNull();
+    expect(validCommand({ c: 'setSale', pid: 1, price: -1 })).toBeNull();
+    expect(validCommand({ c: 'setLoanList', pid: 1, months: 9 })).toBeNull();
+    expect(validCommand({ c: 'setLoanList', pid: 1, months: 6 })).not.toBeNull();
+    expect(validCommand({ c: 'auctionBid', pid: 1, amount: null })).not.toBeNull();
+    expect(validCommand({ c: 'bid', pid: 1, kind: 'emprestimo', fee: 0, wage: 1, years: 1, months: 7 })).toBeNull();
+  });
+});
+
 describe('new features', () => {
   it('custom positions keep the keeper and give each cell a role', () => {
     const shape = presetCells('4-4-2');
@@ -226,6 +387,22 @@ describe('new features', () => {
     const base = ppg('toque');
     expect(Math.abs(ppg('contra') - base)).toBeLessThan(0.2);
     expect(Math.abs(ppg('longa') - base)).toBeLessThan(0.2);
+  });
+
+  it('gives a realistic number of penalties (about 0.3 a match)', () => {
+    let pens = 0;
+    const N = 600;
+    for (let i = 0; i < N; i++) {
+      const sim = new MatchSim(synthSetup(78, 64, 9000 + i));
+      const orig = (sim as unknown as { doShot: (t: string, ...r: unknown[]) => void }).doShot.bind(sim);
+      (sim as unknown as { doShot: (t: string, ...r: unknown[]) => void }).doShot = (t: string, ...r: unknown[]) => {
+        if (t === 'penalty') pens++;
+        return orig(t, ...r);
+      };
+      sim.runToEnd();
+    }
+    expect(pens / N).toBeGreaterThan(0.15);
+    expect(pens / N).toBeLessThan(0.5);
   });
 
   it('records passes, tackles, xG and ratings in a match', () => {
@@ -312,7 +489,7 @@ describe('AI coach', () => {
     expect(aiPlan(sit({ minute: 62, diff: 0, decider: true })).mentality).toBe('ofensiva');
   });
 
-  it('plans before kick-off: favourites at home attack, weak sides away sit deep', () => {
+  it('plans before kick-off: favourites keep their shape, weak sides away sit deep', () => {
     const s = world();
     playDates(s, 2);
     const league = Object.values(s.clubs).filter((c) => c.league === 'BRA1').sort((a, b) => b.power - a.power);
@@ -322,9 +499,9 @@ describe('AI coach', () => {
     const fake = { ...f, home: strong.id, away: weak.id };
     const tStrong = aiPreMatchTactics(s, fake, strong, squadOf(s, strong.id), weak, squadOf(s, weak.id), false);
     const tWeak = aiPreMatchTactics(s, fake, weak, squadOf(s, weak.id), strong, squadOf(s, strong.id), false);
-    expect(tStrong.mentality).not.toBe('defensiva');
+    // measured (tools/skill.ts): all-out attack from kick-off gets punished on the counter
+    expect(tStrong.mentality).toBe('equilibrada');
     expect(tWeak.mentality).toBe('defensiva');
-    expect(tWeak.style).toBe('contra');
   });
 
   it('changes tactics during a match and reorganises after a red card', () => {
@@ -342,6 +519,23 @@ describe('AI coach', () => {
     (sim as unknown as { aiReorganise(s: 0 | 1): void }).aiReorganise(0);
     expect(side.onPitch[hole]).not.toBeNull();
     expect(side.onPitch.filter((x) => x == null)).toHaveLength(1);
+  });
+});
+
+describe('momentum', () => {
+  it('builds per-minute pressure that follows the stronger side', () => {
+    let strong = 0;
+    let weak = 0;
+    for (let i = 0; i < 30; i++) {
+      const sim = new MatchSim(synthSetup(80, 62, 700 + i));
+      sim.runToEnd();
+      expect(sim.momentum[0]).toHaveLength(90);
+      strong += sim.momentum[0].reduce((a, b) => a + b, 0);
+      weak += sim.momentum[1].reduce((a, b) => a + b, 0);
+      // a goal always shows up as pressure in its minute
+      expect(sim.momentum[0].some((v) => v > 0) && sim.momentum[1].some((v) => v > 0)).toBe(true);
+    }
+    expect(strong).toBeGreaterThan(weak * 1.2);
   });
 });
 
@@ -401,7 +595,7 @@ describe('save', () => {
     }
     const bytes = await gzip(JSON.stringify({ app: 'pebolim-manager', format: 1, state: packState(old) }));
     const back = await loadFromBytes(bytes);
-    expect(back.v).toBe(2);
+    expect(back.v).toBe(3);
     expect(back.clubs[club.id].tickets.base).toHaveLength(4);
     expect((back.clubs[club.id] as any).ticket).toBeUndefined();
   });

@@ -1,13 +1,18 @@
 import { dateLabel } from '../../engine/util';
 import { useMe } from '../../store';
-import { ClubBadge, compLabel } from '../common';
+import { ClubBadge, compLabel, useSort } from '../common';
 
 export function Calendario() {
   const { state, club } = useMe();
+  const mine = state && club ? Object.values(state.fixtures).filter((f) => f.home === club.id || f.away === club.id) : [];
+  const opp = (f: (typeof mine)[number]) => state!.clubs[f.home === club!.id ? f.away : f.home];
+  const { sorted: fixtures, th } = useSort(mine, { key: 'date', dir: 1 }, {
+    date: (f) => f.date,
+    comp: (f) => (state ? compLabel(state, f.comp) : f.comp) + String(f.date).padStart(3, '0'),
+    venue: (f) => (f.home === club?.id ? 0 : 1) * 1000 + f.date,
+    opp: (f) => opp(f).name,
+  });
   if (!state || !club) return null;
-  const fixtures = Object.values(state.fixtures)
-    .filter((f) => f.home === club.id || f.away === club.id)
-    .sort((a, b) => a.date - b.date);
   return (
     <div className="col">
       <h1>Calendário {state.meta.season}</h1>
@@ -15,10 +20,10 @@ export function Calendario() {
         <table className="t">
           <thead>
             <tr>
-              <th>Data</th>
-              <th>Competição</th>
-              <th />
-              <th>Adversário</th>
+              {th('date', 'Data')}
+              {th('comp', 'Competição')}
+              {th('venue', 'Local')}
+              {th('opp', 'Adversário')}
               <th className="center">Placar</th>
             </tr>
           </thead>

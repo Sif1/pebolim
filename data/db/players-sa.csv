@@ -1,63 +1,63 @@
 club,name,pos,birth,str,nat,traits
-river,Franco Armani,GOL,1986,74,ARG,lideranca
-river,Germán Pezzella,ZAG,1991,75,ARG,cabeceio
-river,Lucas Martínez Quarta,ZAG,1996,77,ARG,
-river,Gonzalo Montiel,LAT,1997,76,ARG,
-river,Marcos Acuña,LAT,1991,76,ARG,cobrancas
-river,Kevin Castaño,VOL,2000,75,COL,
+river,Armani,GOL,1986,74,ARG,lideranca
+river,Pezzella,ZAG,1991,75,ARG,cabeceio
+river,Martínez Quarta,ZAG,1996,77,ARG,velocidade
+river,Montiel,LAT,1997,76,ARG,-
+river,Acuña,LAT,1991,76,ARG,cobrancas
+river,Castaño,VOL,2000,75,COL,cobrancas
 river,Enzo Pérez,VOL,1986,72,ARG,lideranca
-river,Giuliano Galoppo,MEI,1999,74,ARG,
-river,Juan Fernando Quintero,MEI,1993,76,COL,passe|cobrancas
-river,Facundo Colidio,ATA,2000,74,ARG,
-river,Miguel Borja,ATA,1993,75,COL,finalizacao
-river,Maximiliano Salas,ATA,1997,74,ARG,
-river,Sebastián Driussi,ATA,1996,75,ARG,
-boca,Agustín Marchesín,GOL,1988,74,ARG,
+river,Galoppo,MEI,1999,74,ARG,velocidade
+river,Juanfer Quintero,MEI,1993,76,COL,passe|cobrancas
+river,Colidio,ATA,2000,74,ARG,drible
+river,Borja,ATA,1993,75,COL,finalizacao
+river,Maxi Salas,ATA,1997,74,ARG,finalizacao
+river,Driussi,ATA,1996,75,ARG,-
+boca,Marchesín,GOL,1988,74,ARG,-
 boca,Marcos Rojo,ZAG,1990,72,ARG,lideranca
-boca,Ayrton Costa,ZAG,1999,73,ARG,
-boca,Luis Advíncula,LAT,1990,73,PER,velocidade
+boca,Ayrton Costa,ZAG,1999,73,ARG,marcacao
+boca,Advíncula,LAT,1990,73,PER,velocidade
 boca,Leandro Paredes,VOL,1994,78,ARG,passe|cobrancas
-boca,Ander Herrera,VOL,1989,74,ESP,
+boca,Ander Herrera,VOL,1989,74,ESP,marcacao
 boca,Carlos Palacios,MEI,2000,74,CHI,drible
-boca,Exequiel Zeballos,ATA,2002,73,ARG,velocidade
-boca,Miguel Merentiel,ATA,1996,74,URU,
-boca,Edinson Cavani,ATA,1987,74,URU,finalizacao|cabeceio
-racingarg,Gabriel Arias,GOL,1987,76,CHI,
-racingarg,Facundo Mura,LAT,1999,73,ARG,
-racingarg,Gastón Martirena,LAT,2000,74,URU,
-racingarg,Agustín Almendra,MEI,2000,75,ARG,
-racingarg,Juan Nardoni,VOL,2002,73,ARG,
-racingarg,Adrián Martínez,ATA,1992,75,ARG,finalizacao
-racingarg,Santiago Solari,ATA,2001,73,ARG,
-estudiantes,Fernando Muslera,GOL,1986,74,URU,
-estudiantes,Santiago Ascacíbar,VOL,1997,74,ARG,marcacao
-estudiantes,Edwuin Cetré,ATA,2002,74,COL,drible
+boca,Zeballos,ATA,2002,73,ARG,velocidade
+boca,Merentiel,ATA,1996,74,URU,drible
+boca,Cavani,ATA,1987,74,URU,finalizacao|cabeceio
+racingarg,Gabriel Arias,GOL,1987,76,CHI,lideranca
+racingarg,Mura,LAT,1999,73,ARG,velocidade
+racingarg,Martirena,LAT,2000,74,URU,-
+racingarg,Almendra,MEI,2000,75,ARG,finalizacao
+racingarg,Nardoni,VOL,2002,73,ARG,-
+racingarg,Maravilla Martínez,ATA,1992,75,ARG,finalizacao
+racingarg,Santiago Solari,ATA,2001,73,ARG,finalizacao
+estudiantes,Muslera,GOL,1986,74,URU,reflexos
+estudiantes,Ascacíbar,VOL,1997,74,ARG,marcacao
+estudiantes,Cetré,ATA,2002,74,COL,drible
 estudiantes,Guido Carrillo,ATA,1991,73,ARG,cabeceio
-rosariocentral,Jorge Broun,GOL,1990,72,ARG,
-rosariocentral,Ignacio Malcorra,MEI,1987,72,ARG,cobrancas
-rosariocentral,Ángel Di María,ATA,1988,78,ARG,drible|cobrancas
-rosariocentral,Jaminton Campaz,ATA,2000,73,COL,
-independiente,Rodrigo Rey,GOL,1990,73,ARG,
-independiente,Iván Marcone,VOL,1990,72,ARG,
-lanus,Carlos Izquierdoz,ZAG,1988,72,ARG,
-lanus,Eduardo Salvio,ATA,1990,71,ARG,
-talleres,Guido Herrera,GOL,1992,73,ARG,
-sanlorenzo,Iker Muniain,MEI,1992,72,ESP,
+rosariocentral,Broun,GOL,1990,72,ARG,-
+rosariocentral,Malcorra,MEI,1987,72,ARG,cobrancas
+rosariocentral,Di María,ATA,1988,78,ARG,drible|cobrancas
+rosariocentral,Campaz,ATA,2000,73,COL,cabeceio
+independiente,Rodrigo Rey,GOL,1990,73,ARG,lideranca|reflexos
+independiente,Marcone,VOL,1990,72,ARG,passe|cobrancas
+lanus,Izquierdoz,ZAG,1988,72,ARG,-
+lanus,Toto Salvio,ATA,1990,71,ARG,-
+talleres,Guido Herrera,GOL,1992,73,ARG,-
+sanlorenzo,Muniain,MEI,1992,72,ESP,cobrancas
 penarol,Leonardo Fernández,MEI,1998,73,PAR,cobrancas
-penarol,Matías Arezo,ATA,2002,72,URU,
-nacionaluru,Diego Polenta,ZAG,1992,71,URU,
+penarol,Arezo,ATA,2002,72,URU,-
+nacionaluru,Polenta,ZAG,1992,71,URU,lideranca|velocidade
 colocolo,Arturo Vidal,MEI,1987,73,CHI,lideranca
-colocolo,Javier Correa,ATA,1992,72,ARG,
-uchile,Charles Aránguiz,MEI,1989,72,CHI,passe
-atlnacional,David Ospina,GOL,1988,74,COL,lideranca
+colocolo,Javier Correa,ATA,1992,72,ARG,-
+uchile,Aránguiz,MEI,1989,72,CHI,passe
+atlnacional,Ospina,GOL,1988,74,COL,lideranca
 atlnacional,Edwin Cardona,MEI,1992,72,COL,cobrancas
-atlnacional,Alfredo Morelos,ATA,1996,73,COL,
-millonarios,Radamel Falcao,ATA,1986,70,COL,finalizacao
-junior,Carlos Bacca,ATA,1986,70,COL,
-olimpia,Derlis González,ATA,1994,72,PAR,
-cerroporteno,Cecilio Domínguez,ATA,1994,71,PAR,
-universitario,Edison Flores,MEI,1994,71,PER,
+atlnacional,Morelos,ATA,1996,73,COL,drible
+millonarios,Falcao,ATA,1986,70,COL,finalizacao
+junior,Bacca,ATA,1986,70,COL,velocidade
+olimpia,Derlis González,ATA,1994,72,PAR,drible
+cerroporteno,Cecilio Domínguez,ATA,1994,71,PAR,velocidade
+universitario,Edison Flores,MEI,1994,71,PER,cobrancas
 alianzalima,Paolo Guerrero,ATA,1984,70,PER,cabeceio
-alianzalima,Hernán Barcos,ATA,1984,69,ARG,
-cristal,Yoshimar Yotún,MEI,1990,70,PER,passe
-ldu,Ricardo Adé,ZAG,1990,72,HAI,
+alianzalima,Barcos,ATA,1984,69,ARG,velocidade
+cristal,Yotún,MEI,1990,70,PER,passe
+ldu,Ricardo Adé,ZAG,1990,72,HAI,-

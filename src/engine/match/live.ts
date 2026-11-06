@@ -1,5 +1,34 @@
 import type { Tactics } from '../types';
 import { matchRating, MatchSim, PITCH_H, PITCH_W, type MatchEvent, type MatchResult, type MatchSetup } from './core';
+import { aiDive, aiShot, autoShootout, kickOutcome, type PkDir, type PkOutcome, type PkTaker, type Shootout } from './shootout';
+
+/** Real-time length of each shootout step, in ms. */
+export const PK_TIMES = {
+  /** managers pick their five takers */
+  order: 30_000,
+  /** taker picks a corner, keeper picks a side */
+  aim: 10_000,
+  /** run-up, shot and reaction on screen */
+  anim: 3_400,
+};
+
+/** A shootout as clients see it. During 'aim' nobody sees the other side's choice. */
+export interface PkFrame {
+  phase: 'order' | 'aim' | 'anim';
+  score: [number, number];
+  /** kicks so far: side, taker, shot direction, dive direction, outcome (0 goal, 1 save, 2 miss) */
+  kicks: [0 | 1, number, PkDir, PkDir, PkOutcome][];
+  /** side and taker of the kick being prepared or shown */
+  next: [0 | 1, number] | null;
+  /** ms left in this step */
+  left: number;
+  /** still waiting for these sides to choose */
+  wait: [boolean, boolean];
+  first: 0 | 1;
+  order: [number[], number[]];
+  /** keepers on the pitch */
+  keepers: [number, number];
+}
 
 export const MAX_PAUSES = 3;
 export const PAUSE_LIMIT_MS = 90_000;
@@ -47,11 +76,17 @@ export interface LiveFrame {
   ended: boolean;
   /** events since the previous frame */
   ev: MatchEvent[];
+  /** penalty shootout in progress */
+  pk?: PkFrame;
 }
 
 /** Lineup details (sent less often): who is where, fitness, subs used. */
 export interface LiveDetail {
   f: number;
+  /** momentum ×10 per minute so far, [home, away] */
+  mom: [number[], number[]];
+  /** current momentum minute (0-89) */
+  momAt: number;
   sides: {
     onPitch: (number | null)[];
     bench: number[];
@@ -95,7 +130,134 @@ export class LiveMatch {
     this.humans = humans;
     this.sim.sides[0].ai = !humans[0];
     this.sim.sides[1].ai = !humans[1];
+    // a human is here: a shootout is played kick by kick
+    this.sim.pkMode = humans[0] || humans[1] ? 'live' : 'auto';
     this.placeKickoff();
+  }
+
+  // ---------- penalty shootout ----------
+  private pk: {
+    so: Shootout;
+    phase: PkFrame['phase'];
+    left: number;
+    ready: [boolean, boolean];
+    shot: PkDir | null;
+    dive: PkDir | null;
+    takers: Map<number, PkTaker>;
+    /** the kick being shown in 'anim' */
+    showing: [0 | 1, number] | null;
+  } | null = null;
+
+  get inShootout() {
+    return this.sim.pkPending;
+  }
+
+  private startShootout() {
+    const so = this.sim.newShootout();
+    this.pk = {
+      so,
+      phase: 'order',
+      left: PK_TIMES.order,
+      ready: [!this.humans[0], !this.humans[1]],
+      shot: null,
+      dive: null,
+      takers: new Map([...this.sim.pkTakers(0), ...this.sim.pkTakers(1)].map((t) => [t.id, t])),
+      showing: null,
+    };
+    this.detailDirty = true;
+  }
+
+  private beginAim() {
+    const pk = this.pk!;
+    pk.phase = 'aim';
+    pk.left = PK_TIMES.aim;
+    pk.shot = null;
+    pk.dive = null;
+    pk.showing = null;
+  }
+
+  private takeKick() {
+    const pk = this.pk!;
+    const n = pk.so.next();
+    if (!n) return;
+    const rng = this.sim.rng;
+    const taker = pk.takers.get(n.taker) ?? { id: n.taker, name: '', str: 60, pen: false, gk: false };
+    const shot = pk.shot ?? aiShot(rng);
+    const dive = pk.dive ?? aiDive(rng, pk.so.shotsBy(n.side));
+    const out = kickOutcome(taker, this.sim.pkKeepers()[1 - n.side], shot, dive, rng);
+    pk.so.record({ side: n.side, taker: n.taker, dir: shot, dive, out });
+    pk.phase = 'anim';
+    pk.left = PK_TIMES.anim;
+    pk.showing = [n.side, n.taker];
+  }
+
+  private tickShootout(ms: number) {
+    if (!this.pk) this.startShootout();
+    const pk = this.pk!;
+    pk.left -= ms;
+    if (pk.phase === 'order') {
+      const set = (s: 0 | 1) => pk.ready[s] || !this.humans[s];
+      if ((set(0) && set(1)) || pk.left <= 0) this.beginAim();
+    } else if (pk.phase === 'aim') {
+      const n = pk.so.next();
+      if (!n) return this.sim.endWithPens(pk.so.score);
+      const shotIn = pk.shot != null || !this.humans[n.side];
+      const diveIn = pk.dive != null || !this.humans[1 - n.side];
+      if ((shotIn && diveIn) || pk.left <= 0) this.takeKick();
+    } else if (pk.left <= 0) {
+      if (pk.so.next()) this.beginAim();
+      else this.sim.endWithPens(pk.so.score);
+    }
+  }
+
+  /** A manager's five takers, in order (the rest follow by skill). */
+  pkOrder(side: 0 | 1, order: number[]): string | null {
+    const pk = this.pk;
+    if (!pk || pk.phase !== 'order') return 'A ordem dos batedores já foi definida.';
+    const onPitch = new Set(this.sim.pkTakers(side).map((t) => t.id));
+    const clean = order.filter((id, i) => onPitch.has(id) && order.indexOf(id) === i);
+    if (clean.length < Math.min(5, onPitch.size)) return 'Escolha cinco batedores.';
+    pk.so.order[side] = [...clean, ...pk.so.order[side].filter((id) => !clean.includes(id))];
+    pk.ready[side] = true;
+    return null;
+  }
+
+  /** The taker's corner or the keeper's dive, whichever this side owes for the coming kick. */
+  pkAim(side: 0 | 1, dir: PkDir): string | null {
+    const pk = this.pk;
+    if (!pk || pk.phase !== 'aim') return null;
+    const n = pk.so.next();
+    if (!n) return null;
+    if (n.side === side) pk.shot ??= dir;
+    else pk.dive ??= dir;
+    return null;
+  }
+
+  private pkFrame(): PkFrame | undefined {
+    const pk = this.pk;
+    if (!pk || !this.sim.pkPending) return undefined;
+    const n = pk.phase === 'anim' ? pk.showing : (() => {
+      const x = pk.so.next();
+      return x ? ([x.side, x.taker] as [0 | 1, number]) : null;
+    })();
+    const keeper = (s: 0 | 1) => this.sim.pkTakers(s).find((t) => t.gk)?.id ?? 0;
+    const waiting = (s: 0 | 1): boolean => {
+      if (!this.humans[s]) return false;
+      if (pk.phase === 'order') return !pk.ready[s];
+      if (pk.phase !== 'aim' || !n) return false;
+      return n[0] === s ? pk.shot == null : pk.dive == null;
+    };
+    return {
+      phase: pk.phase,
+      score: [...pk.so.score] as [number, number],
+      kicks: pk.so.kicks.map((k) => [k.side, k.taker, k.dir, k.dive, k.out]),
+      next: n,
+      left: Math.max(0, Math.round(pk.left)),
+      wait: [waiting(0), waiting(1)],
+      first: pk.so.first,
+      order: [[...pk.so.order[0]], [...pk.so.order[1]]],
+      keepers: [keeper(0), keeper(1)],
+    };
   }
 
   get ended() {
@@ -163,6 +325,10 @@ export class LiveMatch {
   /** Advance by real milliseconds; `base` is the plain match speed (game seconds per real second). */
   tick(realMs: number, base: number) {
     if (this.sim.ended) return;
+    if (this.sim.pkPending) {
+      this.paused = false;
+      return this.tickShootout(realMs);
+    }
     if (this.paused) {
       if (performance.now() - this.pausedAt > PAUSE_LIMIT_MS) this.resume();
       return;
@@ -187,6 +353,11 @@ export class LiveMatch {
   /** Simulate the rest instantly (Simular rápido). */
   finishNow(): MatchResult {
     this.paused = false;
+    if (this.sim.pkPending && this.pk) {
+      // finish the shootout already under way with AI choices
+      this.sim.endWithPens(autoShootout(this.pk.so, this.pk.takers, this.sim.pkKeepers(), this.sim.rng));
+      return this.sim.result();
+    }
     return this.sim.runToEnd();
   }
 
@@ -281,6 +452,7 @@ export class LiveMatch {
 
   pause(side: 0 | 1): string | null {
     if (this.sim.ended) return 'Partida encerrada';
+    if (this.sim.pkPending) return 'Disputa de pênaltis em andamento';
     if (this.paused) return null;
     if (this.pauses[side] >= MAX_PAUSES) return `Limite de ${MAX_PAUSES} pausas atingido`;
     this.pauses[side]++;
@@ -347,13 +519,17 @@ export class LiveMatch {
       pausedBy: this.pausedBy,
       ended: sim.ended,
       ev,
+      pk: this.pkFrame(),
     };
   }
 
   detail(): LiveDetail {
     this.detailDirty = false;
+    const at = this.sim.momentumBucket();
     return {
       f: this.fixtureId,
+      mom: [0, 1].map((s) => this.sim.momentum[s].slice(0, at + 1).map((v) => Math.round(v * 10))) as [number[], number[]],
+      momAt: at,
       sides: this.sim.sides.map((s, side) => {
         const fit: Record<number, number> = {};
         const rt: Record<number, number> = {};

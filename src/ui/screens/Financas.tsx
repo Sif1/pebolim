@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { clubComps, DATES_PER_SEASON, estimateGate, SECTORS, sectorBounds, usableCapacity } from '../../engine/economy';
+import { clubComps, DATES_PER_SEASON, estimateGate, expectedTickets, runningCosts, SECTORS, sectorBounds, usableCapacity, wageBudget } from '../../engine/economy';
 import type { Club, GameState, SectorPrices } from '../../engine/types';
 import { formatMoney, squadOf } from '../../engine/util';
 import { command, useMe } from '../../store';
@@ -12,6 +12,10 @@ export function Financas() {
   const income = l.tickets + l.sponsors + l.tv + l.prizes + l.sales;
   const expense = l.wages + l.upkeep + l.travel + l.purchases + l.works;
   const wages = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
+  const tickets = expectedTickets(state, club);
+  const budget = wageBudget(state, club);
+  const yearly = wages * 12;
+  const projected = club.baseIncome + tickets - yearly - runningCosts(club);
   const lastHome = Object.values(state.fixtures)
     .filter((f) => f.home === club.id && f.hg != null)
     .sort((a, b) => b.date - a.date)[0];
@@ -43,6 +47,38 @@ export function Financas() {
         <div className="stat">
           <span className="label">Custo por rodada (salários)</span>
           <span className="value">{formatMoney((wages * 12) / DATES_PER_SEASON)}</span>
+        </div>
+        <div className="stat">
+          <span className="label">Bilheteria prevista (ano)</span>
+          <span className="value">{formatMoney(tickets)}</span>
+        </div>
+      </div>
+      <div className={`panel ${yearly > budget ? 'budget-bad' : ''}`}>
+        <h3>Saúde financeira</h3>
+        <div className="row" style={{ alignItems: 'center', gap: 14 }}>
+          <div className="grow">
+            <div className="row small" style={{ justifyContent: 'space-between' }}>
+              <span>
+                Folha anual <b>{formatMoney(yearly)}</b> de um orçamento salarial de <b>{formatMoney(budget)}</b>
+              </span>
+              <span className={yearly > budget ? 'bad' : yearly > budget * 0.9 ? 'warn' : 'good'}>{Math.round((yearly / Math.max(1, budget)) * 100)}%</span>
+            </div>
+            <div className="bar" style={{ marginTop: 4 }}>
+              <div
+                style={{
+                  width: `${Math.min(100, (yearly / Math.max(1, budget)) * 100)}%`,
+                  background: yearly > budget ? 'var(--bad)' : yearly > budget * 0.9 ? 'var(--warn)' : 'var(--good)',
+                }}
+              />
+            </div>
+          </div>
+          <div className="small" style={{ minWidth: 220 }}>
+            Projeção do ano (sem prêmios e transferências): <Money v={projected} />
+          </div>
+        </div>
+        <div className="small muted" style={{ marginTop: 6 }}>
+          O orçamento é a receita prevista (patrocínio, TV e bilheteria) menos manutenção e viagens, mais uma parte do caixa que sobra. Acima dele o
+          clube perde dinheiro todo ano e a diretoria perde a paciência. Prêmios, boas campanhas nas copas e vendas são o lucro.
         </div>
       </div>
       <div className="grid2" style={{ alignItems: 'start' }}>
@@ -117,7 +153,7 @@ function TicketTable({ state, club }: { state: GameState; club: Club }) {
             <th key={s.label} className="right" title={`${Math.round(s.share * 100)}% dos lugares`}>
               {s.label}
               <div className="faint small">
-                R$ {sectorBounds(club, i)[0]}–{sectorBounds(club, i)[1]}
+                US$ {sectorBounds(club, i)[0]}–{sectorBounds(club, i)[1]}
               </div>
             </th>
           ))}

@@ -12,7 +12,12 @@ A browser football-manager game for playing with friends. One player hosts from 
 - AI coaches that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics, with every change shown in the match feed
 - Line-ups on a drawn pitch: drag players between the field, bench and reserves, and drag them to any of 25 positions (the role follows the area of the pitch)
 - Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
-- Transfer market search, bids between humans and the AI, contracts, finances, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions, player development, youth intake, board firing and job offers
+- Penalty shootouts you play: pick your five takers, then choose the corner for each kick and the side your keeper dives, with a pixel-art run-up and shot
+- Transfer market with search filters (position, age, força, potential, trait, nationality with flags, for sale / for loan / in auction), sortable columns, bids between humans and the AI
+  - Put your players up for sale at your price, offer them on loan for 6 or 12 months (the borrower pays the wages), or auction them: sealed bids from every manager and the AI, decided at the next round. The AI lists, loans and auctions its surplus players too, and buys listed players when the price is fair
+- Players have potential (0–5 stars: how far and how fast they grow, how slowly they decline) and traits (finalização, cabeceio, drible, passe…) that matter in the match engine
+- Contracts, finances in US$ with a wage-budget gauge, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions, player development, youth intake, board firing and job offers
+- Monthly awards in every country (player, young player and manager of the month), plus hat-tricks, goal milestones and streaks in the news
 - Saves are small `.pebolim` files (about 450 KB) that anyone in the session can download
 
 ## Run it
@@ -32,8 +37,8 @@ For friends on other networks, deploy it (see below) so everyone opens the same 
 2. Team pick:
    - **New game:** pick any club, or create your own. A custom club replaces a club you choose in that country's bottom division.
    - **Loaded game:** resume one of the career's managers, or start a new manager with any club that has no manager, or create your own club. Clubs whose managers are away stay reserved for them.
-3. Between rounds everyone works on their own screen. Each manager clicks **Pronto**, then the host clicks **Jogar rodada**.
-4. On match day, every human match is shown live. When all of them end, the host clicks **Ver resultados** to move to the round summary.
+3. Between rounds everyone works on their own screen. Each manager clicks **Pronto** (not possible while an injured or suspended player is in their line-up), then the host clicks **Continuar**.
+4. On match day, every human match is shown live. When all of them end, the host clicks **Ver resultados** to move to the round summary. Players put up for auction by other clubs show up after each match day.
 5. Anyone can click **Baixar save** at any time. Everyone's browser also autosaves (Início → Carregar jogo → Continuar último jogo). If the host leaves, any player can host again from their copy.
 
 How state stays consistent: the host is authoritative. Your clicks are sent to the host as commands; the host validates and applies them, then broadcasts small patches (or a full compressed snapshot after each match day) to everyone. Other managers' searches and drafts never leave their browser.
@@ -45,7 +50,9 @@ The host checks the shape of every message (types, number ranges, list sizes) be
 Clubs and players live in `data/db/*.csv`. They are meant to be edited in any spreadsheet app.
 
 - `clubs-*.csv` columns: `key, name, short, country, state, city, lat, lon, color1, color2, stadium, capacity, rep, league, estadual, continent, contonly`
-- `players-*.csv` columns: `club, name, pos (GOL/LAT/ZAG/VOL/MEI/ATA), birth, str (1-99), nat, traits (separated by |)`
+- `players-*.csv` columns: `club, name, pos (GOL/LAT/ZAG/VOL/MEI/ATA), birth, str (1-99), nat, traits`, plus optional `pot` (the força he can reach) and `stars` (0-5). Use the name the player is known by (Arrascaeta, Gabigol, Bruno Henrique); `src/engine/renames.ts` lists the renames so older saves pick them up too.
+  - `traits` takes up to two of `finalizacao, cabeceio, velocidade, drible, passe, marcacao, lideranca, reflexos, cobrancas`, separated by `|`; `-` means none. Known players carry their real strengths; `npx tsx tools/fill-traits.ts` fills any blank cell with traits that fit the position and level (the same ones in every new game).
+- `crests.csv` columns: `key, crest, wiki, title`: one crest image link per club, found on Wikipedia by `npx tsx tools/fetch-crests.ts` (the game links to the images; none are stored in the repository). To fix a wrong crest, paste another image link in the `crest` column, or add the club's exact article to `TITLES` in the tool and run it with `--only=key`.
 - `competitions.json` holds the formats, promotion and relegation rules, and qualification rules.
 
 Any squad with fewer than about 25 players is filled with generated players at the club's level.
@@ -102,6 +109,19 @@ npx tsx tools/leaguebalance.ts
 ```
 
 Plays three full seasons and checks that the strongest squads still finish on top (add `off` to compare without the AI coach).
+
+```bash
+npx tsx tools/skill.ts 2000
+```
+
+The manager ladder: real squads of similar strength managed by a poor, a passive, the AI and a good manager. Points per game must rise in that order (a good human beats the AI coach; a careless one does worse).
+
+```bash
+npx tsx tools/finsim.ts 3
+npx tsx tools/marketsim.ts
+```
+
+Economy checks: three seasons of club balances per league (who is in the red, wages against income, where the money comes from), and one season of the transfer market (AI listings, loans, auctions, and whether a human's fairly priced player sells).
 
 ```bash
 npm run typecheck

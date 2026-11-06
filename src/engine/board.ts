@@ -1,6 +1,7 @@
 import type { Rng } from './rng';
 import type { Club, Fixture, GameState, Manager } from './types';
 import { absDate, addNews, clamp } from './util';
+import { roughIncome } from './economy';
 
 const OFFER_DATES = 5;
 
@@ -22,7 +23,8 @@ export function boardAfterMatch(state: GameState, f: Fixture) {
 }
 
 export function boardFinanceCheck(club: Club) {
-  if (club.balance < -0.25 * club.baseIncome) club.board.conf = clamp(club.board.conf - 0.8, 0, 100);
+  // in the red by more than ~3 months of income: the board loses patience a little every date
+  if (club.balance < -0.25 * roughIncome(club)) club.board.conf = clamp(club.board.conf - 0.8, 0, 100);
 }
 
 export function managerOf(state: GameState, club: Club): Manager | null {

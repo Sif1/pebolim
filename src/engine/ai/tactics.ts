@@ -4,7 +4,7 @@
 import type { Formation, Marking, Mentality, Player, Style, Tactics } from '../types';
 
 /** Switch for experiments (tools/leaguecheck): false = AI keeps its default tactics and only makes tired substitutions. */
-export const AI_COACH = { enabled: true, matchups: true };
+export const AI_COACH = { enabled: true, matchups: true, rules: { early: true, numbers: true, gameState: true, readOpp: true } };
 
 /** What the AI coach knows at a given moment. */
 export interface Situation {
@@ -57,24 +57,25 @@ export function naturalStyle(players: Pick<Player, 'pos' | 'str' | 'traits'>[]):
 
 /** The tactics an AI coach wants for this situation (formation is decided separately). */
 export function aiPlan(s: Situation): Plan {
-  const fav = s.edge >= 3;
-  const dog = s.edge <= -3;
-  let mentality: Mentality = fav ? 'ofensiva' : dog ? 'defensiva' : 'equilibrada';
-  let style: Style = fav ? (s.natural === 'contra' ? 'toque' : s.natural) : dog ? 'contra' : s.natural;
+  const R = AI_COACH.rules;
+  const fav = R.early && s.edge >= 3;
+  const dog = R.early && s.edge <= -3;
+  // Opening plan, measured against an adaptive opponent (tools/skill.ts, docs/ENGINE.md): favourites keep their
+  // shape and play their own game (all-out attack gets punished on the counter); clear underdogs sit deeper.
+  let mentality: Mentality = dog ? 'defensiva' : 'equilibrada';
+  let style: Style = fav && s.natural === 'contra' ? 'toque' : s.natural;
   // pressing for 90 minutes drains energy for the next rounds and gives away fouls: only in short bursts
   let marking: Marking = 'zona';
-  let why = fav ? 'favorito, propõe o jogo' : dog ? 'azarão, fecha a casinha' : '';
+  let why = fav ? 'favorito, controla o jogo' : dog ? 'azarão, fecha a casinha' : '';
   if (s.home && mentality === 'defensiva' && s.edge > -6) {
     mentality = 'equilibrada';
     why = 'em casa, não se esconde';
   }
-  if (!s.home && !fav && mentality === 'equilibrada' && s.edge < 0) {
-    style = 'contra';
-    why = 'fora de casa, joga no contra-ataque';
-  }
 
   // numbers on the pitch
-  if (s.men >= 1) {
+  if (!R.numbers) {
+    /* off */
+  } else if (s.men >= 1) {
     mentality = 'ofensiva';
     style = 'toque';
     marking = s.energy >= 75 && s.minute >= 45 ? 'pressao' : 'zona';
@@ -87,8 +88,10 @@ export function aiPlan(s: Situation): Plan {
   }
 
   // score and clock
-  const m = s.minute;
-  if (s.diff < 0) {
+  const m = R.gameState ? s.minute : -1;
+  if (m < 0) {
+    /* off */
+  } else if (s.diff < 0) {
     if (m >= 80) {
       mentality = 'ofensiva';
       style = 'longa';
@@ -125,7 +128,7 @@ export function aiPlan(s: Situation): Plan {
   }
 
   // read the opponent (unless chasing the game late)
-  if (!(s.diff < 0 && m >= 65)) {
+  if (R.readOpp && !(s.diff < 0 && m >= 65)) {
     if (s.opp.style === 'contra' && mentality === 'ofensiva' && s.men <= 0) {
       // pushing everyone forward feeds a counter-attacking side
       mentality = 'equilibrada';

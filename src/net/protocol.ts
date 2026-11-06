@@ -17,7 +17,10 @@ export type MatchAction =
   | { a: 'sub'; out: number; in: number }
   | { a: 'swap'; s1: number; s2: number }
   | { a: 'tactics'; tactics: Tactics }
-  | { a: 'quick' };
+  | { a: 'quick' }
+  /** penalty shootout: your takers in order, then where you shoot or dive (0 left, 1 middle, 2 right) */
+  | { a: 'pkOrder'; order: number[] }
+  | { a: 'pkAim'; dir: 0 | 1 | 2 };
 
 export interface LobbyPlayer {
   clientId: string;

@@ -3,7 +3,7 @@ import { bottomLeagues } from '../engine/commands';
 import type { Club, GameState } from '../engine/types';
 import { formatMoney } from '../engine/util';
 import { leaveGame, useApp } from '../store';
-import { ClubBadge, COUNTRY_NAME, compLabel, Modal, Str } from './common';
+import { ClubBadge, COUNTRY_NAME, compLabel, Modal, Str, useSort } from './common';
 
 export function Lobby() {
   const state = useApp((s) => s.state)!;
@@ -205,17 +205,23 @@ function ClubBrowser({ clubs, state, onPick }: { clubs: Club[]; state: GameState
 }
 
 function ClubTable({ clubs, state, onPick }: { clubs: Club[]; state: GameState; onPick: (c: Club) => void }) {
-  const sorted = [...clubs].sort((a, b) => b.power - a.power);
+  const { sorted, th } = useSort(clubs, { key: 'power', dir: -1 }, {
+    name: (c) => c.name,
+    league: (c) => (c.league ? compLabel(state, c.league) : '~'),
+    power: (c) => c.power,
+    rep: (c) => c.rep,
+    bal: (c) => c.balance,
+  });
   return (
     <div className="scroll" style={{ maxHeight: '60vh' }}>
       <table className="t">
         <thead>
           <tr>
-            <th>Clube</th>
-            <th>Liga</th>
-            <th className="center">Força</th>
-            <th className="center">Reputação</th>
-            <th className="right">Caixa</th>
+            {th('name', 'Clube')}
+            {th('league', 'Liga')}
+            {th('power', 'Força', 'center')}
+            {th('rep', 'Reputação', 'center')}
+            {th('bal', 'Caixa', 'right')}
             <th />
           </tr>
         </thead>

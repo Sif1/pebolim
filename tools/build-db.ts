@@ -1,5 +1,5 @@
 // Compile data/db/*.csv + competitions.json into public/db/base.json: npm run db
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDatabase } from '../src/engine/dbcsv';
 import type { CompConfig } from '../src/engine/types';
@@ -25,6 +25,22 @@ function concat(prefix: string): string {
 }
 
 const { db, issues } = buildDatabase(concat('clubs'), concat('players'), comps, season);
+
+// crests found by tools/fetch-crests.ts (a crest column in a clubs file wins)
+const crestFile = join(dir, 'crests.csv');
+if (existsSync(crestFile)) {
+  const crests = new Map<string, string>();
+  for (const line of readFileSync(crestFile, 'utf8').split(/\r?\n/).slice(1)) {
+    const [key, url] = line.split(',');
+    if (key && /^https?:\/\//.test(url ?? '')) crests.set(key, url);
+  }
+  let n = 0;
+  for (const c of db.clubs) {
+    if (!c.crest && crests.has(c.key)) c.crest = crests.get(c.key);
+    if (c.crest) n++;
+  }
+  console.log(`crests: ${n}/${db.clubs.length} clubs`);
+}
 for (const w of issues.warnings) console.warn('aviso:', w);
 for (const e of issues.errors) console.error('erro:', e);
 if (issues.errors.length) process.exit(1);

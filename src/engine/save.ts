@@ -1,3 +1,5 @@
+import { absDate, playerValue } from './util';
+import { ceilingFor, tierOf } from './potential';
 import { sectorRefs } from './economy';
 import { SAVE_FORMAT_VERSION, type Fixture, type GameState, type Player, type SectorPrices } from './types';
 import { defaultTicket } from './world';
@@ -5,8 +7,8 @@ import { defaultTicket } from './world';
 const APP = 'pebolim-manager';
 
 const PLAYER_KEYS: (keyof Player)[] = [
-  'id', 'name', 'nat', 'pos', 'birth', 'str', 'pot', 'traits', 'clubId', 'wage', 'contractEnd',
-  'fitness', 'morale', 'injury', 'ban', 'yel', 'listed', 'loan', 's', 'c', 'num', 'idle',
+  'id', 'name', 'nat', 'pos', 'birth', 'str', 'stars', 'pot', 'traits', 'clubId', 'wage', 'contractEnd',
+  'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle',
 ];
 const FIXTURE_KEYS: (keyof Fixture)[] = [
   'id', 'comp', 'date', 'home', 'away', 'hg', 'ag', 'pens', 'stage', 'tie', 'leg', 'group', 'round', 'goals', 'att', 'reds',
@@ -83,6 +85,43 @@ function migrate(state: GameState): GameState {
     // matches played before ratings existed count as a neutral 6.0
     for (const p of Object.values(state.players)) p.s.rt = p.s.apps * 60;
     state.v = 2;
+  }
+  if (state.v < 3) {
+    // v2 was in Brazilian reais; everything is in US dollars now
+    const k = 1 / 5.4;
+    const m = (v: number) => Math.round(v * k);
+    for (const c of Object.values(state.clubs)) {
+      c.balance = m(c.balance);
+      c.baseIncome = m(c.baseIncome);
+      for (const key of Object.keys(c.ledger) as (keyof typeof c.ledger)[]) c.ledger[key] = m(c.ledger[key]);
+      const conv = (ps: SectorPrices) => ps.map((x) => Math.max(1, m(x))) as SectorPrices;
+      c.tickets = { base: conv(c.tickets.base), comps: Object.fromEntries(Object.entries(c.tickets.comps).map(([id, ps]) => [id, conv(ps)])) };
+    }
+    for (const p of Object.values(state.players)) p.wage = Math.max(500, m(p.wage));
+    for (const b of Object.values(state.bids)) {
+      b.fee = m(b.fee);
+      b.wage = m(b.wage);
+      if (b.counter != null) b.counter = m(b.counter);
+    }
+    for (const cfg of state.config) cfg.prize = m(cfg.prize);
+    for (const comp of Object.values(state.comps)) comp.cfg.prize = m(comp.cfg.prize);
+    state.v = 3;
+  }
+  // market listings (saves before them had only a "listed" flag) and loans that ended at a season
+  state.auctionBids ??= {};
+  for (const p of Object.values(state.players) as (Player & { listed?: boolean })[]) {
+    if (p.salePrice === undefined) p.salePrice = p.listed ? playerValue(p, state.meta.season) : null;
+    p.loanListed ??= null;
+    p.auction ??= null;
+    delete p.listed;
+    if (p.loan && p.loan.until < 10000) p.loan.until = absDate(p.loan.until, 77);
+  }
+  // potential stars (saves before them had only a hidden ceiling)
+  for (const p of Object.values(state.players)) {
+    if (p.stars == null) {
+      p.stars = Math.max(tierOf(p.str), tierOf(p.pot ?? p.str));
+      p.pot = Math.max(p.str, ceilingFor(p.stars));
+    }
   }
   return state;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { autoLineup, BENCH_SIZE, isAvailable, lineupRating } from '../../engine/ai/lineup';
+import { autoLineup, BENCH_SIZE, isAvailable, lineupIssues, lineupRating } from '../../engine/ai/lineup';
+import { nextFixture } from '../Shell';
 import { FORMATION_LIST, shapeLabel, slotsFor } from '../../engine/match/formations';
 import { effective } from '../../engine/match/ratings';
 import type { Formation, Lineup, Marking, Mentality, Player, Style, Tactics } from '../../engine/types';
@@ -17,6 +18,9 @@ type Sel = { kind: 'xi'; i: number } | { kind: 'bench'; i: number } | null;
 export function Escalacao() {
   const { state, club } = useMe();
   const squad = useMemo(() => (state && club ? squadOf(state, club.id) : []), [state, club]);
+  // availability is judged for the next match's competition (suspensions are per competition)
+  const nf = state && club ? nextFixture(state, club.id) : null;
+  const compId = nf?.comp ?? null;
   const [tactics, setTactics] = useState<Tactics | null>(null);
   const [lineup, setLineup] = useState<Lineup | null>(null);
   const [auto, setAuto] = useState(true);
@@ -27,9 +31,9 @@ export function Escalacao() {
     if (!club || dirty) return;
     setTactics(club.tactics);
     const fresh = club.lineup.xi.length === slotsFor(club.tactics).length && club.lineup.xi.some((x) => x != null);
-    setLineup(fresh ? club.lineup : autoLineup(squad, club.tactics, null));
+    setLineup(fresh ? club.lineup : autoLineup(squad, club.tactics, compId));
     setAuto(club.autoLineup);
-  }, [club, squad, dirty]);
+  }, [club, squad, dirty, compId]);
 
   if (!state || !club || !tactics || !lineup) return null;
   const byId = new Map(squad.map((p) => [p.id, p]));
@@ -47,7 +51,7 @@ export function Escalacao() {
     const next = { ...tactics, ...t };
     if (t.formation && t.formation !== tactics.formation) {
       next.shape = null;
-      setLineup(autoLineup(squad, next, null));
+      setLineup(autoLineup(squad, next, compId));
     }
     setTactics(next);
     setDirty(true);
@@ -141,7 +145,7 @@ export function Escalacao() {
       name: p.name,
       pos: p.pos,
       fitness: p.fitness,
-      dim: !isAvailable(p, null),
+      dim: !isAvailable(p, compId),
       meta: (
         <>
           {slots[i].pos} <b style={{ color: eff < p.str - 3 ? '#fca5a5' : '#d1fae5' }}>{eff}</b>
@@ -160,6 +164,7 @@ export function Escalacao() {
   const reserves = squad.filter((p) => !used.has(p.id)).sort((a, b) => b.str - a.str);
   const selPos = sel?.kind === 'xi' ? slots[sel.i].pos : null;
   const custom = !!tactics.shape;
+  const issues = lineupIssues(state, club.id, { lineup, auto });
 
   return (
     <div className="col">
@@ -171,7 +176,7 @@ export function Escalacao() {
         <button
           className="btn"
           onClick={() => {
-            setLineup(autoLineup(squad, tactics, null));
+            setLineup(autoLineup(squad, tactics, compId));
             setAuto(true);
             setDirty(true);
           }}
@@ -182,6 +187,17 @@ export function Escalacao() {
           Salvar
         </button>
       </div>
+      {issues.length > 0 && (
+        <div className="panel lineup-issues">
+          <b>Esta escalação não pode entrar em campo hoje.</b> Troque os jogadores abaixo (ou use “Escalar automaticamente”) antes de clicar em
+          Pronto:
+          <ul>
+            {issues.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="panel row">
         <label className="field">
           Formação base
@@ -270,7 +286,7 @@ export function Escalacao() {
                     <tr
                       key={i}
                       className={`click ${sel?.kind === 'xi' && sel.i === i ? 'me' : ''}`}
-                      style={{ opacity: p && !isAvailable(p, null) ? 0.5 : 1 }}
+                      style={{ opacity: p && !isAvailable(p, compId) ? 0.5 : 1 }}
                       onClick={() => clickSlot(i)}
                       {...dragProps({ kind: 'slot', slot: i }, p != null)}
                       {...dropProps((src) => onBoardDrop({ kind: 'slot', slot: i }, src))}
@@ -284,6 +300,7 @@ export function Escalacao() {
                             <span className="faint num">{p.num}</span> {p.name}
                             {p.pos !== sl.pos && <span className="small warn"> (é {p.pos})</span>}
                             {p.injury > 0 && <span className="pill bad" style={{ marginLeft: 6 }}>lesão</span>}
+                            {compId && (p.ban[compId] ?? 0) > 0 && <span className="pill warn" style={{ marginLeft: 6 }}>suspenso</span>}
                           </>
                         ) : (
                           <span className="faint">vazio: arraste alguém para cá</span>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Bid } from '../../engine/types';
 import { dateLabel, formatMoney } from '../../engine/util';
 import { command, useMe } from '../../store';
-import { ClubName, Empty, PosTag, Str } from '../common';
+import { ClubName, Empty, PosTag, Str, useSort } from '../common';
 import { PlayerModal } from '../PlayerModal';
 
 const STATUS: Record<Bid['status'], [string, string]> = {
@@ -19,11 +19,20 @@ export function Propostas() {
   const [tab, setTab] = useState<'recebidas' | 'enviadas'>('recebidas');
   const [open, setOpen] = useState<number | null>(null);
   const [counter, setCounter] = useState<Record<number, number>>({});
+  const bids = state && club ? Object.values(state.bids).sort((a, b) => b.id - a.id) : [];
+  const received = bids.filter((b) => b.seller === club?.id);
+  const sent = bids.filter((b) => b.buyer === club?.id);
+  const other = (b: Bid) => (tab === 'recebidas' ? b.buyer : b.seller);
+  const { sorted: list, th } = useSort(tab === 'recebidas' ? received : sent, { key: 'id', dir: -1 }, {
+    id: (b) => b.id,
+    name: (b) => state?.players[b.player]?.name ?? '',
+    club: (b) => (other(b) != null ? (state?.clubs[other(b)!]?.name ?? '') : ''),
+    kind: (b) => b.kind,
+    fee: (b) => b.fee,
+    wage: (b) => b.wage,
+    status: (b) => b.status,
+  });
   if (!state || !club) return null;
-  const bids = Object.values(state.bids).sort((a, b) => b.id - a.id);
-  const received = bids.filter((b) => b.seller === club.id);
-  const sent = bids.filter((b) => b.buyer === club.id);
-  const list = tab === 'recebidas' ? received : sent;
 
   return (
     <div className="col">
@@ -42,19 +51,19 @@ export function Propostas() {
           <table className="t">
             <thead>
               <tr>
-                <th>Jogador</th>
-                <th>{tab === 'recebidas' ? 'Comprador' : 'Vendedor'}</th>
-                <th>Tipo</th>
-                <th className="right">Valor</th>
-                <th className="right">Salário</th>
-                <th>Situação</th>
+                {th('name', 'Jogador')}
+                {th('club', tab === 'recebidas' ? 'Comprador' : 'Vendedor')}
+                {th('kind', 'Tipo')}
+                {th('fee', 'Valor', 'right')}
+                {th('wage', 'Salário', 'right')}
+                {th('status', 'Situação')}
                 <th />
               </tr>
             </thead>
             <tbody>
               {list.map((b) => {
                 const p = state.players[b.player];
-                const other = tab === 'recebidas' ? b.buyer : b.seller;
+                const otherId = other(b);
                 const [label, cls] = STATUS[b.status];
                 return (
                   <tr key={b.id}>
@@ -67,11 +76,9 @@ export function Propostas() {
                         <span className="faint">jogador aposentado</span>
                       )}
                     </td>
-                    <td>{other != null ? <ClubName id={other} state={state} /> : <span className="pill good">livre</span>}</td>
-                    <td className="small">
-                      {b.kind === 'emprestimo' ? 'Empréstimo' : 'Compra'} · {b.years} ano(s)
-                    </td>
-                    <td className="right num">{formatMoney(b.fee)}</td>
+                    <td>{otherId != null ? <ClubName id={otherId} state={state} /> : <span className="pill good">livre</span>}</td>
+                    <td className="small">{b.kind === 'emprestimo' ? `Empréstimo · ${b.months ?? 12} meses` : `Compra · ${b.years} ano(s)`}</td>
+                    <td className="right num">{b.kind === 'emprestimo' ? <span className="faint">—</span> : formatMoney(b.fee)}</td>
                     <td className="right small num">{formatMoney(b.wage)}/mês</td>
                     <td>
                       <span className={`pill ${cls}`}>{label}</span>
@@ -90,6 +97,7 @@ export function Propostas() {
                               Recusar
                             </button>
                           </div>
+                          {b.kind === 'compra' && (
                           <div className="row" style={{ gap: 4 }}>
                             <input
                               type="number"
@@ -107,6 +115,7 @@ export function Propostas() {
                               Pedir
                             </button>
                           </div>
+                          )}
                         </div>
                       )}
                       {tab === 'enviadas' && b.status === 'contraproposta' && (

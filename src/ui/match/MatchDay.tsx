@@ -1,15 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { gateOf, usableCapacity } from '../../engine/economy';
 import { MAX_SUBS } from '../../engine/match/core';
 import { FORMATION_LIST, shapeLabel } from '../../engine/match/formations';
 import type { LiveDetail, LiveFrame } from '../../engine/match/live';
 import type { Club, Fixture, Formation, GameState, Marking, Mentality, Style, Tactics } from '../../engine/types';
-import { dateLabel } from '../../engine/util';
+import { dateLabel, formatMoney } from '../../engine/util';
 import { MATCH_MINUTES } from '../../net/validate';
 import { useApp, useMe } from '../../store';
-import { awayKit, ClubBadge, compLabel, Energy, Rating } from '../common';
+import { awayKit, ClubBadge, compLabel, contrastPair, Energy, Rating, shortName } from '../common';
 import { MARKING_LABEL, MENTALITY_LABEL, STYLE_LABEL } from '../screens/Escalacao';
 import { dragProps, dropProps, moveSlotTo, TacticsBoard, type BoardToken, type DragSrc, type DropTarget } from '../TacticsBoard';
 import { PitchCanvas } from './PitchCanvas';
+import { ShootoutView } from './Shootout';
 
 const clock = (t: number, half: 1 | 2) => {
   const m = Math.floor(t / 60);
@@ -18,7 +20,7 @@ const clock = (t: number, half: 1 | 2) => {
   return `${m + 1}'`;
 };
 
-const lastName = (n: string) => n.split(' ').slice(-1)[0];
+const lastName = shortName;
 
 export function MatchDay() {
   const { state, club } = useMe();
@@ -34,12 +36,30 @@ export function MatchDay() {
   const focused = focus != null ? fixtures.find((f) => f.id === focus) : (mine ?? fixtures[0]);
   const myDone = mine ? md.done.includes(mine.id) : true;
   const minutes = state.meta.settings.matchMinutes;
+  const venue = focused ? state.clubs[focused.home] : null;
+  const gate = focused ? gateOf(state, focused) : null;
+  const stage = focused
+    ? focused.stage != null
+      ? state.comps[focused.comp]?.stages[focused.stage]?.name
+      : focused.round
+        ? `${focused.round}ª rodada`
+        : focused.group != null
+          ? 'fase de grupos'
+          : null
+    : null;
 
   return (
     <div className="content" style={{ height: '100vh' }}>
-      <div className="row" style={{ marginBottom: 12 }}>
+      <div className="row" style={{ marginBottom: focused ? 4 : 12 }}>
         <h1 className="grow" style={{ margin: 0 }}>
-          Dia de jogo · {dateLabel(state, md.date)}
+          Dia de jogo
+          {focused && (
+            <span className="md-comp">
+              {state.comps[focused.comp]?.cfg.name ?? compLabel(state, focused.comp)}
+              {stage && <span className="faint"> · {stage}</span>}
+            </span>
+          )}
+          <span className="md-date">{dateLabel(state, md.date)}</span>
         </h1>
         <label className="row small muted" style={{ gap: 6 }} title={host ? 'Vale para todas as partidas, na hora' : 'Só o anfitrião muda'}>
           Duração
@@ -70,6 +90,16 @@ export function MatchDay() {
           <span className="pill warn">Seu jogo acabou · aguardando os outros</span>
         ) : null}
       </div>
+      {focused && venue && gate && (
+        <div className="md-venue">
+          <span>🏟 {venue.stadium}</span>
+          <span>
+            <b>{gate.total.toLocaleString('pt-BR')}</b> ingressos vendidos
+            <span className="faint"> de {usableCapacity(venue).toLocaleString('pt-BR')} lugares ({Math.round((gate.total / Math.max(1, usableCapacity(venue))) * 100)}%)</span>
+          </span>
+          {club?.id === venue.id && <span className="faint">renda de {formatMoney(gate.revenue)}</span>}
+        </div>
+      )}
       {fixtures.length === 0 && (
         <div className="panel">Nenhum treinador joga nesta data. Os resultados das outras partidas já foram calculados.</div>
       )}
@@ -138,11 +168,13 @@ function useMatchMaps(f: Fixture, state: GameState) {
 /** Scoreboard, pitch and commentary for one live match. */
 function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: boolean }) {
   const client = useApp((s) => s.client)!;
+  const myClub = useMe().club?.id;
   const fr: LiveFrame | undefined = client.frames.get(f.id)?.cur;
   const events = client.events.get(f.id) ?? [];
   const home = state.clubs[f.home];
   const away = state.clubs[f.away];
   const kit = useMemo(() => awayKit(home.colors, away.colors), [home.colors, away.colors]);
+  const [momH, momA] = useMemo(() => contrastPair(home.colors, kit), [home.colors, kit]);
   const { numbers, names, mineIds } = useMatchMaps(f, state);
   const comp = state.comps[f.comp];
   // tactical changes (the AI coach's and the managers') only show on the big view
@@ -169,11 +201,19 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
           <span className="sb-chip" style={{ background: kit[0], borderColor: kit[1] }} />
         </div>
         <div className="sb-clock">
-          {fr ? (fr.ended ? 'FIM' : fr.paused ? 'PAUSA' : clock(fr.t, fr.half)) : '0\''}
+          {fr ? (fr.ended ? 'FIM' : fr.pk ? 'PÊNALTIS' : fr.paused ? 'PAUSA' : clock(fr.t, fr.half)) : '0\''}
           {fr?.pens && ` · pên. ${fr.pens[0]}-${fr.pens[1]}`}
+          {fr?.pk && !fr.pens && ` ${fr.pk.score[0]}-${fr.pk.score[1]}`}
         </div>
       </div>
-      <PitchCanvas fixtureId={f.id} homeColors={home.colors} awayColors={kit} numbers={numbers} names={names} big={big} mine={mineIds} />
+      {fr?.pk && big ? (
+        <ShootoutView f={f} state={state} fr={fr} mySide={myClub === f.home ? 0 : myClub === f.away ? 1 : null} />
+      ) : (
+        <>
+          <PitchCanvas fixtureId={f.id} homeColors={home.colors} awayColors={kit} numbers={numbers} names={names} big={big} mine={mineIds} />
+          <Momentum f={f} homeColor={momH} awayColor={momA} homeShort={home.short} awayShort={away.short} big={big} />
+        </>
+      )}
       <div className="ticker">
         {last ? (
           <span className={last.kind === 'goal' ? 'good' : last.kind === 'red' ? 'bad' : ''}>
@@ -204,6 +244,82 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Minute of the momentum graph (0-89) for an event, given whether half-time has passed. */
+const momentMinute = (t: number, half: 1 | 2) => (half === 1 ? Math.min(44, Math.floor(t / 60)) : 45 + Math.min(44, Math.max(0, Math.floor((t - 2700) / 60))));
+
+/**
+ * Match momentum: who is pushing, minute by minute. Bars above the line are the home side's pressure,
+ * below it the away side's (attacking-third possession, shots weighted by chance quality, corners, goals).
+ */
+function Momentum({ f, homeColor, awayColor, homeShort, awayShort, big }: { f: Fixture; homeColor: string; awayColor: string; homeShort: string; awayShort: string; big?: boolean }) {
+  const client = useApp((s) => s.client)!;
+  const d = client.details.get(f.id);
+  const events = client.events.get(f.id) ?? [];
+  const N = 90;
+  const W = 900;
+  const H = big ? 70 : 28;
+  const mid = H / 2;
+  const smooth = (arr: number[]) =>
+    arr.map((_, i) => {
+      let s = 0;
+      let w = 0;
+      [0.2, 0.3, 0.5].forEach((wt, k) => {
+        const j = i - 2 + k;
+        if (j < 0) return;
+        s += (arr[j] ?? 0) * wt;
+        w += wt;
+      });
+      return w ? s / w : 0;
+    });
+  const hs = smooth((d?.mom[0] ?? []).map((v) => v / 10));
+  const as = smooth((d?.mom[1] ?? []).map((v) => v / 10));
+  const max = Math.max(3, ...hs, ...as);
+  const bw = W / N;
+  const at = d?.momAt ?? 0;
+  const marks: { m: number; side: 0 | 1; kind: 'goal' | 'red' }[] = [];
+  let half: 1 | 2 = 1;
+  for (const e of events) {
+    if (e.kind === 'ht') half = 2;
+    else if (e.kind === 'goal' || e.kind === 'red') marks.push({ m: momentMinute(e.t, half), side: e.side, kind: e.kind });
+  }
+  const h = (v: number) => (v / max) * (mid - 2);
+  return (
+    <div className={`momentum ${big ? 'big' : ''}`} title="Pressão de cada time, minuto a minuto (acima: mandante; abaixo: visitante)">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <rect x={(at + 1) * bw} y={0} width={Math.max(0, W - (at + 1) * bw)} height={H} fill="rgba(255,255,255,0.03)" />
+        {big &&
+          [15, 30, 60, 75].map((m) => <line key={m} x1={m * bw} x2={m * bw} y1={0} y2={H} stroke="rgba(255,255,255,0.07)" />)}
+        <line x1={45 * bw} x2={45 * bw} y1={0} y2={H} stroke="rgba(255,255,255,0.3)" strokeDasharray="4 3" />
+        {hs.map((v, i) => (v > 0.05 ? <rect key={`h${i}`} x={i * bw + 0.6} y={mid - h(v)} width={bw - 1.2} height={h(v)} fill={homeColor} /> : null))}
+        {as.map((v, i) => (v > 0.05 ? <rect key={`a${i}`} x={i * bw + 0.6} y={mid} width={bw - 1.2} height={h(v)} fill={awayColor} /> : null))}
+        <line x1={0} x2={W} y1={mid} y2={mid} stroke="rgba(255,255,255,0.35)" />
+        <rect x={at * bw} y={0} width={bw} height={H} fill="rgba(255,255,255,0.18)" />
+      </svg>
+      {marks.map((k, i) => (
+        <span
+          key={i}
+          className={`mm ${k.kind}`}
+          style={{ left: `${((k.m + 0.5) / N) * 100}%`, ...(k.side === 0 ? { top: 1 } : { bottom: 1 }) }}
+          title={k.kind === 'goal' ? 'Gol' : 'Expulsão'}
+        />
+      ))}
+      {big && (
+        <>
+          <span className="mm-team top">{homeShort}</span>
+          <span className="mm-team bottom">{awayShort}</span>
+          <div className="mm-ticks">
+            {['0', "15'", "30'", "45'", "60'", "75'", "90'"].map((t, i) => (
+              <span key={t} style={{ left: `${(i * 15 * 100) / N}%` }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
