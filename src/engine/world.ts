@@ -7,6 +7,7 @@ import { defaultNamePools } from './names';
 import { Rng } from './rng';
 import { SAVE_FORMAT_VERSION, type Club, type GameState, type Objective, type Player, type Settings } from './types';
 import { clamp, emptyLedger, expectedWage, squadIndex } from './util';
+import { sectorRefs } from './economy';
 
 export const DEFAULT_SETTINGS: Settings = { matchMinutes: 5, windows: true };
 
@@ -82,7 +83,7 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
       contOnly: !!dc.contOnly,
       balance: 0,
       baseIncome: 0,
-      ticket: 0,
+      tickets: { base: [0, 0, 0, 0], comps: {} },
       tc: { level: clamp(Math.round(dc.rep / 22), 1, 4), building: 0 },
       stadiumWork: null,
       focus: 'equilibrado',
@@ -98,7 +99,7 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
       ledger: emptyLedger(),
       form: '',
     };
-    state.clubs[id].ticket = defaultTicket(state.clubs[id]);
+    state.clubs[id].tickets.base = sectorRefs(state.clubs[id]);
   }
 
   // curated players
@@ -125,7 +126,7 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
       yel: {},
       listed: false,
       loan: null,
-      s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0 },
+      s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0, rt: 0 },
       c: { apps: 0, goals: 0 },
       num: 0,
       idle: 0,
@@ -170,7 +171,7 @@ export function startSeason(state: GameState, rng: Rng) {
   state.fixtures = {};
   state.meta.date = 0;
   for (const p of Object.values(state.players)) {
-    p.s = { apps: 0, goals: 0, ast: 0, yel: 0, red: 0 };
+    p.s = { apps: 0, goals: 0, ast: 0, yel: 0, red: 0, rt: 0 };
     p.yel = {};
     p.ban = {};
   }

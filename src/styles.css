@@ -562,8 +562,8 @@ table.t tr.zone-down td:first-child {
 /* match day */
 .md-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
+  gap: 12px;
 }
 .md-card {
   background: var(--panel);
@@ -609,18 +609,145 @@ canvas.pitch {
   display: block;
   width: 100%;
   height: auto;
-  background: #14532d;
+  background: #2a7a35;
 }
-.big-match {
+
+/* match day: focused match = pitch | stats | controls */
+.match-focus {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 560px) 250px minmax(300px, 380px);
+  gap: 12px;
   align-items: start;
 }
-@media (max-width: 1100px) {
-  .big-match {
+@media (max-width: 1280px) {
+  .match-focus {
+    grid-template-columns: minmax(0, 560px) 250px;
+  }
+  .match-focus > :last-child {
+    grid-column: 1 / -1;
+    max-width: 820px;
+  }
+}
+@media (max-width: 860px) {
+  .match-focus {
     grid-template-columns: 1fr;
   }
+}
+.scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 4px;
+  background: linear-gradient(#0f172a, #111827);
+  border-bottom: 1px solid #000;
+}
+.sb-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 13px;
+}
+.sb-team.right {
+  justify-content: flex-end;
+  text-align: right;
+}
+.sb-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-mgr {
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.sb-chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px solid;
+  flex-shrink: 0;
+}
+.sb-score {
+  font-size: 22px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  background: #000;
+  color: #fef08a;
+  padding: 0 10px;
+  border-radius: 4px;
+  display: flex;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+.sb-score span {
+  color: #6b7280;
+}
+.sb-clock {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #86efac;
+  font-variant-numeric: tabular-nums;
+  margin-top: -2px;
+}
+.md-card:not(.big) .sb-score {
+  font-size: 17px;
+}
+.ticker {
+  background: #0b1220;
+  border-top: 1px solid #000;
+  padding: 5px 10px;
+  font-size: 12px;
+  min-height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-panel {
+  padding: 10px 12px;
+}
+.cmp {
+  margin-bottom: 5px;
+}
+.cmp-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  font-size: 12px;
+}
+.cmp-row .k {
+  text-align: center;
+  color: var(--muted);
+}
+.cmp-row span:last-child {
+  text-align: right;
+}
+.cmp-row .lead {
+  font-weight: 800;
+  color: var(--text);
+}
+.cmp-bar {
+  height: 3px;
+  background: #64748b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.cmp-bar > div {
+  height: 100%;
+  background: var(--accent);
+}
+table.t.compact td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.match-control .board {
+  max-width: 300px;
+  align-self: center;
 }
 
 .lineup-pitch {
@@ -672,4 +799,162 @@ canvas.pitch {
   .topbar {
     grid-column: 1;
   }
+}
+
+/* energy bar + number, match rating */
+.energy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.energy .num {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 32px;
+}
+.rating {
+  display: inline-block;
+  min-width: 30px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* tactics board (vertical pitch with draggable players) */
+.board {
+  position: relative;
+  aspect-ratio: 68 / 105;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #1f6b3a;
+  background: repeating-linear-gradient(180deg, #1d6b36 0 9.52%, #1a6131 9.52% 19.04%);
+  user-select: none;
+}
+.board-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.board .tok {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 84px;
+  text-align: center;
+  font-size: 11px;
+  cursor: grab;
+  z-index: 2;
+}
+.board .tok.dim {
+  opacity: 0.55;
+}
+.board .tok .shirt {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 2px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  border: 2px solid;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+.board .tok .yc {
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 7px;
+  height: 10px;
+  background: #facc15;
+  border-radius: 1px;
+}
+.board .tok.sel .shirt,
+.board .tok.drop-hover .shirt {
+  outline: 3px solid #fde047;
+}
+.board .tok .nm {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  padding: 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+}
+.board .tok .meta {
+  font-size: 10px;
+  color: #d1fae5;
+  text-shadow: 0 1px 2px #000;
+}
+.tok-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 1px;
+}
+.tok-info .rating {
+  min-width: 24px;
+  font-size: 10px;
+  padding: 0 2px;
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+.mini-bar {
+  display: inline-block;
+  width: 28px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mini-bar > span {
+  display: block;
+  height: 100%;
+}
+.board .cell {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.board .cell.drop-hover {
+  background: rgba(253, 224, 71, 0.3);
+  border-color: #fde047;
+}
+.board.compact .tok {
+  width: 64px;
+  font-size: 10px;
+}
+.board.compact .tok .shirt {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+.board.compact .cell {
+  width: 24px;
+  height: 24px;
+  font-size: 8px;
+}
+.drop-zone.drop-hover {
+  outline: 2px dashed var(--accent);
+}
+tr.drop-hover td {
+  background: rgba(253, 224, 71, 0.15);
 }

@@ -1,5 +1,6 @@
 import { enablePatches, produceWithPatches, setAutoFreeze } from 'immer';
 import { finishDate, simulateBackground } from '../engine/advance';
+import { bottomLeagues } from '../engine/commands';
 import { createCustomClub, createManager, runCommand, type CmdResult } from '../engine/commands';
 import type { MatchResult } from '../engine/match/core';
 import { LiveMatch } from '../engine/match/live';
@@ -8,7 +9,9 @@ import { Rng } from '../engine/rng';
 import { encodeSnapshot } from '../engine/save';
 import type { GameState } from '../engine/types';
 import type { Claim, ClientMsg, HostMsg, LobbyState, MatchAction, MatchdayInfo, SessionPhase } from './protocol';
+import { startTicker } from './ticker';
 import type { HostSideConn } from './transport';
+import { RateLimit, validClientMsg } from './validate';
 
 enablePatches();
 setAutoFreeze(false);
@@ -22,6 +25,11 @@ interface ClientRec {
   ready: boolean;
   connected: boolean;
   isHost: boolean;
+  /** hello received (only one per connection) */
+  greeted: boolean;
+  limit: RateLimit;
+  lastResync: number;
+  dropped: number;
 }
 
 const TICK_MS = 100;
@@ -41,7 +49,7 @@ export class HostSession {
   private live = new Map<number, LiveMatch>();
   private results: Record<number, MatchResult> = {};
   private md: MatchdayInfo | null = null;
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private stopTicker: (() => void) | null = null;
   private lastTick = 0;
   private tickCount = 0;
 
@@ -67,9 +75,31 @@ export class HostSession {
       ready: false,
       connected: true,
       isHost,
+      greeted: false,
+      // generous for normal play (a click is one message), stops floods
+      limit: new RateLimit(60, 25),
+      lastResync: 0,
+      dropped: 0,
     };
-    conn.onMessage((msg) => this.enqueue(() => this.handle(rec, msg)));
+    conn.onMessage((raw) => {
+      if (!rec.connected) return;
+      if (!isHost && !rec.limit.take()) {
+        if (++rec.dropped > 400) this.kick(rec, 'Mensagens demais.');
+        return;
+      }
+      const msg = validClientMsg(raw);
+      if (!msg) {
+        if (!isHost && ++rec.dropped > 400) this.kick(rec, 'Mensagens inválidas.');
+        return;
+      }
+      this.enqueue(() => this.handle(rec, msg));
+    });
     conn.onClose(() => this.enqueue(async () => this.disconnected(rec)));
+  }
+
+  private kick(rec: ClientRec, reason: string) {
+    this.send(rec, { t: 'kick', reason });
+    rec.conn.close();
   }
 
   private enqueue(fn: () => Promise<void> | void) {
@@ -144,25 +174,37 @@ export class HostSession {
     return this.snap;
   }
 
-  private async broadcastSnapshot() {
+  /** live = sent at the start of a match day (half-applied date): clients must not autosave it */
+  private async broadcastSnapshot(live = false) {
     this.ver++;
     const s = await this.snapshot();
-    this.broadcast({ t: 'snapshot', ver: s.ver, data: s.bytes, hash: s.hash });
+    this.broadcast({ t: 'snapshot', ver: s.ver, data: s.bytes, hash: s.hash, live });
   }
 
   // ---------- message handling ----------
 
   private async handle(rec: ClientRec, msg: ClientMsg) {
+    if (msg.t === 'hello') {
+      if (rec.greeted) return;
+      rec.greeted = true;
+      return this.hello(rec, msg.name, msg.token, msg.managerId);
+    }
+    // nothing else is accepted before the hello
+    if (!rec.greeted || !this.clients.has(rec.id)) return;
     switch (msg.t) {
-      case 'hello':
-        return this.hello(rec, msg.name, msg.token, msg.managerId);
       case 'claim':
         return this.claim(rec, msg.claim);
       case 'cmd': {
         if (!rec.managerId) return this.send(rec, { t: 'ack', seq: msg.seq, ok: false, msg: 'Escolha um clube primeiro.' });
         if (this.phase === 'matchday') return this.send(rec, { t: 'ack', seq: msg.seq, ok: false, msg: 'Aguarde o fim da rodada.' });
         const mid = rec.managerId;
-        const res = this.apply((d) => runCommand(d, mid, msg.cmd));
+        let res: CmdResult;
+        try {
+          res = this.apply((d) => runCommand(d, mid, msg.cmd));
+        } catch (e) {
+          console.error('command failed', e);
+          res = { ok: false, msg: 'Não foi possível fazer isso agora.' };
+        }
         return this.send(rec, { t: 'ack', seq: msg.seq, ok: res.ok, msg: res.msg });
       }
       case 'ready':
@@ -171,14 +213,25 @@ export class HostSession {
       case 'match':
         return this.matchAction(rec, msg.fixtureId, msg.action);
       case 'resync': {
+        // each resync sends the whole game (~0.5 MB): at most one every 3 seconds per player
+        const now = Date.now();
+        if (now - rec.lastResync < 3000) return;
+        rec.lastResync = now;
         const s = await this.snapshot();
-        return this.send(rec, { t: 'snapshot', ver: s.ver, data: s.bytes, hash: s.hash });
+        return this.send(rec, { t: 'snapshot', ver: s.ver, data: s.bytes, hash: s.hash, live: this.phase === 'matchday' });
       }
       case 'host':
         if (!rec.isHost) return;
         if (msg.action === 'start') return this.start(rec);
         if (msg.action === 'matchday') return this.startMatchday();
         if (msg.action === 'continue') return this.finishMatchday();
+        return;
+      case 'settings':
+        if (!rec.isHost) return this.notice(rec, 'Só o anfitrião muda a duração das partidas.', 'error');
+        this.apply((d) => {
+          d.meta.settings.matchMinutes = msg.matchMinutes;
+        });
+        return this.broadcast({ t: 'notice', text: `Partidas ao vivo agora duram ${msg.matchMinutes} min.`, level: 'info' });
     }
   }
 
@@ -203,7 +256,7 @@ export class HostSession {
     this.clients.set(rec.id, rec);
     this.send(rec, { t: 'welcome', clientId: rec.id });
     const s = await this.snapshot();
-    this.send(rec, { t: 'snapshot', ver: s.ver, data: s.bytes, hash: s.hash });
+    this.send(rec, { t: 'snapshot', ver: s.ver, data: s.bytes, hash: s.hash, live: this.phase === 'matchday' });
     this.send(rec, { t: 'claimed', managerId: rec.managerId });
     this.send(rec, { t: 'matchday', md: this.md });
     this.broadcastLobby();
@@ -228,12 +281,14 @@ export class HostSession {
     return [...this.clients.values()].some((c) => c !== except && c.connected && c.managerId === id);
   }
 
-  /** Which claims are valid right now (mirrors the lobby UI rules). */
+  /**
+   * Which clubs a new manager may take (mirrors the lobby UI): any league club without a manager.
+   * Clubs of managers who are away stay theirs; those are taken back with "resume".
+   */
   claimable(clubId: number): boolean {
     const c = this.state.clubs[clubId];
     if (!c || !c.league || c.contOnly) return false;
-    if (this.isNewGame) return !c.managerId;
-    return c.upForSelection && !c.managerId;
+    return !c.managerId;
   }
 
   private claim(rec: ClientRec, claim: Claim) {
@@ -262,12 +317,15 @@ export class HostSession {
       });
       rec.managerId = mid;
     } else if (claim.kind === 'create') {
-      if (!this.isNewGame) return this.notice(rec, 'Só é possível criar um clube no início de um jogo novo.', 'error');
+      const target = this.state.clubs[claim.spec.replaceClubId];
+      if (!target || target.managerId || !target.league || !bottomLeagues(this.state).includes(target.league))
+        return this.notice(rec, 'Escolha um clube sem treinador da última divisão.', 'error');
+      const newGame = this.isNewGame;
       let err: string | null = null;
       let mid: string | null = null;
       this.apply((d) => {
         const rng = new Rng(d.meta.rng);
-        err = createCustomClub(d, rng, claim.spec);
+        err = createCustomClub(d, rng, claim.spec, newGame);
         if (!err) mid = createManager(d, rng, rec.name, claim.spec.replaceClubId).id;
         d.meta.rng = rng.state();
       });
@@ -289,7 +347,7 @@ export class HostSession {
   // ---------- match day ----------
 
   private speed(): number {
-    return 5700 / (this.state.meta.settings.matchMinutes * 60);
+    return 5700 / (Math.max(1, this.state.meta.settings.matchMinutes) * 60);
   }
 
   private async startMatchday() {
@@ -309,7 +367,7 @@ export class HostSession {
     this.phase = 'matchday';
     for (const c of this.clients.values()) c.ready = false;
     this.md = { date: this.plan.date, live: [...this.live.keys()], done: [], allDone: this.live.size === 0 };
-    await this.broadcastSnapshot();
+    await this.broadcastSnapshot(true);
     this.broadcastLobby();
     this.broadcast({ t: 'matchday', md: this.md });
     if (this.live.size) this.startTimer();
@@ -318,12 +376,12 @@ export class HostSession {
   private startTimer() {
     this.stopTimer();
     this.lastTick = performance.now();
-    this.timer = setInterval(() => this.tick(), TICK_MS);
+    this.stopTicker = startTicker(TICK_MS, () => this.tick());
   }
 
   private stopTimer() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    this.stopTicker?.();
+    this.stopTicker = null;
   }
 
   private tick() {
@@ -342,7 +400,8 @@ export class HostSession {
       }
     }
     this.tickCount++;
-    if (this.tickCount % 2 === 0 || changed) this.pushFrames(this.tickCount % 10 === 0);
+    // short matches move fast: send every tick so the pitch stays smooth
+    if (speed > 40 || this.tickCount % 2 === 0 || changed) this.pushFrames(this.tickCount % 10 === 0);
     if (changed) {
       this.md!.allDone = this.md!.done.length >= this.live.size;
       this.broadcast({ t: 'matchday', md: this.md });
@@ -375,7 +434,7 @@ export class HostSession {
         err = m.sim.sub(s, action.out, action.in);
         break;
       case 'swap':
-        m.sim.swapSlots(s, action.s1, action.s2);
+        err = m.sim.swapSlots(s, action.s1, action.s2);
         break;
       case 'tactics':
         m.sim.setTactics(s, action.tactics);
@@ -415,6 +474,7 @@ export class HostSession {
     this.broadcast({ t: 'matchday', md: null });
     this.broadcastLobby();
   }
+
 
   dispose() {
     this.stopTimer();

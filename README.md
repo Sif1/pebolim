@@ -7,7 +7,12 @@ A browser football-manager game for playing with friends. One player hosts from 
 - Argentina and Uruguay (two divisions each)
 - Libertadores, Sul-Americana, Champions League and Europa League
 - Live 2D match day: every human match on screen at once, each with its own clock; you pause and change only your own match
-- Transfer market search, bids between humans and the AI, contracts, finances, stadium, training centre, travel logistics, injuries, suspensions, player development, youth intake, board firing and job offers
+  - Live stats beside the pitch (possession, shots, xG, clear-cut chances, passes, tackles, saves) and a rating for every player next to their energy
+  - Drag a substitute onto a player to bring him on, or drag players to new positions mid-match
+- AI coaches that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics, with every change shown in the match feed
+- Line-ups on a drawn pitch: drag players between the field, bench and reserves, and drag them to any of 25 positions (the role follows the area of the pitch)
+- Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
+- Transfer market search, bids between humans and the AI, contracts, finances, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions, player development, youth intake, board firing and job offers
 - Saves are small `.pebolim` files (about 450 KB) that anyone in the session can download
 
 ## Run it
@@ -26,12 +31,14 @@ For friends on other networks, deploy it (see below) so everyone opens the same 
 1. The host creates or loads a game. Friends enter the room code and type a name; there are no accounts.
 2. Team pick:
    - **New game:** pick any club, or create your own. A custom club replaces a club you choose in that country's bottom division.
-   - **Loaded game:** resume one of the career's managers, or take a club that was left without a manager (after a firing, a resignation or a move).
+   - **Loaded game:** resume one of the career's managers, or start a new manager with any club that has no manager, or create your own club. Clubs whose managers are away stay reserved for them.
 3. Between rounds everyone works on their own screen. Each manager clicks **Pronto**, then the host clicks **Jogar rodada**.
 4. On match day, every human match is shown live. When all of them end, the host clicks **Ver resultados** to move to the round summary.
 5. Anyone can click **Baixar save** at any time. Everyone's browser also autosaves (Início → Carregar jogo → Continuar último jogo). If the host leaves, any player can host again from their copy.
 
 How state stays consistent: the host is authoritative. Your clicks are sent to the host as commands; the host validates and applies them, then broadcasts small patches (or a full compressed snapshot after each match day) to everyone. Other managers' searches and drafts never leave their browser.
+
+The host checks the shape of every message (types, number ranges, list sizes) before it reaches the game rules, rate-limits each player, and allows at most one full resync every 3 seconds per player, so a modified client can't inject invalid values or flood the host. Live matches run on a background-safe timer, but keep the host's tab open during match days.
 
 ## Editing the database
 
@@ -82,7 +89,19 @@ Plays two headless seasons and prints champions, finances and the save-file size
 npx tsx tools/calib.ts
 ```
 
-Prints match-engine statistics (goals, shots, home/away rates).
+Prints match-engine statistics (goals, xG, shots, passes, tackles, ratings, home/away rates).
+
+```bash
+npx tsx tools/sensitivity.ts
+```
+
+Measures how much each engine input (strength, sectors, fitness, morale, tactics, formations, traits…) changes points per game against the AI coach. [docs/ENGINE.md](docs/ENGINE.md) explains the engine and the AI coach and ranks these factors.
+
+```bash
+npx tsx tools/leaguebalance.ts
+```
+
+Plays three full seasons and checks that the strongest squads still finish on top (add `off` to compare without the AI coach).
 
 ```bash
 npm run typecheck

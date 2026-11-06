@@ -1,5 +1,5 @@
 import type { Formation, Lineup, Player, Pos, Tactics } from '../types';
-import { FORMATIONS, FORMATION_LIST } from '../match/formations';
+import { FORMATION_LIST, slotsFor, type Slot } from '../match/formations';
 import { computeRatings, effective, overall } from '../match/ratings';
 
 export const BENCH_SIZE = 9;
@@ -10,9 +10,16 @@ export function isAvailable(p: Player, compId: string | null): boolean {
   return true;
 }
 
+/** A preset formation or full tactics (which may carry custom positions). */
+export type Shape = Formation | Pick<Tactics, 'formation' | 'shape'>;
+
+export function slotsOf(shape: Shape): Slot[] {
+  return slotsFor(typeof shape === 'string' ? { formation: shape } : shape);
+}
+
 /** Greedy best-fit lineup for a formation. */
-export function autoLineup(squad: Player[], formation: Formation, compId: string | null): Lineup {
-  const slots = FORMATIONS[formation];
+export function autoLineup(squad: Player[], shape: Shape, compId: string | null): Lineup {
+  const slots = slotsOf(shape);
   const avail = squad.filter((p) => isAvailable(p, compId));
   const pairs: { s: number; p: Player; e: number }[] = [];
   for (let si = 0; si < slots.length; si++) {
@@ -47,7 +54,7 @@ export function lineupRating(squad: Player[], lineup: Lineup, formation: Formati
   const byId = new Map(squad.map((p) => [p.id, p]));
   const t: Tactics = tactics ?? { formation, mentality: 'equilibrada', marking: 'zona', style: 'toque' };
   const r = computeRatings(
-    FORMATIONS[formation],
+    slotsFor(t),
     lineup.xi.map((id) => (id != null ? (byId.get(id) ?? null) : null)),
     t,
   );
@@ -77,8 +84,8 @@ export function squadStrength(squad: Player[]): number {
 }
 
 /** Make sure a human-set lineup is valid for a match; fill holes with the best available players. */
-export function repairLineup(squad: Player[], lineup: Lineup, formation: Formation, compId: string | null): Lineup {
-  const slots = FORMATIONS[formation];
+export function repairLineup(squad: Player[], lineup: Lineup, shape: Shape, compId: string | null): Lineup {
+  const slots = slotsOf(shape);
   const byId = new Map(squad.map((p) => [p.id, p]));
   const ok = (id: number | null) => id != null && byId.has(id) && isAvailable(byId.get(id)!, compId);
   const xi: (number | null)[] = slots.map((_, i) => (ok(lineup.xi[i] ?? null) ? lineup.xi[i]! : null));

@@ -107,7 +107,8 @@ export function ClaimPanel() {
 
   if (!lobby.newGame) {
     const managers = Object.values(state.managers).filter((m) => !takenManagers.has(m.id));
-    const open = Object.values(state.clubs).filter((c) => c.upForSelection && !c.managerId && c.league);
+    const open = Object.values(state.clubs).filter((c) => c.upForSelection && !c.managerId && c.league && !c.contOnly);
+    const free = Object.values(state.clubs).filter((c) => c.league && !c.contOnly);
     return (
       <div className="col">
         <div className="panel col">
@@ -133,11 +134,28 @@ export function ClaimPanel() {
           })}
         </div>
         <div className="panel col">
-          <h2>Clubes disponíveis</h2>
-          <div className="small muted">Clubes que ficaram sem treinador (demissão ou troca de clube) estão livres para um novo treinador.</div>
-          {open.length === 0 && <div className="muted">Nenhum clube disponível no momento.</div>}
-          <ClubTable clubs={open} state={state} onPick={(c) => client.claim({ kind: 'club', clubId: c.id })} />
+          <div className="row">
+            <h2 className="grow" style={{ margin: 0 }}>
+              Novo treinador
+            </h2>
+            <button className="btn" onClick={() => setCreating(true)}>
+              + Criar meu próprio clube
+            </button>
+          </div>
+          <div className="small muted">
+            Entre na carreira com um treinador novo: escolha qualquer clube sem treinador ou crie o seu. Clubes de treinadores que estão fora da sala
+            continuam reservados para eles.
+          </div>
+          {open.length > 0 && (
+            <>
+              <h3 style={{ margin: '6px 0 0' }}>Vagas abertas (demissão ou troca de clube)</h3>
+              <ClubTable clubs={open} state={state} onPick={(c) => client.claim({ kind: 'club', clubId: c.id })} />
+            </>
+          )}
+          <h3 style={{ margin: '6px 0 0' }}>Todos os clubes</h3>
+          <ClubBrowser clubs={free} state={state} onPick={(c) => client.claim({ kind: 'club', clubId: c.id })} />
         </div>
+        {creating && <CreateClub onClose={() => setCreating(false)} midCareer />}
         <button className="btn ghost" style={{ alignSelf: 'flex-start' }} onClick={() => client.claim({ kind: 'spectate' })}>
           Só assistir
         </button>
@@ -240,7 +258,7 @@ function ClubTable({ clubs, state, onPick }: { clubs: Club[]; state: GameState; 
   );
 }
 
-function CreateClub({ onClose }: { onClose: () => void }) {
+function CreateClub({ onClose, midCareer }: { onClose: () => void; midCareer?: boolean }) {
   const state = useApp((s) => s.state)!;
   const client = useApp((s) => s.client)!;
   const bottoms = bottomLeagues(state);
@@ -313,7 +331,12 @@ function CreateClub({ onClose }: { onClose: () => void }) {
             </select>
           </label>
         </div>
-        {rep && <div className="small muted">Você herda a vaga, a cidade-base para viagens e o calendário do {rep.name}.</div>}
+        {rep && (
+          <div className="small muted">
+            Você herda a vaga, a cidade-base para viagens e o calendário do {rep.name}.
+            {midCareer && ' Como a temporada já começou, seu clube fica com os pontos e os jogos dele, e os jogadores dele ficam livres no mercado.'}
+          </div>
+        )}
         <div className="row">
           <button
             className="btn primary"

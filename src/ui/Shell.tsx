@@ -14,6 +14,7 @@ import { Estrutura } from './screens/Estrutura';
 import { Financas } from './screens/Financas';
 import { Mercado } from './screens/Mercado';
 import { Noticias } from './screens/Noticias';
+import { Opcoes } from './screens/Opcoes';
 import { Painel } from './screens/Painel';
 import { Propostas } from './screens/Propostas';
 import { Resumo } from './screens/Resumo';
@@ -49,6 +50,10 @@ const NAV: { group: string; items: { id: Screen; label: string; needsClub?: bool
       { id: 'temporada', label: 'Temporadas' },
       { id: 'treinador', label: 'Treinador' },
     ],
+  },
+  {
+    group: 'Jogo',
+    items: [{ id: 'opcoes', label: 'Opções' }],
   },
 ];
 
@@ -112,6 +117,8 @@ export function Shell() {
         return <Treinador />;
       case 'clube':
         return <ClubeView />;
+      case 'opcoes':
+        return <Opcoes />;
       default:
         return <Painel />;
     }

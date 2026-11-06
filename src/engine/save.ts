@@ -1,4 +1,6 @@
-import { SAVE_FORMAT_VERSION, type Fixture, type GameState, type Player } from './types';
+import { sectorRefs } from './economy';
+import { SAVE_FORMAT_VERSION, type Fixture, type GameState, type Player, type SectorPrices } from './types';
+import { defaultTicket } from './world';
 
 const APP = 'pebolim-manager';
 
@@ -27,7 +29,7 @@ export function packState(state: GameState): unknown {
         if (k === 'str' || k === 'fitness' || k === 'morale') return r1(v as number);
         if (k === 's') {
           const s = p.s;
-          return [s.apps, s.goals, s.ast, s.yel, s.red];
+          return [s.apps, s.goals, s.ast, s.yel, s.red, s.rt];
         }
         if (k === 'c') return [p.c.apps, p.c.goals];
         return v;
@@ -50,7 +52,7 @@ export function unpackState(obj: any): GameState {
     const p: any = {};
     pk.forEach((k, i) => (p[k] = row[i]));
     const s = p.s as number[];
-    p.s = { apps: s[0], goals: s[1], ast: s[2], yel: s[3], red: s[4] };
+    p.s = { apps: s[0], goals: s[1], ast: s[2], yel: s[3], red: s[4], rt: s[5] ?? 0 };
     const c = p.c as number[];
     p.c = { apps: c[0], goals: c[1] };
     players[p.id] = p as Player;
@@ -68,9 +70,20 @@ export function unpackState(obj: any): GameState {
   return migrate(state);
 }
 
-/** Hook for future format changes. */
+/** Bring older saves up to the current format. */
 function migrate(state: GameState): GameState {
   if (state.v > SAVE_FORMAT_VERSION) throw new Error('Este save foi criado por uma versão mais nova do jogo.');
+  if (state.v < 2) {
+    // v1 had one ticket price per club: scale the sector reference prices by how far it was from the default
+    for (const c of Object.values(state.clubs) as (GameState['clubs'][number] & { ticket?: number })[]) {
+      const k = c.ticket ? c.ticket / Math.max(1, defaultTicket(c)) : 1;
+      c.tickets = { base: sectorRefs(c).map((p) => Math.max(1, Math.round(p * k))) as SectorPrices, comps: {} };
+      delete c.ticket;
+    }
+    // matches played before ratings existed count as a neutral 6.0
+    for (const p of Object.values(state.players)) p.s.rt = p.s.apps * 60;
+    state.v = 2;
+  }
   return state;
 }
 

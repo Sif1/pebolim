@@ -1,33 +1,46 @@
-// Prints match-engine statistics for calibration: npx tsx tools/calib.ts [n]
+// Prints match-engine statistics for calibration: npx tsx tools/calib.ts [n] [pairs]
 import { MatchSim } from '../src/engine/match/core';
 import { synthSetup } from '../tests/helpers';
 
 const N = Number(process.argv[2] ?? 2000);
 
 function run(hs: number, as: number) {
-  let goals = 0, hw = 0, dr = 0, aw = 0, shots = 0, ont = 0, corners = 0, fouls = 0, yel = 0, red = 0, poss = 0;
+  const sum: Record<string, number> = {};
+  const add = (k: string, v: number) => (sum[k] = (sum[k] ?? 0) + v);
   const t0 = performance.now();
   for (let i = 0; i < N; i++) {
     const sim = new MatchSim(synthSetup(hs, as, i * 7919 + hs * 13 + as));
     const r = sim.runToEnd();
-    goals += r.hg + r.ag;
-    if (r.hg > r.ag) hw++;
-    else if (r.hg === r.ag) dr++;
-    else aw++;
-    shots += r.stats[0].shots + r.stats[1].shots;
-    ont += r.stats[0].onTarget + r.stats[1].onTarget;
-    corners += r.stats[0].corners + r.stats[1].corners;
-    fouls += r.stats[0].fouls + r.stats[1].fouls;
-    yel += r.stats[0].yel + r.stats[1].yel;
-    red += r.stats[0].red + r.stats[1].red;
-    poss += sim.possPct();
+    add('goals', r.hg + r.ag);
+    add(r.hg > r.ag ? 'H' : r.hg === r.ag ? 'D' : 'A', 1);
+    for (const s of r.stats) {
+      add('shots', s.shots);
+      add('onT', s.onTarget);
+      add('corners', s.corners);
+      add('fouls', s.fouls);
+      add('yel', s.yel);
+      add('red', s.red);
+      add('passes', s.passes);
+      add('passFail', s.passFail);
+      add('tackles', s.tackles);
+      add('big', s.big);
+      add('xg', s.xg);
+      add('saves', s.saves);
+    }
+    add('possH', sim.possPct());
+    const rts = Object.values(r.players).filter((p) => p.mins >= 30);
+    add('rt', rts.reduce((a, p) => a + p.rt, 0) / Math.max(1, rts.length));
+    add('rtMax', Math.max(...rts.map((p) => p.rt)));
+    add('rtMin', Math.min(...rts.map((p) => p.rt)));
   }
   const ms = (performance.now() - t0) / N;
-  const f = (x: number) => (x / N).toFixed(2);
+  const f = (k: string, per = 1) => ((sum[k] ?? 0) / N / per).toFixed(2);
+  const pct = (k: string) => (((sum[k] ?? 0) / N) * 100).toFixed(1) + '%';
+  const acc = ((sum.passes / (sum.passes + sum.passFail)) * 100).toFixed(1);
   console.log(
-    `${hs} vs ${as}: goals ${f(goals)} | H ${((hw / N) * 100).toFixed(1)}% D ${((dr / N) * 100).toFixed(1)}% A ${((aw / N) * 100).toFixed(1)}% | shots ${f(shots)} onT ${f(ont)} corners ${f(corners)} fouls ${f(fouls)} yel ${f(yel)} red ${f(red)} possH ${f(poss)} | ${ms.toFixed(2)} ms/match`,
+    `${hs} vs ${as}: goals ${f('goals')} xG ${f('xg')} | H ${pct('H')} D ${pct('D')} A ${pct('A')} | per team: shots ${f('shots', 2)} onT ${f('onT', 2)} big ${f('big', 2)} passes ${f('passes', 2)} (${acc}%) tackles ${f('tackles', 2)} saves ${f('saves', 2)} corners ${f('corners', 2)} fouls ${f('fouls', 2)} | match: yel ${f('yel')} red ${f('red')} possH ${f('possH')} | ratings avg ${f('rt')} max ${f('rtMax')} min ${f('rtMin')} | ${ms.toFixed(2)} ms`,
   );
 }
 
-const pairs = (process.argv[3] ?? "70-70,75-65,65-75,80-60,60-80").split(",").map((p) => p.split("-").map(Number));
+const pairs = (process.argv[3] ?? '70-70,75-65,65-75,80-60,60-80').split(',').map((p) => p.split('-').map(Number));
 for (const [h, a] of pairs) run(h, a);

@@ -53,12 +53,14 @@ export type ClientMsg =
   | { t: 'ready'; ready: boolean }
   | { t: 'match'; fixtureId: number; action: MatchAction }
   | { t: 'resync' }
-  | { t: 'host'; action: 'start' | 'matchday' | 'continue' };
+  | { t: 'host'; action: 'start' | 'matchday' | 'continue' }
+  | { t: 'settings'; matchMinutes: number };
 
 export type HostMsg =
   | { t: 'welcome'; clientId: string }
   | { t: 'lobby'; lobby: LobbyState }
-  | { t: 'snapshot'; ver: number; data: Uint8Array; hash: string }
+  /** live: taken in the middle of a match day, not a safe point to autosave */
+  | { t: 'snapshot'; ver: number; data: Uint8Array; hash: string; live?: boolean }
   | { t: 'patch'; ver: number; patches: Patch[] }
   | { t: 'ack'; seq: number; ok: boolean; msg: string }
   | { t: 'notice'; text: string; level: 'info' | 'error' | 'success' }

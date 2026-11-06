@@ -113,10 +113,13 @@ export function Home() {
                 <label className="field">
                   Duração de cada partida ao vivo
                   <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-                    <option value={3}>3 minutos (rápido)</option>
+                    <option value={1}>1 minuto (relâmpago)</option>
+                    <option value={2}>2 minutos (rápido)</option>
+                    <option value={3}>3 minutos</option>
                     <option value={5}>5 minutos</option>
                     <option value={8}>8 minutos (detalhado)</option>
                   </select>
+                  <span className="small faint">Dá para mudar depois, em Opções.</span>
                 </label>
               </div>
               <label className="row">
@@ -202,7 +205,7 @@ export function Home() {
 }
 
 /** Advanced: custom STUN/TURN servers for friends behind strict networks. */
-function IceSettings() {
+export function IceSettings() {
   const [text, setText] = useState(() => localStorage.getItem('pebolim.ice') ?? '');
   const [msg, setMsg] = useState<string | null>(null);
   const save = () => {

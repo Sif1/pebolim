@@ -1,5 +1,5 @@
 import type { Tactics } from '../types';
-import { MatchSim, PITCH_H, PITCH_W, type MatchEvent, type MatchResult, type MatchSetup } from './core';
+import { matchRating, MatchSim, PITCH_H, PITCH_W, type MatchEvent, type MatchResult, type MatchSetup } from './core';
 
 export const MAX_PAUSES = 3;
 export const PAUSE_LIMIT_MS = 90_000;
@@ -22,6 +22,10 @@ export interface LiveFrame {
   shots: [number, number];
   onT: [number, number];
   cards: [number, number, number, number];
+  /** extra stats, [home, away] each: passes ok, passes failed, tackles, clear-cut chances, xG ×100, corners, fouls, saves */
+  x: { pas: [number, number]; pf: [number, number]; tk: [number, number]; bc: [number, number]; xg: [number, number]; co: [number, number]; fo: [number, number]; sv: [number, number] };
+  /** player on the ball (0 = none) */
+  car: number;
   paused: boolean;
   pausedBy: 0 | 1 | null;
   ended: boolean;
@@ -38,6 +42,8 @@ export interface LiveDetail {
     subs: number;
     tactics: Tactics;
     fit: Record<number, number>;
+    /** match rating ×10 of everyone who has played */
+    rt: Record<number, number>;
     yel: number[];
     off: number[];
     pauses: number;
@@ -242,6 +248,8 @@ export class LiveMatch {
     const ev = sim.events.slice(this.evSent);
     this.evSent = sim.events.length;
     const st = sim.stats;
+    const pair = (k: keyof (typeof st)[0], m = 1): [number, number] => [Math.round(st[0][k] * m), Math.round(st[1][k] * m)];
+    const act = sim.action;
     return {
       f: this.fixtureId,
       t: Math.round(sim.t),
@@ -255,6 +263,17 @@ export class LiveMatch {
       shots: [st[0].shots, st[1].shots],
       onT: [st[0].onTarget, st[1].onTarget],
       cards: [st[0].yel, st[1].yel, st[0].red, st[1].red],
+      x: {
+        pas: pair('passes'),
+        pf: pair('passFail'),
+        tk: pair('tackles'),
+        bc: pair('big'),
+        xg: pair('xg', 100),
+        co: pair('corners'),
+        fo: pair('fouls'),
+        sv: pair('saves'),
+      },
+      car: (act && act.kind !== 'celebrate' ? (act.target ?? act.actor) : sim.carrier) ?? 0,
       paused: this.paused,
       pausedBy: this.pausedBy,
       ended: sim.ended,
@@ -268,10 +287,12 @@ export class LiveMatch {
       f: this.fixtureId,
       sides: this.sim.sides.map((s, side) => {
         const fit: Record<number, number> = {};
+        const rt: Record<number, number> = {};
         const yel: number[] = [];
         const off: number[] = [];
         for (const pl of s.players.values()) {
           fit[pl.id] = Math.round(pl.fitness);
+          if (pl.on != null) rt[pl.id] = Math.round(matchRating(pl) * 10);
           if (pl.yellow > 0) yel.push(pl.id);
           if (pl.off != null || pl.red || pl.injured) off.push(pl.id);
         }
@@ -279,8 +300,9 @@ export class LiveMatch {
           onPitch: [...s.onPitch],
           bench: [...s.bench],
           subs: s.subs,
-          tactics: { ...s.tactics },
+          tactics: { ...s.tactics, shape: s.tactics.shape ? [...s.tactics.shape] : null },
           fit,
+          rt,
           yel,
           off,
           pauses: this.pauses[side],

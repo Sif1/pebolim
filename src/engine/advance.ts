@@ -39,10 +39,10 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
     f.goals = r.goals;
     f.reds = [r.stats[0].red, r.stats[1].red];
     const home = state.clubs[f.home];
-    f.att = attendance(state, f, rng);
-    const gate = f.att * home.ticket;
-    home.balance += gate;
-    home.ledger.tickets += gate;
+    const gate = attendance(state, f, rng);
+    f.att = gate.total;
+    home.balance += gate.revenue;
+    home.ledger.tickets += gate.revenue;
     applyFixtureToTables(state, f);
 
     // suspensions already being served in this competition
@@ -58,6 +58,7 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
       p.s.goals += st.goals;
       p.c.goals += st.goals;
       p.s.ast += st.ast;
+      p.s.rt += Math.round((st.rt ?? 6) * 10);
       p.fitness = st.fitness;
       if (st.inj > 0) {
         p.injury = Math.max(p.injury, st.inj);

@@ -1,18 +1,18 @@
 import { squadStrength } from './ai/lineup';
 import { takeJob } from './board';
-import { seatCost, TC_BUILD, tcUpgradeCost } from './economy';
+import { clubComps, seatCost, sectorBounds, sectorRefs, stadiumBuildDates, TC_BUILD, tcUpgradeCost } from './economy';
 import { assignNumbers, fillSquad, strForRep } from './generator';
-import { FORMATIONS } from './match/formations';
+import { FORMATIONS, slotsFor, validShape } from './match/formations';
 import { Rng } from './rng';
 import { executeTransfer, resolveAiBid, wageDemand, windowOpen } from './transfers';
-import type { Bid, GameState, Lineup, Manager, Tactics, TrainingFocus, TravelMode } from './types';
+import type { Bid, GameState, Lineup, Manager, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
 import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, squadOf } from './util';
-import { defaultTicket } from './world';
 
 export type Command =
   | { c: 'setTactics'; tactics: Tactics }
   | { c: 'setLineup'; lineup: Lineup; auto: boolean }
-  | { c: 'setTicket'; price: number }
+  /** comp null = default prices; prices null = drop the competition's own prices */
+  | { c: 'setTickets'; comp: string | null; prices: SectorPrices | null }
   | { c: 'setFocus'; focus: TrainingFocus }
   | { c: 'setTravel'; mode: TravelMode | 'auto' }
   | { c: 'upgradeTC' }
@@ -83,8 +83,10 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
     case 'setTactics': {
       const t = cmd.tactics;
       if (!FORMATIONS[t.formation]) return fail('Formação inválida.');
-      if (t.formation !== club.tactics.formation) club.lineup = { xi: FORMATIONS[t.formation].map(() => null), bench: club.lineup.bench };
-      club.tactics = { ...t };
+      if (t.shape != null && !validShape(t.shape)) return fail('Posições inválidas.');
+      // a different preset formation clears the lineup; moving positions keeps everyone in his slot
+      if (t.formation !== club.tactics.formation && !t.shape) club.lineup = { xi: slotsFor(t).map(() => null), bench: club.lineup.bench };
+      club.tactics = { ...t, shape: t.shape ? [...t.shape] : null };
       return ok('Tática salva.');
     }
     case 'setLineup': {
@@ -96,11 +98,20 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       club.autoLineup = cmd.auto;
       return ok('Escalação salva.');
     }
-    case 'setTicket': {
-      const ref = defaultTicket(club);
-      const price = Math.round(clamp(cmd.price, ref * 0.2, ref * 4));
-      club.ticket = price;
-      return ok(`Ingresso a R$ ${price}.`);
+    case 'setTickets': {
+      if (cmd.comp != null && !clubComps(state, club.id).some((c) => c.id === cmd.comp)) return fail('Seu clube não disputa essa competição.');
+      if (cmd.prices == null) {
+        if (cmd.comp == null) return fail('Preços inválidos.');
+        delete club.tickets.comps[cmd.comp];
+        return ok('Essa competição volta a usar os preços padrão.');
+      }
+      const prices = cmd.prices.map((v, i) => {
+        const [lo, hi] = sectorBounds(club, i);
+        return Math.round(clamp(v, lo, hi));
+      }) as SectorPrices;
+      if (cmd.comp == null) club.tickets.base = prices;
+      else club.tickets.comps[cmd.comp] = prices;
+      return ok(cmd.comp == null ? 'Preços padrão salvos.' : `Preços salvos para ${state.comps[cmd.comp].cfg.name}.`);
     }
     case 'setFocus':
       club.focus = cmd.focus;
@@ -116,6 +127,7 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       club.balance -= cost;
       club.ledger.works += cost;
       club.tc.building = TC_BUILD[club.tc.level + 1];
+      club.tc.total = club.tc.building;
       return ok(`Obra iniciada: CT nível ${club.tc.level + 1} em ${club.tc.building} rodadas.`);
     }
     case 'expandStadium': {
@@ -125,8 +137,9 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       if (club.balance < cost) return fail(`Saldo insuficiente (custa ${formatMoney(cost)}).`);
       club.balance -= cost;
       club.ledger.works += cost;
-      club.stadiumWork = { seats, left: Math.max(4, Math.ceil(seats / 2000)) };
-      return ok(`Ampliação de ${seats.toLocaleString('pt-BR')} lugares iniciada.`);
+      const dates = stadiumBuildDates(seats);
+      club.stadiumWork = { seats, left: dates, total: dates };
+      return ok(`Ampliação de ${seats.toLocaleString('pt-BR')} lugares iniciada: ${dates} rodadas, com 10% do estádio fechado durante as obras.`);
     }
     case 'listPlayer': {
       const p = state.players[cmd.pid];
@@ -342,8 +355,11 @@ export function bottomLeagues(state: GameState): string[] {
   return [...byCountry.values()].map((x) => x.id);
 }
 
-/** Replace a bottom-division club with a user-created one (new game only). */
-export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpec): string | null {
+/**
+ * Replace a bottom-division club with a user-created one. At the start of a new game its old squad is removed;
+ * later in a career the old players become free agents and the new club keeps the old one's place, points and fixtures.
+ */
+export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpec, newGame = true): string | null {
   const club = state.clubs[spec.replaceClubId];
   if (!club || !club.league || !bottomLeagues(state).includes(club.league)) return 'Escolha um clube da última divisão.';
   if (club.managerId) return 'Esse clube já tem treinador.';
@@ -360,7 +376,24 @@ export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpe
   club.tc = { level: 1, building: 0 };
   club.estadual = null;
   // fresh generated squad at the division's level
-  for (const p of squadOf(state, club.id)) delete state.players[p.id];
+  for (const p of squadOf(state, club.id)) {
+    if (newGame) {
+      delete state.players[p.id];
+    } else if (p.loan) {
+      p.clubId = p.loan.from;
+      p.loan = null;
+    } else {
+      p.clubId = null;
+      p.listed = false;
+      p.idle = 0;
+      p.num = 0;
+    }
+  }
+  // players the old club had loaned out stay where they are
+  for (const p of Object.values(state.players)) if (p.loan?.from === club.id) p.loan = null;
+  for (const b of Object.values(state.bids)) {
+    if ((b.buyer === club.id || b.seller === club.id) && (b.status === 'pendente' || b.status === 'contraproposta')) b.status = 'cancelada';
+  }
   const leagueClubs = Object.values(state.clubs).filter((c) => c.league === club.league && c.id !== club.id);
   const avgPower = leagueClubs.reduce((a, c) => a + c.power, 0) / Math.max(1, leagueClubs.length);
   fillSquad(state, rng, club.id, [], Math.min(strForRep(club.rep) + 4, avgPower - 2), 0.05, 24);
@@ -369,7 +402,8 @@ export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpe
   const monthly = squad.reduce((a, p) => a + p.wage, 0);
   club.baseIncome = Math.round((monthly * 12) / 0.85);
   club.balance = Math.round(club.baseIncome * 0.15);
-  club.ticket = defaultTicket(club);
+  club.tickets = { base: sectorRefs(club), comps: {} };
+  club.stadiumWork = null;
   club.ledger = emptyLedger();
   club.power = squadStrength(squad);
   club.lineup = { xi: [], bench: [] };

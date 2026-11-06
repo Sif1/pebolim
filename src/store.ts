@@ -24,6 +24,7 @@ export type Screen =
   | 'calendario'
   | 'noticias'
   | 'treinador'
+  | 'opcoes'
   | 'clube';
 
 export interface Notice {
@@ -84,7 +85,8 @@ export const useApp = create<AppState>((set, get) => ({
 function tabToken(): string {
   let t = sessionStorage.getItem('pebolim.token');
   if (!t) {
-    t = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    // unguessable: whoever holds it can take this tab's place after a reconnect
+    t = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
     sessionStorage.setItem('pebolim.token', t);
   }
   return t;
@@ -108,7 +110,8 @@ function makeClient(conn: ConstructorParameters<typeof ClientSession>[0], code: 
       if (pendingSave) clearTimeout(pendingSave);
       pendingSave = setTimeout(() => {
         pendingSave = null;
-        if (client.state) void saveToBytes(client.state).then(autosave);
+        // never autosave a half-played match day (reloading it would replay travel and lineups)
+        if (client.state && !client.md) void saveToBytes(client.state).then(autosave);
       }, 4000);
     },
     onLobby: (lobby) => useApp.setState({ lobby }),
@@ -124,7 +127,8 @@ function makeClient(conn: ConstructorParameters<typeof ClientSession>[0], code: 
     },
     onFrames: () => useApp.setState({ frameTick: useApp.getState().frameTick + 1 }),
     onNotice: (text, level) => useApp.getState().notify(text, level),
-    onSnapshotBytes: (bytes) => {
+    onSnapshotBytes: (bytes, live) => {
+      if (live) return;
       const now = Date.now();
       if (now - lastAutosave < 3000) return;
       lastAutosave = now;

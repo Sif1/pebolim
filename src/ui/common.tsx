@@ -109,6 +109,42 @@ export function Bar({ v, max = 100, color }: { v: number; max?: number; color?: 
   );
 }
 
+/** Energy (fitness) color: green above 80%, yellow 60-80%, red below 60%. */
+export function energyColor(v: number): string {
+  return v > 80 ? 'var(--good)' : v >= 60 ? 'var(--warn)' : 'var(--bad)';
+}
+
+/** Energy as a bar plus its number. */
+export function Energy({ v, w = 56 }: { v: number; w?: number }) {
+  const r = Math.max(0, Math.min(100, Math.round(v)));
+  const c = energyColor(r);
+  return (
+    <span className="energy" title={`Energia ${r}%`}>
+      <span className="bar" style={{ width: w, minWidth: w }}>
+        <div style={{ width: `${r}%`, background: c }} />
+      </span>
+      <span className="num" style={{ color: c }}>
+        {r}%
+      </span>
+    </span>
+  );
+}
+
+export function ratingColor(v: number): string {
+  return v >= 8 ? '#a78bfa' : v >= 7 ? '#22c55e' : v >= 6.5 ? '#84cc16' : v >= 6 ? '#eab308' : v >= 5.5 ? '#f97316' : '#ef4444';
+}
+
+/** Match rating badge (e.g. 7.4); a dash when the player has no rating yet. */
+export function Rating({ v }: { v: number | null | undefined }) {
+  if (v == null) return <span className="rating faint">–</span>;
+  const c = ratingColor(v);
+  return (
+    <span className="rating" style={{ background: c + '26', color: c }} title="Nota na partida">
+      {v.toFixed(1)}
+    </span>
+  );
+}
+
 export function Modal({ onClose, children, wide }: { onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

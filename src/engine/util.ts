@@ -1,6 +1,7 @@
 import type { Club, GameState, Ledger, Player, TableRow } from './types';
 
-export const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+/** Clamp to [lo, hi]; NaN becomes lo so bad input can never poison the state. */
+export const clamp = (v: number, lo: number, hi: number) => (Number.isNaN(v) ? lo : v < lo ? lo : v > hi ? hi : v);
 
 export const age = (p: Player, season: number) => season - p.birth;
 

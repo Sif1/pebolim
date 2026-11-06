@@ -87,9 +87,11 @@ export function computeRatings(slots: Slot[], onPitch: (RatedPlayer | null)[], t
     const avg = sum[k] / wsum[k]; // missing players count as zero -> big penalty
     return avg * (0.6 + (0.4 * present[k]) / REF[k]);
   };
-  let def = sector(0);
-  let mid = sector(1);
-  let att = sector(2);
+  // a leader on the pitch lifts everyone a little
+  const lead = onPitch.some((p) => p?.traits.includes('lideranca')) ? 1.015 : 1;
+  let def = sector(0) * lead;
+  let mid = sector(1) * lead;
+  let att = sector(2) * lead;
   if (tactics.mentality === 'defensiva') {
     def *= 1.06;
     att *= 0.92;

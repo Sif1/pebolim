@@ -1,6 +1,6 @@
 import type { RngState } from './rng';
 
-export const SAVE_FORMAT_VERSION = 1;
+export const SAVE_FORMAT_VERSION = 2;
 
 export type Pos = 'GOL' | 'LAT' | 'ZAG' | 'VOL' | 'MEI' | 'ATA';
 export const POSITIONS: Pos[] = ['GOL', 'LAT', 'ZAG', 'VOL', 'MEI', 'ATA'];
@@ -33,6 +33,8 @@ export interface SeasonStats {
   ast: number;
   yel: number;
   red: number;
+  /** sum of match ratings ×10 (average = rt / apps / 10) */
+  rt: number;
 }
 
 export interface Player {
@@ -78,6 +80,11 @@ export interface Tactics {
   mentality: Mentality;
   marking: Marking;
   style: Style;
+  /**
+   * Custom positions: grid cells (row * 5 + col) for slots 1..10 (slot 0 is the keeper).
+   * Null/absent = the preset formation's positions.
+   */
+  shape?: number[] | null;
 }
 
 export interface Lineup {
@@ -87,6 +94,16 @@ export interface Lineup {
 }
 
 export type TravelMode = 'onibus' | 'comercial' | 'fretado';
+
+/** Ticket prices per stadium sector, cheapest first: geral, arquibancada, cadeiras, camarotes. */
+export type SectorPrices = [number, number, number, number];
+
+export interface TicketPrices {
+  /** default prices per sector */
+  base: SectorPrices;
+  /** per-competition overrides (competition id -> prices) */
+  comps: Record<string, SectorPrices>;
+}
 export type TrainingFocus = 'equilibrado' | 'fisico' | 'tecnico';
 export type Objective = 'titulo' | 'continental' | 'meio' | 'rebaixamento' | 'acesso';
 
@@ -128,9 +145,10 @@ export interface Club {
   balance: number;
   /** yearly sponsors + TV income baseline */
   baseIncome: number;
-  ticket: number;
-  tc: { level: number; building: number };
-  stadiumWork: { seats: number; left: number } | null;
+  tickets: TicketPrices;
+  /** training centre: level 1-5; building = dates left on the next level's works, total = their full length */
+  tc: { level: number; building: number; total?: number };
+  stadiumWork: { seats: number; left: number; total?: number } | null;
   focus: TrainingFocus;
   tactics: Tactics;
   lineup: Lineup;

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Player } from '../../engine/types';
 import { age, formatMoney, playerValue, squadOf } from '../../engine/util';
 import { useMe } from '../../store';
-import { Bar, compLabel, PosTag, Str, useSort } from '../common';
+import { Bar, compLabel, Energy, PosTag, Rating, Str, useSort } from '../common';
 import { PlayerModal, potentialHint, traitLabel } from '../PlayerModal';
 
 const POS_ORDER = { GOL: 0, LAT: 1, ZAG: 2, VOL: 3, MEI: 4, ATA: 5 };
@@ -22,6 +22,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
     val: (p) => playerValue(p, season),
     g: (p) => p.s.goals,
     apps: (p) => p.s.apps,
+    rt: (p) => avgRating(p) ?? 0,
   });
   if (!state) return null;
   const xi = new Set(club?.lineup.xi ?? []);
@@ -41,6 +42,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
             <th>Situação</th>
             {th('apps', 'J', 'center')}
             {th('g', 'G', 'center')}
+            {th('rt', 'Nota', 'center')}
             {th('con', 'Contrato', 'center')}
             {th('wage', 'Salário', 'right')}
             {showValue && th('val', 'Valor', 'right')}
@@ -65,7 +67,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
                 </td>
                 <td className="center small warn">{potentialHint(p.str, p.pot, age(p, season))}</td>
                 <td style={{ width: 70 }}>
-                  <Bar v={p.fitness} />
+                  <Energy v={p.fitness} />
                 </td>
                 <td style={{ width: 60 }}>
                   <Bar v={p.morale} color="var(--info)" />
@@ -82,6 +84,9 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
                 </td>
                 <td className="center num">{p.s.apps}</td>
                 <td className="center num">{p.s.goals}</td>
+                <td className="center">
+                  <Rating v={avgRating(p)} />
+                </td>
                 <td className={`center num ${p.contractEnd <= season ? 'warn' : ''}`}>{p.contractEnd}</td>
                 <td className="right small num">{formatMoney(p.wage)}</td>
                 {showValue && <td className="right small num">{formatMoney(playerValue(p, season))}</td>}
@@ -115,4 +120,9 @@ export function Elenco() {
       {open != null && <PlayerModal pid={open} onClose={() => setOpen(null)} />}
     </div>
   );
+}
+
+/** Season average match rating, or null before the first rated match. */
+function avgRating(p: { s: { apps: number; rt: number } }): number | null {
+  return p.s.apps > 0 && p.s.rt > 0 ? p.s.rt / p.s.apps / 10 : null;
 }

@@ -1,4 +1,4 @@
-import { DATES_PER_SEASON, TC_DEV, TC_REC } from './economy';
+import { DATES_PER_SEASON, TC_DEV, TC_INJ, TC_REC } from './economy';
 import type { Rng } from './rng';
 import type { GameState } from './types';
 import { age } from './util';
@@ -28,7 +28,7 @@ export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number
     if (playedToday.has(p.id)) rec *= 0.85;
     if (p.injury > 0) {
       p.injury--;
-      if (p.injury > 0 && rng.chance((lvl - 1) * 0.06)) p.injury--;
+      if (p.injury > 0 && rng.chance(TC_INJ[lvl])) p.injury--;
       p.fitness = Math.min(80, p.fitness + rec * 0.5);
     } else {
       p.fitness = Math.min(100, p.fitness + rec);

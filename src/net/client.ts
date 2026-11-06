@@ -23,7 +23,8 @@ export interface ClientEvents {
   onMatchday(md: MatchdayInfo | null): void;
   onFrames(): void;
   onNotice(text: string, level: 'info' | 'error' | 'success'): void;
-  onSnapshotBytes(bytes: Uint8Array): void;
+  /** live = mid-match-day snapshot, not a safe autosave point */
+  onSnapshotBytes(bytes: Uint8Array, live: boolean): void;
   onClose(reason: string): void;
 }
 
@@ -80,6 +81,11 @@ export class ClientSession {
     this.send({ t: 'host', action });
   }
 
+  /** Host only: change how long live matches last. */
+  setMatchMinutes(matchMinutes: number) {
+    this.send({ t: 'settings', matchMinutes });
+  }
+
   command(cmd: Command): Promise<CmdResult> {
     const seq = ++this.seq;
     return new Promise((resolve) => {
@@ -111,7 +117,7 @@ export class ClientSession {
         this.managerId = m.managerId;
         return this.ev.onClaimed(m.managerId);
       case 'snapshot':
-        return this.snapshot(m.ver, m.data, m.hash);
+        return this.snapshot(m.ver, m.data, m.hash, !!m.live);
       case 'patch':
         this.buffered.push({ ver: m.ver, patches: m.patches });
         return this.flush();
@@ -147,7 +153,7 @@ export class ClientSession {
     }
   }
 
-  private async snapshot(ver: number, data: Uint8Array, hash: string) {
+  private async snapshot(ver: number, data: Uint8Array, hash: string, live: boolean) {
     this.loading = true;
     try {
       const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
@@ -156,7 +162,7 @@ export class ClientSession {
       this.state = state;
       this.ver = ver;
       this.buffered = this.buffered.filter((b) => b.ver > ver);
-      this.ev.onSnapshotBytes(bytes);
+      this.ev.onSnapshotBytes(bytes, live);
       this.ev.onState(state, ver);
     } catch (e) {
       console.error(e);

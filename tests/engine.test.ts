@@ -1,12 +1,17 @@
 import { applyPatches, enablePatches, produceWithPatches, setAutoFreeze } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { finishDate, simulateBackground } from '../src/engine/advance';
-import { createManager, runCommand } from '../src/engine/commands';
+import { createCustomClub, createManager, runCommand } from '../src/engine/commands';
+import { clubComps, sectorRefs } from '../src/engine/economy';
+import { presetCells, slotsFor } from '../src/engine/match/formations';
+import { aiPlan, type Situation } from '../src/engine/ai/tactics';
+import { aiPreMatchTactics } from '../src/engine/matchday';
+import { validClientMsg, validCommand } from '../src/net/validate';
 import { roundRobin, tieWinner } from '../src/engine/competitions';
 import { MatchSim } from '../src/engine/match/core';
 import { prepareMatchday } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
-import { loadFromBytes, saveToBytes } from '../src/engine/save';
+import { gzip, loadFromBytes, packState, saveToBytes } from '../src/engine/save';
 import type { GameState } from '../src/engine/types';
 import { sortTable, squadOf } from '../src/engine/util';
 import { createWorld } from '../src/engine/world';
@@ -186,7 +191,7 @@ describe('commands', () => {
     replica = applyPatches(replica, p1) as GameState;
     const mid = club.managerId ?? Object.keys(host.managers)[0];
     const [h2, p2] = produceWithPatches(host, (d) => {
-      runCommand(d as GameState, mid, { c: 'setTicket', price: 77 });
+      runCommand(d as GameState, mid, { c: 'setTickets', comp: null, prices: [20, 40, 70, 200] });
       runCommand(d as GameState, mid, { c: 'setTravel', mode: 'fretado' });
     });
     host = h2;
@@ -195,7 +200,191 @@ describe('commands', () => {
   });
 });
 
+describe('new features', () => {
+  it('custom positions keep the keeper and give each cell a role', () => {
+    const shape = presetCells('4-4-2');
+    shape[9] = 12; // second striker drops to the middle of the pitch
+    const slots = slotsFor({ formation: '4-4-2', shape });
+    expect(slots[0].pos).toBe('GOL');
+    expect(slots[10].pos).toBe('MEI');
+    expect(slotsFor({ formation: '4-4-2', shape: [1, 1, 2, 3, 4, 5, 6, 7, 8, 9] })[1]).toEqual(slotsFor({ formation: '4-4-2' })[1]);
+  });
+
+  it('keeps the playing styles balanced (no dominant style)', () => {
+    const ppg = (style: 'toque' | 'contra' | 'longa') => {
+      let pts = 0;
+      for (let i = 0; i < 700; i++) {
+        const s = synthSetup(70, 70, 5000 + i);
+        s.home.tactics.style = style;
+        s.home.ai = false; // keep the style all match, against the AI coach
+        const r = new MatchSim(s).runToEnd();
+        pts += r.hg > r.ag ? 3 : r.hg === r.ag ? 1 : 0;
+      }
+      return pts / 700;
+    };
+    const base = ppg('toque');
+    expect(Math.abs(ppg('contra') - base)).toBeLessThan(0.2);
+    expect(Math.abs(ppg('longa') - base)).toBeLessThan(0.2);
+  });
+
+  it('records passes, tackles, xG and ratings in a match', () => {
+    const r = new MatchSim(synthSetup(72, 68, 11)).runToEnd();
+    for (const s of r.stats) {
+      expect(s.passes).toBeGreaterThan(100);
+      expect(s.passFail).toBeGreaterThan(10);
+      expect(s.tackles).toBeGreaterThan(0);
+      expect(s.xg).toBeGreaterThan(0);
+    }
+    for (const p of Object.values(r.players)) {
+      expect(p.rt).toBeGreaterThanOrEqual(3);
+      expect(p.rt).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('sets ticket prices per competition and keeps them in bounds', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'T', club.id);
+    const comp = clubComps(s, club.id)[0].id;
+    expect(runCommand(s, m.id, { c: 'setTickets', comp, prices: [1, 1e6, 50, 100] }).ok).toBe(true);
+    const refs = sectorRefs(club);
+    expect(club.tickets.comps[comp][0]).toBe(Math.round(refs[0] * 0.2));
+    expect(club.tickets.comps[comp][1]).toBe(Math.round(refs[1] * 5));
+    expect(runCommand(s, m.id, { c: 'setTickets', comp: 'NOPE', prices: [1, 1, 1, 1] }).ok).toBe(false);
+    expect(runCommand(s, m.id, { c: 'setTickets', comp, prices: null }).ok).toBe(true);
+    expect(club.tickets.comps[comp]).toBeUndefined();
+  });
+
+  it('builds the training centre over several dates', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1' && c.tc.level < 5)!;
+    const m = createManager(s, rng, 'T', club.id);
+    club.balance = 1e12;
+    const lvl = club.tc.level;
+    expect(runCommand(s, m.id, { c: 'upgradeTC' }).ok).toBe(true);
+    expect(club.tc.building).toBeGreaterThanOrEqual(8);
+    playDates(s, 2);
+    expect(club.tc.level).toBe(lvl);
+    playDates(s, club.tc.building);
+    expect(club.tc.level).toBe(lvl + 1);
+  });
+
+  it('creates a club mid-career without breaking the squad pool', () => {
+    const s = world();
+    playDates(s, 5);
+    const rng = new Rng(s.meta.rng);
+    const bottom = Object.values(s.clubs).find((c) => c.league === 'BRA3' && !c.managerId) ?? Object.values(s.clubs).find((c) => c.league === 'BRA2')!;
+    const oldSquad = squadOf(s, bottom.id).map((p) => p.id);
+    const err = createCustomClub(s, rng, { name: 'Pebolim FC', short: 'PEB', colors: ['#112233', '#ffffff'], city: 'X', stadium: 'Y', replaceClubId: bottom.id }, false);
+    expect(err).toBeNull();
+    for (const id of oldSquad) expect(s.players[id]).toBeDefined();
+    expect(squadOf(s, bottom.id).length).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe('AI coach', () => {
+  const sit = (o: Partial<Situation>): Situation => ({
+    minute: 30,
+    diff: 0,
+    men: 0,
+    edge: 0,
+    home: true,
+    decider: false,
+    energy: 90,
+    opp: { mentality: 'equilibrada', style: 'toque', marking: 'zona' },
+    natural: 'toque',
+    ...o,
+  });
+
+  it('adapts to the score, the clock, numbers and the opponent', () => {
+    expect(aiPlan(sit({ minute: 85, diff: -1 }))).toMatchObject({ mentality: 'ofensiva', style: 'longa' });
+    expect(aiPlan(sit({ minute: 65, diff: 1, edge: -6, home: false }))).toMatchObject({ mentality: 'defensiva', style: 'contra' });
+    expect(aiPlan(sit({ men: -1 }))).toMatchObject({ mentality: 'defensiva', style: 'contra' });
+    expect(aiPlan(sit({ men: 1, minute: 60 }))).toMatchObject({ mentality: 'ofensiva', style: 'toque', marking: 'pressao' });
+    // a favourite doesn't throw everyone forward against a counter-attacking side
+    expect(aiPlan(sit({ edge: 8, opp: { mentality: 'defensiva', style: 'contra', marking: 'zona' } })).mentality).toBe('equilibrada');
+    // against an opponent pushing forward, a side that isn't chasing goes for the counter
+    expect(aiPlan(sit({ edge: 0, opp: { mentality: 'ofensiva', style: 'toque', marking: 'zona' } })).style).toBe('contra');
+    // a knockout tie that needs a goal
+    expect(aiPlan(sit({ minute: 62, diff: 0, decider: true })).mentality).toBe('ofensiva');
+  });
+
+  it('plans before kick-off: favourites at home attack, weak sides away sit deep', () => {
+    const s = world();
+    playDates(s, 2);
+    const league = Object.values(s.clubs).filter((c) => c.league === 'BRA1').sort((a, b) => b.power - a.power);
+    const strong = league[0];
+    const weak = league[league.length - 1];
+    const f = Object.values(s.fixtures).find((x) => x.comp === 'BRA1')!;
+    const fake = { ...f, home: strong.id, away: weak.id };
+    const tStrong = aiPreMatchTactics(s, fake, strong, squadOf(s, strong.id), weak, squadOf(s, weak.id), false);
+    const tWeak = aiPreMatchTactics(s, fake, weak, squadOf(s, weak.id), strong, squadOf(s, strong.id), false);
+    expect(tStrong.mentality).not.toBe('defensiva');
+    expect(tWeak.mentality).toBe('defensiva');
+    expect(tWeak.style).toBe('contra');
+  });
+
+  it('changes tactics during a match and reorganises after a red card', () => {
+    let changed = 0;
+    for (let i = 0; i < 40; i++) {
+      const r = new MatchSim(synthSetup(78, 64, 900 + i));
+      r.runToEnd();
+      changed += r.events.filter((e) => e.kind === 'tactic' && e.text.includes('muda')).length;
+    }
+    expect(changed).toBeGreaterThan(20);
+    const sim = new MatchSim(synthSetup(70, 70, 77));
+    const side = sim.sides[0];
+    const hole = side.slots.findIndex((sl) => sl.pos === 'ZAG');
+    side.onPitch[hole] = null;
+    (sim as unknown as { aiReorganise(s: 0 | 1): void }).aiReorganise(0);
+    expect(side.onPitch[hole]).not.toBeNull();
+    expect(side.onPitch.filter((x) => x == null)).toHaveLength(1);
+  });
+});
+
+describe('host input checks', () => {
+  it('drops malformed commands and messages', () => {
+    expect(validCommand({ c: 'bid', pid: 1, kind: 'compra', fee: NaN, wage: 1000, years: 2 })).toBeNull();
+    expect(validCommand({ c: 'renew', pid: 1, wage: 'lots', years: 2 })).toBeNull();
+    expect(validCommand({ c: 'setTickets', comp: null, prices: [1, 2, 3] })).toBeNull();
+    expect(validCommand({ c: 'expandStadium', seats: 1e9 })).toBeNull();
+    expect(validCommand({ c: 'setTactics', tactics: { formation: '4-4-2', mentality: 'x', marking: 'zona', style: 'toque' } })).toBeNull();
+    expect(validCommand({ c: 'nope' })).toBeNull();
+    expect(validClientMsg({ t: 'match', fixtureId: 1, action: { a: 'swap', s1: 0, s2: 99 } })).toBeNull();
+    expect(validClientMsg({ t: 'settings', matchMinutes: 0.01 })).toBeNull();
+    expect(validClientMsg('hello')).toBeNull();
+    expect(validClientMsg({ t: 'cmd', seq: 1, cmd: { c: 'bid', pid: 3, kind: 'compra', fee: 10, wage: 100, years: 2 } })).not.toBeNull();
+  });
+
+  it('never lets NaN reach the state', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'T', club.id);
+    runCommand(s, m.id, { c: 'setTickets', comp: null, prices: [NaN, NaN, NaN, NaN] });
+    expect(club.tickets.base.every((p) => Number.isFinite(p))).toBe(true);
+  });
+});
+
 describe('save', () => {
+  it('migrates version 1 saves (single ticket price)', async () => {
+    const s = world();
+    const club = Object.values(s.clubs)[0];
+    const old = structuredClone(s) as any;
+    old.v = 1;
+    for (const c of Object.values(old.clubs) as any[]) {
+      c.ticket = 50;
+      delete c.tickets;
+    }
+    const bytes = await gzip(JSON.stringify({ app: 'pebolim-manager', format: 1, state: packState(old) }));
+    const back = await loadFromBytes(bytes);
+    expect(back.v).toBe(2);
+    expect(back.clubs[club.id].tickets.base).toHaveLength(4);
+    expect((back.clubs[club.id] as any).ticket).toBeUndefined();
+  });
+
   it('round-trips and stays small', async () => {
     const s = world();
     playDates(s, 3);

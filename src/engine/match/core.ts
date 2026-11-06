@@ -1,7 +1,8 @@
 import { Rng, type RngState } from '../rng';
-import type { GoalEvent, Pos, Tactics, Trait } from '../types';
-import { FORMATIONS, type Slot } from './formations';
-import { computeRatings, effective, type RatedPlayer, type SectorRatings } from './ratings';
+import { AI_COACH, aiPlan, describeChange, MENTALITY_TXT, naturalStyle, preferredFormations, strengthEdge, STYLE_TXT, type Situation } from '../ai/tactics';
+import type { Formation, GoalEvent, Pos, Style, Tactics, Trait } from '../types';
+import { FORMATIONS, shapeLabel, slotsFor, type Slot } from './formations';
+import { computeRatings, effective, overall, type RatedPlayer, type SectorRatings } from './ratings';
 
 export const PITCH_W = 105;
 export const PITCH_H = 68;
@@ -35,6 +36,13 @@ export interface MPlayer extends RatedPlayer {
   /** game second the player came on, or null if never played */
   on: number | null;
   off: number | null;
+  /** match rating adjustment from 6.0 (see matchRating) */
+  rt: number;
+}
+
+/** Match rating 3.0-10.0, built up from 6.0 by the player's actions. */
+export function matchRating(p: { rt: number }): number {
+  return Math.round(Math.min(10, Math.max(3, 6 + p.rt)) * 10) / 10;
 }
 
 export interface TeamSetup {
@@ -128,7 +136,8 @@ interface Effects {
   setPiece: SetPiece;
   goal?: { side: 0 | 1; pid: number; ast: number | null; pen?: boolean };
   events?: MatchEvent[];
-  shot?: { side: 0 | 1; onTarget: boolean };
+  /** xg: chance quality; big: clear-cut chance; gk: keeper who saved it */
+  shot?: { side: 0 | 1; onTarget: boolean; pid: number; xg: number; big: boolean; gk?: number | null };
   corner?: 0 | 1;
   lastPasser?: number | null;
 }
@@ -141,6 +150,16 @@ export interface SideStats {
   fouls: number;
   yel: number;
   red: number;
+  /** completed and failed passes (crosses included, throw-ins not) */
+  passes: number;
+  passFail: number;
+  /** ball won from an opponent's dribble */
+  tackles: number;
+  /** clear-cut chances */
+  big: number;
+  /** expected goals */
+  xg: number;
+  saves: number;
 }
 
 export interface MatchResult {
@@ -149,7 +168,7 @@ export interface MatchResult {
   ag: number;
   pens: [number, number] | null;
   goals: GoalEvent[];
-  players: Record<number, { side: 0 | 1; mins: number; goals: number; ast: number; yel: number; red: boolean; inj: number; fitness: number }>;
+  players: Record<number, { side: 0 | 1; mins: number; goals: number; ast: number; yel: number; red: boolean; inj: number; fitness: number; rt: number }>;
   stats: [SideStats, SideStats];
 }
 
@@ -167,7 +186,60 @@ export interface SideState {
 
 export const MAX_SUBS = 5;
 
-const emptyStats = (): SideStats => ({ poss: 0, shots: 0, onTarget: 0, corners: 0, fouls: 0, yel: 0, red: 0 });
+/**
+ * Playing styles: how often the side on the ball picks each action, and style bonuses.
+ * Balanced with tools/sensitivity.ts so that no style beats the others at equal strength.
+ */
+export const STYLE_TUNE = {
+  toque: { pass: 0.6, back: 0.14, dribble: 0.16, long: 0.1, passBonus: 0.06 },
+  contra: { pass: 0.48, back: 0.22, dribble: 0.15, long: 0.15, passBonus: 0 },
+  longa: { pass: 0.36, back: 0.2, dribble: 0.1, long: 0.34, passBonus: 0 },
+  /** contra-ataque right after winning the ball (first actions of a possession) */
+  breakActions: 2,
+  breakLong: 2,
+  breakDribble: 1.4,
+  breakBack: 0.2,
+  /** long-ball success: base + (duel where it lands − 0.5) × slope */
+  longBase: 0.335,
+  longSlope: 0.5,
+  /** chance per open-play action of shooting in the box / from the edge of it */
+  boxShot: 0.095,
+  edgeShot: 0.02,
+  /** scales every open-play and set-piece chance quality (penalties excluded); the main goals-per-match knob */
+  xgScale: 0.69,
+  // ---- matchups ----
+  /** contra-ataque against a side in postura ofensiva: one more break action and this much easier on breaks */
+  counterSpace: 0.03,
+  /** long balls against pressão alta: the press is bypassed */
+  longVsPress: 0.03,
+  /** clear-cut chances against a side in postura defensiva are this much rarer (crowded box) */
+  blockBig: 0.8,
+};
+
+interface AiMemory {
+  lastChange: number;
+  goals: number;
+  reds: number;
+  ownReds: number;
+  formationChanged: boolean;
+  tiredSubAt: number;
+}
+
+const emptyStats = (): SideStats => ({
+  poss: 0,
+  shots: 0,
+  onTarget: 0,
+  corners: 0,
+  fouls: 0,
+  yel: 0,
+  red: 0,
+  passes: 0,
+  passFail: 0,
+  tackles: 0,
+  big: 0,
+  xg: 0,
+  saves: 0,
+});
 
 export class MatchSim {
   readonly setup: MatchSetup;
@@ -190,6 +262,16 @@ export class MatchSim {
   private setPiece: SetPiece = 'kickoff';
   private lastPasser: number | null = null;
   private lastMinute = -1;
+  /** open-play decisions since the side on the ball won it */
+  private possActions = 0;
+  /** squad strength at kick-off (força points), used by the AI to judge who is the favourite */
+  readonly power: [number, number] = [70, 70];
+  /** the style each side's players suit */
+  readonly natural: [Style, Style] = ['toque', 'toque'];
+  private ai: [AiMemory, AiMemory] = [0, 1].map(() => ({ lastChange: 0, goals: 0, reds: 0, ownReds: 0, formationChanged: false, tiredSubAt: 0 })) as [
+    AiMemory,
+    AiMemory,
+  ];
 
   constructor(setup: MatchSetup) {
     this.setup = setup;
@@ -200,6 +282,12 @@ export class MatchSim {
       for (const pid of s.onPitch) if (pid != null) s.players.get(pid)!.on = 0;
     }
     this.recalc();
+    for (const side of [0, 1] as const) {
+      const s = this.sides[side];
+      const xi = s.onPitch.map((id) => (id != null ? s.players.get(id)! : null));
+      this.power[side] = overall(computeRatings(s.slots, xi, { ...s.tactics, mentality: 'equilibrada', marking: 'zona' }));
+      this.natural[side] = naturalStyle(xi.filter((p): p is MPlayer => !!p));
+    }
     this.carrier = this.pickByPos(0, ['ATA', 'MEI']);
   }
 
@@ -218,12 +306,13 @@ export class MatchSim {
         ast: 0,
         on: null,
         off: null,
+        rt: 0,
       });
     }
-    const slots = FORMATIONS[ts.tactics.formation];
+    const slots = slotsFor(ts.tactics);
     return {
       setup: ts,
-      tactics: { ...ts.tactics },
+      tactics: { ...ts.tactics, shape: ts.tactics.shape ? [...ts.tactics.shape] : null },
       slots,
       onPitch: slots.map((_, i) => ts.xi[i] ?? null),
       bench: [...ts.bench],
@@ -300,34 +389,63 @@ export class MatchSim {
     return null;
   }
 
-  /** Move a player already on the pitch to another slot (swap). */
-  swapSlots(side: 0 | 1, a: number, b: number) {
+  /** Move a player already on the pitch to another slot (swap). Returns an error message or null. */
+  swapSlots(side: 0 | 1, a: number, b: number): string | null {
     const s = this.sides[side];
+    const n = s.onPitch.length;
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a >= n || b >= n || a === b) return 'Troca inválida';
+    if (this.ended) return 'Partida encerrada';
     [s.onPitch[a], s.onPitch[b]] = [s.onPitch[b], s.onPitch[a]];
+    this.recalc();
+    return null;
+  }
+
+  /** Best-fit seating of the players on the pitch into a set of slots (the keeper slot stays filled first). */
+  private seat(side: 0 | 1, slots: Slot[]): (number | null)[] {
+    const s = this.sides[side];
+    const current = s.onPitch.filter((x): x is number => x != null).map((id) => s.players.get(id)!);
+    const assigned: (number | null)[] = slots.map(() => null);
+    const pairs: { si: number; p: MPlayer; e: number }[] = [];
+    slots.forEach((sl, si) => current.forEach((p) => pairs.push({ si, p, e: effective(p, sl.pos) + (sl.pos === 'GOL' ? 1000 : 0) })));
+    pairs.sort((x, y) => y.e - x.e);
+    const used = new Set<number>();
+    for (const pr of pairs) {
+      if (assigned[pr.si] != null || used.has(pr.p.id)) continue;
+      assigned[pr.si] = pr.p.id;
+      used.add(pr.p.id);
+    }
+    return assigned;
+  }
+
+  setTactics(side: 0 | 1, t: Tactics, text?: string) {
+    const s = this.sides[side];
+    const newSlots = slotsFor(t);
+    // a new preset formation re-seats everyone; moving positions around keeps each player in his slot
+    if (t.formation !== s.tactics.formation && !t.shape) s.onPitch = this.seat(side, newSlots);
+    s.slots = newSlots;
+    s.tactics = { ...t, shape: t.shape ? [...t.shape] : null };
+    this.events.push({
+      t: this.t,
+      kind: 'tactic',
+      side,
+      text: text ?? `${s.setup.short}: ${shapeLabel(t)}, ${MENTALITY_TXT[t.mentality]}, ${STYLE_TXT[t.style]}${t.marking === 'pressao' ? ', pressão alta' : ''}`,
+    });
     this.recalc();
   }
 
-  setTactics(side: 0 | 1, t: Tactics) {
-    const s = this.sides[side];
-    if (t.formation !== s.tactics.formation) {
-      const newSlots = FORMATIONS[t.formation];
-      const current = s.onPitch.filter((x): x is number => x != null).map((id) => s.players.get(id)!);
-      const assigned: (number | null)[] = newSlots.map(() => null);
-      const pairs: { si: number; p: MPlayer; e: number }[] = [];
-      newSlots.forEach((sl, si) => current.forEach((p) => pairs.push({ si, p, e: effective(p, sl.pos) })));
-      pairs.sort((x, y) => y.e - x.e);
-      const used = new Set<number>();
-      for (const pr of pairs) {
-        if (assigned[pr.si] != null || used.has(pr.p.id)) continue;
-        assigned[pr.si] = pr.p.id;
-        used.add(pr.p.id);
-      }
-      s.slots = newSlots;
-      s.onPitch = assigned;
-    }
-    s.tactics = { ...t };
-    this.events.push({ t: this.t, kind: 'tactic', side, text: `${s.setup.short}: ${t.formation}, ${t.mentality}` });
-    this.recalc();
+  // ---------- stats and ratings ----------
+  private rate(pid: number | null | undefined, d: number) {
+    if (pid == null) return;
+    const p = this.player(pid);
+    if (p) p.rt += d;
+  }
+  private passOk(side: 0 | 1, pid: number | null, d = 0.012) {
+    this.stats[side].passes++;
+    this.rate(pid, d);
+  }
+  private passBad(side: 0 | 1, pid: number | null) {
+    this.stats[side].passFail++;
+    this.rate(pid, -0.06);
   }
 
   // ---------- simulation ----------
@@ -425,11 +543,41 @@ export class MatchSim {
     return best;
   }
 
+  /** What the AI coach of `side` sees right now. */
+  situation(side: 0 | 1, minute: number): Situation {
+    const s = this.sides[side];
+    const o = this.sides[1 - side];
+    let diff = this.score[side] - this.score[1 - side];
+    const dec = this.setup.decider;
+    if (dec) diff += side === 0 ? dec.aggHome - dec.aggAway : dec.aggAway - dec.aggHome;
+    const mine = s.onPitch.filter((x): x is number => x != null);
+    const energy = mine.length ? mine.reduce((a, id) => a + s.players.get(id)!.fitness, 0) / mine.length : 0;
+    return {
+      minute,
+      diff,
+      men: mine.length - o.onPitch.filter((x) => x != null).length,
+      edge: strengthEdge(this.power[side], this.power[1 - side], side === 0),
+      home: side === 0,
+      decider: !!dec,
+      energy,
+      opp: o.tactics,
+      natural: this.natural[side],
+    };
+  }
+
+  /**
+   * The AI coach: reorganises after a red card, makes tired and tactical substitutions, and re-reads the game
+   * every 5 minutes (at once after a goal or a red card), changing posture, style, pressing and formation.
+   */
   private aiDecisions(side: 0 | 1, minute: number) {
     const s = this.sides[side];
-    if (minute === 55 || minute === 65 || minute === 72 || minute === 80) {
-      if (s.subs >= MAX_SUBS) return;
-      // replace the most tired outfield player
+    const mem = this.ai[side];
+    if (this.stats[side].red > mem.ownReds) {
+      mem.ownReds = this.stats[side].red;
+      this.aiReorganise(side);
+    }
+    // tired legs from the hour mark (at most one change every 7 minutes)
+    if (minute >= 55 && minute - mem.tiredSubAt >= 7 && s.subs < MAX_SUBS - (minute < 80 ? 1 : 0)) {
       let worst: { pid: number; slot: number; f: number } | null = null;
       s.onPitch.forEach((pid, slot) => {
         if (pid == null || s.slots[slot].pos === 'GOL') return;
@@ -439,16 +587,112 @@ export class MatchSim {
       if (worst) {
         const w = worst as { pid: number; slot: number; f: number };
         const sub = this.bestBenchFor(side, s.slots[w.slot].pos);
-        if (sub != null) this.sub(side, w.pid, sub);
+        if (sub != null && !this.sub(side, w.pid, sub)) mem.tiredSubAt = minute;
       }
     }
-    if (minute === 70 || minute === 82) {
-      const diff = this.score[side] - this.score[1 - side];
-      const want = diff < 0 ? 'ofensiva' : diff > 0 && minute === 82 ? 'defensiva' : s.setup.tactics.mentality;
-      if (want !== s.tactics.mentality) {
-        s.tactics = { ...s.tactics, mentality: want };
+
+    if (!AI_COACH.enabled) return;
+    const goals = this.score[0] + this.score[1];
+    const reds = this.stats[0].red + this.stats[1].red;
+    const trigger = goals !== mem.goals || reds !== mem.reds;
+    mem.goals = goals;
+    mem.reds = reds;
+    if (minute < 5) return;
+    if (!trigger && (minute % 5 !== 0 || minute - mem.lastChange < 10)) return;
+
+    const sit = this.situation(side, minute);
+    const plan = aiPlan(sit);
+    let formation: Formation = s.tactics.formation;
+    // late changes of shape (once per match), with a matching substitution when the bench allows it
+    const chasing = sit.diff < 0 && minute >= 70;
+    const holding = sit.diff > 0 && minute >= 78;
+    if (!mem.formationChanged && sit.men >= 0 && (chasing || holding)) {
+      const prefs = preferredFormations(plan, sit.men).filter((f) => f !== formation);
+      const best = this.bestShape(side, prefs, plan.mentality);
+      if (best) {
+        const wantRole: Pos[] = chasing ? ['ATA'] : ['ZAG', 'VOL'];
+        const outRoles: Pos[] = chasing ? ['VOL', 'ZAG'] : ['ATA'];
+        this.roleSub(side, outRoles, wantRole);
+        formation = best;
+        mem.formationChanged = true;
       }
     }
+    const t = s.tactics;
+    if (formation === t.formation && plan.mentality === t.mentality && plan.style === t.style && plan.marking === t.marking) return;
+    const next: Tactics = { ...t, formation, shape: formation === t.formation ? t.shape : null, mentality: plan.mentality, style: plan.style, marking: plan.marking };
+    this.setTactics(side, next, describeChange(s.setup.name, t, { ...plan, formation }));
+    mem.lastChange = minute;
+  }
+
+  /** The formation from `cands` that suits the players on the pitch best (or null if none is close to the current one). */
+  private bestShape(side: 0 | 1, cands: Formation[], mentality: Tactics['mentality']): Formation | null {
+    const s = this.sides[side];
+    const score = (slots: Slot[], xi: (number | null)[]) =>
+      overall(computeRatings(slots, xi.map((id) => (id != null ? s.players.get(id)! : null)), { ...s.tactics, mentality, marking: 'zona' }));
+    const now = score(s.slots, s.onPitch);
+    let best: Formation | null = null;
+    let bestR = now - 1.5;
+    for (const f of cands) {
+      const slots = FORMATIONS[f];
+      const r = score(slots, this.seat(side, slots));
+      if (r > bestR) {
+        bestR = r;
+        best = f;
+      }
+    }
+    return best;
+  }
+
+  /** Substitute the weakest player in one of `outRoles` with the best bench player of one of `inRoles`. */
+  private roleSub(side: 0 | 1, outRoles: Pos[], inRoles: Pos[]) {
+    const s = this.sides[side];
+    if (s.subs >= MAX_SUBS) return;
+    let inn: { id: number; e: number } | null = null;
+    for (const id of s.bench) {
+      const p = s.players.get(id)!;
+      if (p.injured || !inRoles.includes(p.pos)) continue;
+      const e = effective(p, p.pos);
+      if (!inn || e > inn.e) inn = { id, e };
+    }
+    if (!inn) return;
+    let out: { id: number; e: number } | null = null;
+    s.onPitch.forEach((id, i) => {
+      if (id == null || !outRoles.includes(s.slots[i].pos)) return;
+      const e = effective(s.players.get(id)!, s.slots[i].pos);
+      if (!out || e < out.e) out = { id, e };
+    });
+    const o = out as { id: number; e: number } | null;
+    if (o) this.sub(side, o.id, inn.id);
+  }
+
+  /** After a red card: fill a hole in the back line or midfield with the most advanced player (or a bench defender). */
+  private aiReorganise(side: 0 | 1) {
+    const s = this.sides[side];
+    const hole = s.onPitch.findIndex((id, i) => id == null && s.slots[i].pos !== 'GOL' && s.slots[i].pos !== 'ATA');
+    if (hole < 0) return;
+    const role = s.slots[hole].pos;
+    // the most advanced outfield player
+    let fwd = -1;
+    s.onPitch.forEach((id, i) => {
+      if (id == null || s.slots[i].pos === 'GOL') return;
+      if (fwd < 0 || s.slots[i].x > s.slots[fwd].x) fwd = i;
+    });
+    if (fwd < 0 || s.slots[fwd].x <= s.slots[hole].x) return;
+    const fwdId = s.onPitch[fwd]!;
+    const benchId = this.bestBenchFor(side, role);
+    let text: string;
+    if (benchId != null && s.subs < MAX_SUBS && effective(s.players.get(benchId)!, role) > effective(s.players.get(fwdId)!, role)) {
+      this.sub(side, fwdId, benchId);
+      s.onPitch[hole] = benchId;
+      s.onPitch[fwd] = null;
+      text = `${s.setup.name} recompõe o time: ${s.players.get(benchId)!.name} entra para fechar o buraco`;
+    } else {
+      s.onPitch[hole] = fwdId;
+      s.onPitch[fwd] = null;
+      text = `${s.setup.name} recompõe o time: ${s.players.get(fwdId)!.name} recua para ${role}`;
+    }
+    this.events.push({ t: this.t, kind: 'tactic', side, text });
+    this.recalc();
   }
 
   private pickByPos(side: 0 | 1, prefs: Pos[]): number | null {
@@ -543,14 +787,26 @@ export class MatchSim {
     this.stats[a.side].poss += a.t1 - a.t0;
     this.action = null;
     this.effects = null;
+    if (e.poss !== this.poss) this.possActions = 0;
     this.poss = e.poss;
     this.carrier = e.carrier;
     this.ball = { ...e.ball };
     this.setPiece = e.setPiece;
     if (e.lastPasser !== undefined) this.lastPasser = e.lastPasser;
     if (e.shot) {
-      this.stats[e.shot.side].shots++;
-      if (e.shot.onTarget) this.stats[e.shot.side].onTarget++;
+      const sh = e.shot;
+      const st = this.stats[sh.side];
+      st.shots++;
+      if (sh.onTarget) st.onTarget++;
+      st.xg += sh.xg;
+      if (sh.big) st.big++;
+      if (!e.goal) {
+        this.rate(sh.pid, (sh.onTarget ? 0.12 : -0.04) - (sh.big ? 0.3 : 0));
+        if (sh.onTarget && sh.gk != null) {
+          this.stats[1 - sh.side].saves++;
+          this.rate(sh.gk, sh.big ? 0.5 : 0.25);
+        }
+      }
     }
     if (e.corner !== undefined) this.stats[e.corner].corners++;
     if (e.events) for (const ev of e.events) this.events.push({ ...ev, t: this.t });
@@ -559,9 +815,22 @@ export class MatchSim {
       this.score[g.side]++;
       const scorer = this.player(g.pid)!;
       scorer.goals++;
+      scorer.rt += g.pen ? 0.6 : 1;
       if (g.ast != null) {
         const ap = this.player(g.ast);
-        if (ap) ap.ast++;
+        if (ap) {
+          ap.ast++;
+          ap.rt += 0.6;
+        }
+      }
+      for (const side of [0, 1] as const) {
+        const s = this.sides[side];
+        s.onPitch.forEach((pid, i) => {
+          if (pid == null) return;
+          const pos = s.slots[i].pos;
+          if (side === g.side) this.rate(pid, 0.05);
+          else this.rate(pid, pos === 'GOL' ? -0.3 : pos === 'ZAG' || pos === 'LAT' ? -0.15 : -0.04);
+        });
       }
       this.goals.push({ min: Math.min(this.minute(), this.half === 1 ? 45 : 90), side: g.side, pid: g.pid, ast: g.ast, pen: g.pen });
       const astName = g.ast != null ? ` (assist. ${this.player(g.ast)?.name})` : '';
@@ -629,6 +898,7 @@ export class MatchSim {
   private doKickoff() {
     const s = this.poss;
     const recv = this.pickTeammate(s, 0.38, this.carrier);
+    this.passOk(s, this.carrier, 0.004);
     this.start('kickoff', 3, { x: this.toX(s, 0.4), y: recv.y }, {
       poss: s,
       carrier: recv.pid,
@@ -646,6 +916,7 @@ export class MatchSim {
     const short = this.sides[s].tactics.style === 'toque' ? 0.6 : 0.2;
     if (this.rng.chance(short)) {
       const recv = this.pickTeammate(s, 0.15, gk);
+      this.passOk(s, gk, 0.004);
       const to = { x: this.toX(s, 0.16), y: recv.y };
       this.start('goalkick', this.rng.range(10, 16), to, { poss: s, carrier: recv.pid, ball: to, setPiece: null, lastPasser: gk }, { target: recv.pid });
       return;
@@ -654,11 +925,14 @@ export class MatchSim {
     const won = this.rng.chance(0.42 + (this.duel(u) - 0.5) * 0.5);
     if (won) {
       const recv = this.pickTeammate(s, u, gk);
+      this.passOk(s, gk, 0.02);
       const to = { x: this.toX(s, u), y: recv.y };
       this.start('goalkick', this.rng.range(12, 18), to, { poss: s, carrier: recv.pid, ball: to, setPiece: null, lastPasser: gk }, { target: recv.pid, lofted: true });
     } else {
       const o = (1 - s) as 0 | 1;
       const d = this.pickDefender(o, u);
+      this.passBad(s, gk);
+      this.rate(d, 0.03);
       const to = { x: this.toX(s, u), y: this.clampY(this.rng.range(15, 53)) };
       this.start('goalkick', this.rng.range(12, 18), to, { poss: o, carrier: d, ball: to, setPiece: null, lastPasser: null }, { target: d, lofted: true });
     }
@@ -708,6 +982,7 @@ export class MatchSim {
     }
     if (this.rng.chance(0.15)) {
       const recv = this.pickTeammate(s, 0.8, taker);
+      this.passOk(s, taker);
       const to = { x: this.toX(s, 0.82), y: this.clampY(top ? 12 : PITCH_H - 12) };
       this.start('corner', this.rng.range(16, 24), to, { poss: s, carrier: recv.pid, ball: to, setPiece: null, lastPasser: taker }, { target: recv.pid });
       return;
@@ -751,6 +1026,7 @@ export class MatchSim {
     }
     const nu = Math.min(0.8, u + this.rng.range(0.08, 0.25));
     const recv = this.pickTeammate(s, nu, taker);
+    this.passOk(s, taker);
     const to = { x: this.toX(s, nu), y: recv.y };
     this.start('freekick', this.rng.range(14, 22), to, { poss: s, carrier: recv.pid, ball: to, setPiece: null, lastPasser: taker }, { target: recv.pid, lofted: nu - u > 0.15 });
   }
@@ -770,15 +1046,19 @@ export class MatchSim {
     const ment = A.tactics.mentality;
     const mentMod = ment === 'ofensiva' ? 1.15 : ment === 'defensiva' ? 0.85 : 1;
 
-    let shootP = u > 0.84 ? 0.095 : u > 0.7 ? 0.02 : 0;
+    let shootP = u > 0.84 ? STYLE_TUNE.boxShot : u > 0.7 ? STYLE_TUNE.edgeShot : 0;
     shootP *= mentMod;
     if (this.rng.chance(shootP)) return this.doShot(u > 0.84 ? 'box' : 'long', this.carrier ?? this.shooter(s));
 
     if (u > 0.7 && Math.abs(yN - 0.5) > 0.27 && this.rng.chance(0.4)) {
       this.lastPasser = this.carrier;
-      if (this.rng.chance(0.18 + (r - 0.5) * 0.3)) return this.doShot('header', this.headerTaker(s), 'cross');
+      if (this.rng.chance(0.18 + (r - 0.5) * 0.3)) {
+        this.passOk(s, this.carrier, 0.06);
+        return this.doShot('header', this.headerTaker(s), 'cross');
+      }
       if (this.rng.chance(0.3)) {
         // cleared behind for a corner
+        this.passBad(s, this.carrier);
         const to = { x: this.toX(s, 0.99), y: this.ball.y < PITCH_H / 2 ? 1 : PITCH_H - 1 };
         this.start('cross', 3, to, { poss: s, carrier: null, ball: to, setPiece: 'corner', corner: s, lastPasser: null }, { lofted: true });
         return;
@@ -787,12 +1067,19 @@ export class MatchSim {
     }
 
     const style = A.tactics.style;
-    const W =
-      style === 'toque'
-        ? { pass: 0.48, back: 0.3, dribble: 0.14, long: 0.08 }
-        : style === 'contra'
-          ? { pass: 0.46, back: 0.18, dribble: 0.16, long: 0.2 }
-          : { pass: 0.36, back: 0.2, dribble: 0.1, long: 0.34 };
+    const T = STYLE_TUNE[style];
+    const W = { pass: T.pass, back: T.back, dribble: T.dribble, long: T.long };
+    const oppOpen = AI_COACH.matchups && this.sides[o].tactics.mentality === 'ofensiva';
+    this.possActions++;
+    const onBreak = style === 'contra' && this.possActions <= STYLE_TUNE.breakActions + (oppOpen ? 1 : 0);
+    if (onBreak) {
+      // fast break: go forward quickly before the opponent recovers its shape
+      W.long *= STYLE_TUNE.breakLong;
+      W.dribble *= STYLE_TUNE.breakDribble;
+      W.back *= STYLE_TUNE.breakBack;
+    }
+    // an opponent pushing forward leaves space behind for counter-attacks
+    const space = onBreak && oppOpen ? STYLE_TUNE.counterSpace : 0;
     if (u < 0.2) W.back *= 0.4;
     if (u > 0.75) W.long = 0.02;
     const kinds = Object.keys(W) as (keyof typeof W)[];
@@ -806,7 +1093,7 @@ export class MatchSim {
     let lofted = false;
     switch (kind) {
       case 'pass':
-        p = 0.63 + (r - 0.5) * 0.4 + (has('passe') ? 0.04 : 0) - (pressing ? 0.03 : 0);
+        p = 0.63 + T.passBonus + space + (r - 0.5) * 0.4 + (has('passe') ? 0.04 : 0) - (pressing ? 0.03 : 0);
         du = this.rng.range(0.06, 0.17);
         dur = this.rng.range(2.5, 5);
         break;
@@ -816,18 +1103,28 @@ export class MatchSim {
         dur = this.rng.range(2, 4);
         break;
       case 'dribble':
-        p = 0.48 + (r - 0.5) * 0.5 + (has('drible') ? 0.08 : 0) + (has('velocidade') ? 0.04 : 0);
+        p = 0.48 + space + (r - 0.5) * 0.5 + (has('drible') ? 0.08 : 0) + (has('velocidade') ? 0.04 : 0);
         du = this.rng.range(0.04, 0.12);
         dur = this.rng.range(3, 6);
         break;
-      default:
-        p = 0.4 + (r - 0.5) * 0.4 + (has('passe') ? 0.03 : 0);
+      default: {
+        // judged where the ball lands: a strong defence there wins long balls
         du = this.rng.range(0.2, 0.4);
+        const rd = this.duel(Math.min(0.97, u + du));
+        p =
+          STYLE_TUNE.longBase +
+          space +
+          (rd - 0.5) * STYLE_TUNE.longSlope +
+          (has('passe') ? 0.03 : 0) +
+          (pressing && AI_COACH.matchups ? STYLE_TUNE.longVsPress : 0);
         dur = this.rng.range(3, 5);
         lofted = true;
+      }
     }
     const nu = Math.min(0.97, Math.max(0.03, u + du));
     if (this.rng.chance(p)) {
+      if (kind === 'dribble') this.rate(this.carrier, 0.07);
+      else this.passOk(s, this.carrier, kind === 'back' ? 0.004 : kind === 'long' ? 0.03 : 0.012);
       if (kind === 'dribble') {
         const to = { x: this.toX(s, nu), y: this.clampY(this.ball.y + this.rng.range(-8, 8)) };
         this.start('dribble', dur, to, { poss: s, carrier: this.carrier, ball: to, setPiece: null });
@@ -847,11 +1144,13 @@ export class MatchSim {
     const o = (1 - s) as 0 | 1;
     const roll = this.rng.next();
     const spot = { x: this.toX(s, u), y: this.clampY(this.ball.y + this.rng.range(-6, 6)) };
+    const isPass = kind === 'pass' || kind === 'back' || kind === 'long' || kind === 'cross';
     if (roll < foulP) {
       // defender fouls: attacking side keeps the ball with a set piece
       const fouler = this.pickDefender(o, u);
       const evs: MatchEvent[] = [];
       this.stats[o].fouls++;
+      this.rate(fouler, -0.06);
       if (fouler != null) this.cardCheck(o, fouler, evs);
       const inBox = u > 0.86 && Math.abs(spot.y - PITCH_H / 2) < 20;
       const pen = inBox && this.rng.chance(0.5);
@@ -865,13 +1164,22 @@ export class MatchSim {
       return;
     }
     if (roll < foulP + outP) {
+      if (isPass) this.passBad(s, this.carrier);
+      else this.rate(this.carrier, -0.04);
       const side = spot.y < PITCH_H / 2 ? 0.5 : PITCH_H - 0.5;
       const to = { x: spot.x, y: side };
       this.start(kind, dur, to, { poss: o, carrier: null, ball: to, setPiece: 'throw', lastPasser: null });
       return;
     }
     const d = this.pickDefender(o, u);
-    // counter-attack chance for 'contra' sides winning the ball deep
+    if (kind === 'dribble') {
+      this.stats[o].tackles++;
+      this.rate(d, 0.12);
+      this.rate(this.carrier, -0.05);
+    } else if (isPass) {
+      this.passBad(s, this.carrier);
+      this.rate(d, 0.06);
+    }
     this.start(kind, dur, spot, { poss: o, carrier: d, ball: spot, setPiece: null, lastPasser: null }, { target: d });
   }
 
@@ -883,6 +1191,7 @@ export class MatchSim {
     if (this.rng.chance(0.003)) return this.sendOff(side, p, evs, 'Cartão vermelho direto');
     if (this.rng.chance(yP)) {
       p.yellow++;
+      p.rt -= 0.3;
       this.stats[side].yel++;
       if (p.yellow >= 2) return this.sendOff(side, p, evs, 'Segundo amarelo');
       evs.push({ t: this.t, kind: 'yellow', side, pid, text: `Cartão amarelo para ${p.name}` });
@@ -892,6 +1201,7 @@ export class MatchSim {
   private sendOff(side: 0 | 1, p: MPlayer, evs: MatchEvent[], why: string) {
     const s = this.sides[side];
     p.red = true;
+    p.rt -= 1.2;
     this.stats[side].red++;
     const slot = s.onPitch.indexOf(p.id);
     if (slot >= 0) s.onPitch[slot] = null;
@@ -927,11 +1237,14 @@ export class MatchSim {
       (type === 'header' ? (sh.traits.includes('cabeceio') ? 1.12 : 1) : sh.traits.includes('finalizacao') ? 1.1 : 1) *
       ((type === 'penalty' || type === 'freekick') && sh.traits.includes('cobrancas') ? 1.12 : 1);
     const gkEff = D.ratings.gk;
-    const base = { box: 0.075, long: 0.021, header: 0.058, penalty: 0.76, freekick: 0.045 }[type];
+    // chance quality (expected goals) depends only on the situation; shooter vs keeper and attack vs defence scale it
+    const { q, big } = this.chanceQuality(type, AI_COACH.matchups && D.tactics.mentality === 'defensiva');
     let f = Math.pow(shEff / Math.max(20, gkEff), 0.95);
     if (type === 'box' || type === 'header') f *= Math.pow(A.ratings.att / Math.max(20, D.ratings.def), 0.5);
     if (s === 0) f *= this.setup.homeAdv;
-    const pGoal = Math.min(0.9, Math.max(0.01, base * f));
+    const pGoal = Math.min(0.9, Math.max(0.01, q * f));
+    const gkId = this.gkOf(o);
+    const shotInfo = { side: s, pid: shooterId, xg: q, big };
     const goalY = PITCH_H / 2 + this.rng.range(-3.2, 3.2);
     const goalX = this.toX(s, 1.0);
     let ast: number | null = null;
@@ -953,7 +1266,7 @@ export class MatchSim {
         ball: to,
         setPiece: null,
         goal: { side: s, pid: shooterId, ast, pen: type === 'penalty' },
-        shot: { side: s, onTarget: true },
+        shot: { ...shotInfo, onTarget: true },
         lastPasser: null,
       }, { actor: shooterId, lofted: type === 'header' });
       // after the goal: celebration, then kickoff for the side that conceded
@@ -971,7 +1284,7 @@ export class MatchSim {
         carrier: corner ? null : gk,
         ball: corner ? to : { x: this.toX(s, 0.95), y: PITCH_H / 2 },
         setPiece: corner ? 'corner' : 'goalkick',
-        shot: { side: s, onTarget: true },
+        shot: { ...shotInfo, onTarget: true, gk: gkId },
         corner: corner ? s : undefined,
         events: evs,
         lastPasser: null,
@@ -981,7 +1294,7 @@ export class MatchSim {
     const blocked = type === 'box' && this.rng.chance(0.28);
     if (blocked && this.rng.chance(0.5)) {
       const to = { x: this.toX(s, 0.97), y: this.ball.y < PITCH_H / 2 ? 2 : PITCH_H - 2 };
-      this.start(kind, dur, to, { poss: s, carrier: null, ball: to, setPiece: 'corner', shot: { side: s, onTarget: false }, corner: s, lastPasser: null }, { actor: shooterId });
+      this.start(kind, dur, to, { poss: s, carrier: null, ball: to, setPiece: 'corner', shot: { ...shotInfo, onTarget: false }, corner: s, lastPasser: null }, { actor: shooterId });
       return;
     }
     const wide = goalY + (this.rng.chance(0.5) ? 1 : -1) * this.rng.range(5, 12);
@@ -992,10 +1305,33 @@ export class MatchSim {
       carrier: this.gkOf(o),
       ball: { x: this.toX(s, 0.95), y: PITCH_H / 2 },
       setPiece: 'goalkick',
-      shot: { side: s, onTarget: false },
+      shot: { ...shotInfo, onTarget: false },
       events: evs,
       lastPasser: null,
     }, { actor: shooterId, lofted: type === 'header' });
+  }
+
+  /**
+   * Situation-only chance quality. Averages match the old fixed values (box 0.075, header 0.058,
+   * long 0.021, free kick 0.045), so goal rates are unchanged; a few box shots and headers are clear-cut chances.
+   */
+  private chanceQuality(type: 'box' | 'long' | 'header' | 'penalty' | 'freekick', crowded = false): { q: number; big: boolean } {
+    const r = this.rng;
+    const k = STYLE_TUNE.xgScale;
+    // a deep defensive block makes clear-cut chances rarer
+    const b = crowded ? STYLE_TUNE.blockBig : 1;
+    switch (type) {
+      case 'penalty':
+        return { q: 0.76, big: true };
+      case 'freekick':
+        return { q: k * r.range(0.03, 0.06), big: false };
+      case 'long':
+        return { q: k * r.range(0.01, 0.032), big: false };
+      case 'header':
+        return r.chance(0.06 * b) ? { q: k * r.range(0.25, 0.45), big: true } : { q: k * r.range(0.02, 0.06), big: false };
+      default:
+        return r.chance(0.09 * b) ? { q: k * r.range(0.28, 0.5), big: true } : { q: k * r.range(0.018, 0.072), big: false };
+    }
   }
 
   private pendingKickoff: 0 | 1 | null = null;
@@ -1062,6 +1398,7 @@ export class MatchSim {
           red: p.red,
           inj: p.injured ? p.injDates : 0,
           fitness: Math.round(p.fitness),
+          rt: matchRating(p),
         };
       }
     }

@@ -1,9 +1,41 @@
 import { useState } from 'react';
-import { busAllowed, seatCost, TC_BUILD, TC_DEV, TC_REC, TC_UPKEEP, tcUpgradeCost, travelCost, travelFatigue, travelModeFor, TRAVEL_LABEL } from '../../engine/economy';
-import type { TrainingFocus, TravelMode } from '../../engine/types';
+import {
+  busAllowed,
+  seatCost,
+  stadiumBuildDates,
+  tcLevelInfo,
+  tcUpgradeCost,
+  travelCost,
+  travelFatigue,
+  travelModeFor,
+  TRAVEL_LABEL,
+  usableCapacity,
+} from '../../engine/economy';
+import type { GameState, TrainingFocus, TravelMode } from '../../engine/types';
 import { dateLabel, distanceKm, formatMoney } from '../../engine/util';
 import { command, useMe } from '../../store';
-import { ClubBadge, compLabel } from '../common';
+import { Bar, ClubBadge, compLabel } from '../common';
+
+/** "pronto em dd/mm" for works that end after `left` more dates. */
+function readyLabel(state: GameState, left: number): string {
+  const idx = state.meta.date + left;
+  return idx < state.calendar.length ? `pronto a partir de ${dateLabel(state, idx).slice(0, 5)}` : 'pronto na próxima temporada';
+}
+
+function Works({ title, left, total, state }: { title: string; left: number; total: number; state: GameState }) {
+  const done = Math.max(0, total - left);
+  return (
+    <div className="col" style={{ gap: 4 }}>
+      <div className="row small" style={{ justifyContent: 'space-between' }}>
+        <b className="warn">{title}</b>
+        <span className="muted">
+          {done}/{total} rodadas · faltam {left} · {readyLabel(state, left)}
+        </span>
+      </div>
+      <Bar v={done} max={total} color="var(--warn)" />
+    </div>
+  );
+}
 
 const FOCUS_LABEL: Record<TrainingFocus, string> = {
   equilibrado: 'Equilibrado',
@@ -25,32 +57,40 @@ export function Estrutura() {
   return (
     <div className="col">
       <h1>Estádio, CT e viagens</h1>
-      <div className="grid2" style={{ alignItems: 'start' }}>
+      <div className="grid2" style={{ alignItems: 'start', gridTemplateColumns: 'minmax(280px, 1fr) minmax(480px, 1.7fr)' }}>
         <div className="panel col">
           <h3>Estádio</h3>
           <div>
             <b>{club.stadium}</b> · {club.capacity.toLocaleString('pt-BR')} lugares
+            {club.stadiumWork && <span className="small muted"> ({usableCapacity(club).toLocaleString('pt-BR')} liberados durante a obra)</span>}
           </div>
+          <div className="small muted">Manutenção do estádio: {formatMoney(Math.round(club.capacity * 0.6))}/rodada.</div>
           {club.stadiumWork ? (
-            <div className="warn">
-              Obra em andamento: +{club.stadiumWork.seats.toLocaleString('pt-BR')} lugares, faltam {club.stadiumWork.left} rodadas.
-            </div>
+            <Works
+              state={state}
+              title={`Ampliação: +${club.stadiumWork.seats.toLocaleString('pt-BR')} lugares`}
+              left={club.stadiumWork.left}
+              total={club.stadiumWork.total ?? club.stadiumWork.left}
+            />
           ) : (
-            <div className="row">
-              <select value={seats} onChange={(e) => setSeats(Number(e.target.value))}>
-                {[2000, 5000, 10000, 15000, 20000].map((s) => (
-                  <option key={s} value={s}>
-                    +{s.toLocaleString('pt-BR')} lugares
-                  </option>
-                ))}
-              </select>
-              <span className="small muted">
-                {formatMoney(seats * seatCost(club))} · {Math.max(4, Math.ceil(seats / 2000))} rodadas
-              </span>
-              <button className="btn primary" disabled={club.balance < seats * seatCost(club)} onClick={() => void command({ c: 'expandStadium', seats })}>
-                Ampliar
-              </button>
-            </div>
+            <>
+              <div className="row">
+                <select value={seats} onChange={(e) => setSeats(Number(e.target.value))}>
+                  {[2000, 5000, 10000, 15000, 20000].map((s) => (
+                    <option key={s} value={s}>
+                      +{s.toLocaleString('pt-BR')} lugares
+                    </option>
+                  ))}
+                </select>
+                <span className="small muted">
+                  {formatMoney(seats * seatCost(club))} · {stadiumBuildDates(seats)} rodadas
+                </span>
+                <button className="btn primary" disabled={club.balance < seats * seatCost(club)} onClick={() => void command({ c: 'expandStadium', seats })}>
+                  Ampliar
+                </button>
+              </div>
+              <div className="small faint">Durante a obra, 10% do estádio fica fechado. Os lugares novos abrem quando ela termina.</div>
+            </>
           )}
         </div>
         <div className="panel col">
@@ -63,24 +103,57 @@ export function Estrutura() {
             ))}
             <span className="muted">Nível {club.tc.level}</span>
           </div>
-          <div className="small muted">
-            Evolução dos jogadores ×{TC_DEV[club.tc.level].toFixed(2)} · recuperação física ×{TC_REC[club.tc.level].toFixed(2)} · manutenção{' '}
-            {formatMoney(TC_UPKEEP[club.tc.level])}/rodada
-          </div>
           {club.tc.building > 0 ? (
-            <div className="warn">Obra do nível {nextLvl} em andamento: faltam {club.tc.building} rodadas.</div>
+            <Works state={state} title={`Obra do nível ${nextLvl}`} left={club.tc.building} total={club.tc.total ?? club.tc.building} />
           ) : nextLvl <= 5 ? (
             <div className="row">
               <button className="btn primary" disabled={club.balance < tcCost} onClick={() => void command({ c: 'upgradeTC' })}>
                 Construir nível {nextLvl}
               </button>
               <span className="small muted">
-                {formatMoney(tcCost)} · {TC_BUILD[nextLvl]} rodadas · depois: evolução ×{TC_DEV[nextLvl].toFixed(2)}, manutenção {formatMoney(TC_UPKEEP[nextLvl])}/rodada
+                {formatMoney(tcCost)} · {tcLevelInfo(club, nextLvl).build} rodadas. O nível atual segue funcionando durante a obra.
               </span>
             </div>
           ) : (
             <div className="good">CT no nível máximo.</div>
           )}
+          <table className="t compact tc-levels">
+            <thead>
+              <tr>
+                <th>Nível</th>
+                <th className="right">Custo</th>
+                <th className="center">Obra</th>
+                <th className="right">Manutenção</th>
+                <th className="center" title="Velocidade de evolução dos jogadores jovens">Evolução</th>
+                <th className="center" title="Recuperação da energia entre as rodadas">Recuperação</th>
+                <th className="center" title="Chance por rodada de um lesionado voltar um dia antes">Lesões</th>
+                <th className="center" title="Bônus de força e potencial dos jovens da base">Base</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((l) => {
+                const i = tcLevelInfo(club, l);
+                return (
+                  <tr key={l} className={l === club.tc.level ? 'me' : ''}>
+                    <td>
+                      <b>{l}</b> {l === club.tc.level && <span className="pill good">atual</span>}
+                      {l === nextLvl && club.tc.building > 0 && <span className="pill warn">em obra</span>}
+                    </td>
+                    <td className="right small num">{l === 1 ? '—' : formatMoney(i.cost)}</td>
+                    <td className="center small num">{i.build ? `${i.build} rod.` : '—'}</td>
+                    <td className="right small num">{formatMoney(i.upkeep)}</td>
+                    <td className="center num">×{i.dev.toFixed(2)}</td>
+                    <td className="center num">×{i.rec.toFixed(2)}</td>
+                    <td className="center num">{i.inj ? `+${Math.round(i.inj * 100)}%` : '—'}</td>
+                    <td className="center small num">
+                      +{i.youthStr} / +{i.youthPot.toFixed(1)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="small faint">Manutenção por rodada (cerca de 78 rodadas por temporada). Custos dobram na Europa.</div>
           <label className="field">
             Foco do treino
             <select value={club.focus} onChange={(e) => void command({ c: 'setFocus', focus: e.target.value as TrainingFocus })}>

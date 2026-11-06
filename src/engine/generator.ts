@@ -64,7 +64,7 @@ export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
     yel: {},
     listed: false,
     loan: null,
-    s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0 },
+    s: { apps: 0, goals: 0, ast: 0, yel: 0, red: 0, rt: 0 },
     c: { apps: 0, goals: 0 },
     num: 0,
     idle: 0,

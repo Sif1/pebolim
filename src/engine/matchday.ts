@@ -1,9 +1,10 @@
-import { autoLineup, repairLineup } from './ai/lineup';
+import { autoLineup, bestFormation, lineupRating, repairLineup } from './ai/lineup';
+import { AI_COACH, aiPlan, naturalStyle, preferredFormations, strengthEdge } from './ai/tactics';
 import { deciderFor } from './competitions';
 import { applyTravel } from './economy';
 import type { MatchSetup, MPlayerInit, TeamSetup } from './match/core';
 import type { Rng } from './rng';
-import type { Club, Fixture, GameState, Player } from './types';
+import type { Club, Fixture, GameState, Player, Tactics } from './types';
 import { age, squadIndex } from './util';
 
 export const HOME_ADV = 1.07;
@@ -18,11 +19,66 @@ export function isHumanClub(state: GameState, clubId: number, present: Set<strin
   return !!c.managerId && present.has(c.managerId);
 }
 
-function teamSetup(state: GameState, club: Club, squad: Player[], compId: string, human: boolean): TeamSetup {
+/** Squad strength for this match: the club's rating scaled by how fresh its best players are. */
+function matchPower(state: GameState, club: Club, squad: Player[]): number {
+  const top = squad.filter((p) => p.injury === 0).sort((a, b) => b.str - a.str).slice(0, 14);
+  const fit = top.length ? top.reduce((a, p) => a + p.fitness, 0) / top.length : 90;
+  return club.power * (0.7 + 0.3 * (fit / 100));
+}
+
+/**
+ * The AI coach's plan for a match: favourite or underdog, home or away, a knockout aggregate to chase or protect,
+ * and what the opponent usually does.
+ */
+export function aiPreMatchTactics(
+  state: GameState,
+  f: Fixture,
+  club: Club,
+  squad: Player[],
+  opp: Club,
+  oppSquad: Player[],
+  oppHuman: boolean,
+): Tactics {
+  const home = f.home === club.id;
+  const dec = deciderFor(state, f);
+  const diff = dec ? (home ? dec.aggHome - dec.aggAway : dec.aggAway - dec.aggHome) : 0;
+  const avail = squad.filter((p) => p.injury === 0 && !(p.ban[f.comp] > 0));
+  const top = [...avail].sort((a, b) => b.str - a.str).slice(0, 11);
+  const energy = top.length ? top.reduce((a, p) => a + p.fitness, 0) / top.length : 90;
+  const natural = naturalStyle(top);
+  const oppNatural = naturalStyle([...oppSquad].sort((a, b) => b.str - a.str).slice(0, 11));
+  const oppT = oppHuman ? opp.tactics : { mentality: 'equilibrada' as const, style: oppNatural, marking: 'zona' as const };
+  const plan = aiPlan({
+    minute: 0,
+    diff,
+    men: 0,
+    edge: strengthEdge(matchPower(state, club, squad), matchPower(state, opp, oppSquad), home),
+    home,
+    decider: !!dec,
+    energy,
+    opp: oppT,
+    natural,
+  });
+  // best formation for the squad, nudged toward the plan when it costs little
+  let formation = bestFormation(avail, f.comp);
+  const base = { formation, mentality: plan.mentality, marking: plan.marking, style: plan.style } as Tactics;
+  const rate = (fm: Tactics['formation']) => lineupRating(avail, autoLineup(avail, fm, f.comp), fm, { ...base, formation: fm });
+  const bestR = rate(formation);
+  for (const fm of preferredFormations(plan, 0)) {
+    if (fm !== formation && rate(fm) >= bestR - 0.8) {
+      formation = fm;
+      break;
+    }
+  }
+  return { formation, mentality: plan.mentality, style: plan.style, marking: plan.marking, shape: null };
+}
+
+function teamSetup(state: GameState, club: Club, squad: Player[], compId: string, human: boolean, aiTactics?: Tactics): TeamSetup {
+  const tactics = !human && aiTactics ? aiTactics : club.tactics;
   const lineup =
     human && !club.autoLineup
-      ? repairLineup(squad, club.lineup, club.tactics.formation, compId)
-      : autoLineup(squad, club.tactics.formation, compId);
+      ? repairLineup(squad, club.lineup, club.tactics, compId)
+      : autoLineup(squad, tactics, compId);
   if (human) club.lineup = lineup;
   const ids = new Set([...lineup.xi.filter((x): x is number => x != null), ...lineup.bench]);
   const season = state.meta.season;
@@ -44,7 +100,7 @@ function teamSetup(state: GameState, club: Club, squad: Player[], compId: string
     name: club.name,
     short: club.short,
     colors: club.colors,
-    tactics: { ...club.tactics },
+    tactics: { ...tactics, shape: tactics.shape ? [...tactics.shape] : null },
     xi: lineup.xi,
     bench: lineup.bench,
     players,
@@ -78,11 +134,15 @@ export function prepareMatchday(state: GameState, rng: Rng, present: Set<string>
     const away = state.clubs[f.away];
     const hHuman = isHumanClub(state, home.id, present);
     const aHuman = isHumanClub(state, away.id, present);
+    const hSquad = idx.get(home.id) ?? [];
+    const aSquad = idx.get(away.id) ?? [];
+    const hT = hHuman || !AI_COACH.enabled ? undefined : aiPreMatchTactics(state, f, home, hSquad, away, aSquad, aHuman);
+    const aT = aHuman || !AI_COACH.enabled ? undefined : aiPreMatchTactics(state, f, away, aSquad, home, hSquad, hHuman);
     const setup: MatchSetup = {
       fixtureId: f.id,
       compId: f.comp,
-      home: teamSetup(state, home, idx.get(home.id) ?? [], f.comp, hHuman),
-      away: teamSetup(state, away, idx.get(away.id) ?? [], f.comp, aHuman),
+      home: teamSetup(state, home, hSquad, f.comp, hHuman, hT),
+      away: teamSetup(state, away, aSquad, f.comp, aHuman, aT),
       seed: rng.fork(),
       homeAdv: HOME_ADV,
       decider: deciderFor(state, f),

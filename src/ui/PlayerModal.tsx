@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { askingPrice, wageDemand, windowOpen } from '../engine/transfers';
 import { age, expectedWage, formatMoney, playerValue } from '../engine/util';
 import { command, useMe } from '../store';
-import { Bar, ClubName, compLabel, Modal, PosTag, Str } from './common';
+import { Bar, ClubName, compLabel, Energy, Modal, PosTag, Str } from './common';
 
 const TRAIT_LABEL: Record<string, string> = {
   finalizacao: 'Finalização',
@@ -84,7 +84,7 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
         </div>
         <div className="stat">
           <span className="label">Condição física</span>
-          <Bar v={p.fitness} />
+          <Energy v={p.fitness} />
         </div>
         <div className="stat">
           <span className="label">Moral</span>
