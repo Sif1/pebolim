@@ -958,3 +958,120 @@ table.t.compact td {
 tr.drop-hover td {
   background: rgba(253, 224, 71, 0.15);
 }
+
+/* sections with tabs */
+.section-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.section-tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+}
+.section-tabs button:hover {
+  color: var(--text);
+}
+.section-tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.section-tabs .count,
+.sidebar .count {
+  background: var(--bad);
+  color: #fff;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+}
+.tab-body > .col > h1:first-child,
+.tab-body > .col > .row:first-child > h1 {
+  font-size: 18px;
+  margin: 2px 0;
+}
+.nav-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 8px 10px;
+}
+
+/* who is in the room (top bar) */
+.online-players {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.online-players .op {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 2px 6px 2px 2px;
+  border-radius: 14px;
+  background: var(--panel2);
+}
+.online-players .op.me {
+  outline: 1px solid var(--accent2);
+}
+.online-players .op.off {
+  opacity: 0.45;
+}
+.op-badge {
+  position: relative;
+  display: inline-flex;
+}
+.op-none {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 11px;
+}
+.op-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  border: 2px solid var(--bg2);
+}
+.op-dot.on {
+  background: var(--good);
+}
+.op-name {
+  font-weight: 600;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-ready {
+  font-size: 11px;
+  color: var(--muted);
+}
+.op-ready.yes {
+  color: var(--good);
+  font-weight: 800;
+}

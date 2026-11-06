@@ -9,23 +9,7 @@ import { HostSession } from './net/host';
 import type { LobbyState, MatchdayInfo } from './net/protocol';
 import { connectToHost, loopbackPair, openHostPeer, randomCode } from './net/transport';
 
-export type Screen =
-  | 'painel'
-  | 'resumo'
-  | 'temporada'
-  | 'elenco'
-  | 'escalacao'
-  | 'mercado'
-  | 'propostas'
-  | 'contratos'
-  | 'financas'
-  | 'estrutura'
-  | 'competicoes'
-  | 'calendario'
-  | 'noticias'
-  | 'treinador'
-  | 'opcoes'
-  | 'clube';
+export type Screen = 'painel' | 'elenco' | 'escalacao' | 'mercado' | 'financas' | 'competicoes' | 'noticias' | 'treinador' | 'opcoes' | 'clube';
 
 export interface Notice {
   id: number;
@@ -43,13 +27,15 @@ interface AppState {
   md: MatchdayInfo | null;
   frameTick: number;
   screen: Screen;
+  /** last tab opened in each section with tabs */
+  tabs: Partial<Record<Screen, string>>;
   /** club being viewed on the club screen */
   viewClub: number | null;
   notices: Notice[];
   status: 'idle' | 'connecting' | 'online' | 'closed';
   error: string | null;
   online: boolean;
-  setScreen(s: Screen): void;
+  setScreen(s: Screen, tab?: string): void;
   openClub(id: number): void;
   notify(text: string, level?: Notice['level']): void;
   dismiss(id: number): void;
@@ -67,12 +53,13 @@ export const useApp = create<AppState>((set, get) => ({
   md: null,
   frameTick: 0,
   screen: 'painel',
+  tabs: {},
   viewClub: null,
   notices: [],
   status: 'idle',
   error: null,
   online: false,
-  setScreen: (screen) => set({ screen }),
+  setScreen: (screen, tab) => set({ screen, tabs: tab ? { ...get().tabs, [screen]: tab } : get().tabs }),
   openClub: (id) => set({ screen: 'clube', viewClub: id }),
   notify: (text, level = 'info') => {
     const id = noticeId++;
@@ -123,7 +110,7 @@ function makeClient(conn: ConstructorParameters<typeof ClientSession>[0], code: 
       const prev = useApp.getState().md;
       useApp.setState({ md });
       // back from a match day: open the round summary
-      if (prev && !md) useApp.setState({ screen: useApp.getState().state?.meta.seasonOver ? 'temporada' : 'resumo' });
+      if (prev && !md) useApp.getState().setScreen('competicoes', useApp.getState().state?.meta.seasonOver ? 'temporadas' : 'rodada');
     },
     onFrames: () => useApp.setState({ frameTick: useApp.getState().frameTick + 1 }),
     onNotice: (text, level) => useApp.getState().notify(text, level),

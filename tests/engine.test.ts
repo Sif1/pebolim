@@ -9,6 +9,7 @@ import { aiPreMatchTactics } from '../src/engine/matchday';
 import { validClientMsg, validCommand } from '../src/net/validate';
 import { roundRobin, tieWinner } from '../src/engine/competitions';
 import { MatchSim } from '../src/engine/match/core';
+import { LiveMatch } from '../src/engine/match/live';
 import { prepareMatchday } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
 import { gzip, loadFromBytes, packState, saveToBytes } from '../src/engine/save';
@@ -341,6 +342,26 @@ describe('AI coach', () => {
     (sim as unknown as { aiReorganise(s: 0 | 1): void }).aiReorganise(0);
     expect(side.onPitch[hole]).not.toBeNull();
     expect(side.onPitch.filter((x) => x == null)).toHaveLength(1);
+  });
+});
+
+describe('live match pacing', () => {
+  it('slows key moments down and still lasts about the chosen length', () => {
+    for (const minutes of [2, 5]) {
+      const base = 5700 / (minutes * 60);
+      let real = 0;
+      let slowest = Infinity;
+      const m = new LiveMatch(synthSetup(70, 70, 4242), [false, false]);
+      while (!m.ended && real < 3600) {
+        const key = m.tier() === 2;
+        m.tick(100, base);
+        real += 0.1;
+        if (key) slowest = Math.min(slowest, m.speedNow);
+      }
+      expect(real).toBeGreaterThan(minutes * 60 * 0.85);
+      expect(real).toBeLessThan(minutes * 60 * 1.15);
+      expect(slowest).toBeLessThan(base / 3);
+    }
   });
 });
 

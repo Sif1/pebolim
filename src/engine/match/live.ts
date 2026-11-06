@@ -4,6 +4,22 @@ import { matchRating, MatchSim, PITCH_H, PITCH_W, type MatchEvent, type MatchRes
 export const MAX_PAUSES = 3;
 export const PAUSE_LIMIT_MS = 90_000;
 
+/**
+ * Highlight pacing: key moments (shots, set-piece deliveries, the ball in the box) play slowly, attacks in the
+ * final third at twice that, and the rest speeds up so the match still lasts about the length the host chose.
+ */
+export const PACING = {
+  /** slowest speed, in game seconds per real second (real time = 1) */
+  minSlow: 6,
+  /** key moments play at least this many times slower than the plain match speed */
+  slowFactor: 3.5,
+  /** expected share of game time in key moments / final-third attacks (the budget corrects itself as it goes) */
+  shareKey: 0.17,
+  shareAttack: 0.1,
+  /** the rest never goes faster than this multiple of the plain speed */
+  maxFast: 4,
+};
+
 /** Snapshot of a live match sent to every client ~5 times per second. */
 export interface LiveFrame {
   f: number;
@@ -68,6 +84,10 @@ export class LiveMatch {
   private bodies = new Map<number, Body>();
   private evSent = 0;
   detailDirty = true;
+  /** real milliseconds played (pauses excluded) */
+  private playedMs = 0;
+  /** current game seconds per real second */
+  speedNow = 0;
 
   constructor(setup: MatchSetup, humans: [boolean, boolean]) {
     this.sim = new MatchSim(setup);
@@ -98,20 +118,69 @@ export class LiveMatch {
     return this.sim.dir(side) > 0 ? v * PITCH_H : (1 - v) * PITCH_H;
   }
 
-  /** Advance by real milliseconds at the given game-seconds-per-real-second speed. */
-  tick(realMs: number, speed: number) {
+  /** 2 = key moment, 1 = attack in the final third, 0 = the rest (build-up, restarts, celebrations). */
+  tier(): 0 | 1 | 2 {
+    const sim = this.sim;
+    const a = sim.action;
+    if (!a) return 0;
+    switch (a.kind) {
+      case 'celebrate':
+      case 'kickoff':
+      case 'halftime':
+      case 'goalkick':
+      case 'throw':
+        return 0;
+      case 'shot':
+      case 'header':
+      case 'save':
+        return 2;
+      case 'corner':
+      case 'freekick':
+      case 'penalty':
+        // the wait before a set piece is dead time; the delivery is the moment to watch
+        return sim.t > a.t1 - 3 ? 2 : 0;
+    }
+    const u = Math.max(sim.progress(a.side, a.from.x), sim.progress(a.side, a.to.x));
+    return u > 0.84 ? 2 : u > 0.7 ? 1 : 0;
+  }
+
+  /** Game seconds per real second right now, for a match whose plain speed is `base`. */
+  private pace(base: number): number {
+    const P = PACING;
+    const key = Math.min(base, Math.max(P.minSlow, base / P.slowFactor));
+    const attack = Math.min(base, key * 2);
+    const tier = this.tier();
+    if (tier === 2) return key;
+    if (tier === 1) return attack;
+    const remGame = Math.max(60, 5700 - this.sim.t);
+    const remReal = 5700 / base - this.playedMs / 1000;
+    const slowReal = remGame * (P.shareKey / key + P.shareAttack / attack);
+    const left = remReal - slowReal;
+    const need = left > 1 ? ((1 - P.shareKey - P.shareAttack) * remGame) / left : Infinity;
+    return Math.min(base * P.maxFast, Math.max(base * 0.8, need));
+  }
+
+  /** Advance by real milliseconds; `base` is the plain match speed (game seconds per real second). */
+  tick(realMs: number, base: number) {
     if (this.sim.ended) return;
     if (this.paused) {
       if (performance.now() - this.pausedAt > PAUSE_LIMIT_MS) this.resume();
       return;
     }
-    const dt = (realMs / 1000) * speed;
-    const steps = Math.max(1, Math.ceil(dt / 1.5));
-    for (let i = 0; i < steps && !this.sim.ended; i++) {
+    // small slices so a fast stretch can't run through the start of an attack
+    let realLeft = realMs / 1000;
+    let guard = 0;
+    while (realLeft > 1e-6 && !this.sim.ended && guard++ < 400) {
+      const speed = this.pace(base);
+      this.speedNow = speed;
+      const dt = Math.min(1.5, realLeft * speed);
       const before = this.sim.events.length;
-      this.sim.step(dt / steps);
+      this.sim.step(dt);
       if (this.sim.events.length !== before) this.detailDirty = true;
-      this.moveBodies(dt / steps);
+      this.moveBodies(dt);
+      const used = dt / speed;
+      realLeft -= used;
+      this.playedMs += used * 1000;
     }
   }
 

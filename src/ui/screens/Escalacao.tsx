@@ -150,6 +150,12 @@ export function Escalacao() {
     });
   });
 
+  const clickSlot = (i: number) => {
+    if (sel?.kind === 'bench' && lineup.bench[sel.i] != null) return intoSlot(i, lineup.bench[sel.i]);
+    if (sel?.kind === 'xi' && sel.i !== i && lineup.xi[sel.i] != null) return intoSlot(i, lineup.xi[sel.i]!);
+    setSel(sel?.kind === 'xi' && sel.i === i ? null : { kind: 'xi', i });
+  };
+
   const used = new Set([...lineup.xi.filter((x): x is number => x != null), ...lineup.bench]);
   const reserves = squad.filter((p) => !used.has(p.id)).sort((a, b) => b.str - a.str);
   const selPos = sel?.kind === 'xi' ? slots[sel.i].pos : null;
@@ -243,10 +249,7 @@ export function Escalacao() {
             tokens={tokens}
             colors={club.colors}
             selected={sel?.kind === 'xi' ? sel.i : null}
-            onSlotClick={(i) => {
-              if (sel?.kind === 'bench' && lineup.bench[sel.i] != null) return intoSlot(i, lineup.bench[sel.i]);
-              setSel(sel?.kind === 'xi' && sel.i === i ? null : { kind: 'xi', i });
-            }}
+            onSlotClick={clickSlot}
             onDrop={onBoardDrop}
           />
           <div className="small muted">
@@ -255,6 +258,47 @@ export function Escalacao() {
           </div>
         </div>
         <div className="col">
+          <div className="panel tight">
+            <h3 style={{ padding: '4px 6px' }}>
+              Titulares ({lineup.xi.filter((x) => x != null).length}/11)
+            </h3>
+            <table className="t">
+              <tbody>
+                {slots.map((sl, i) => {
+                  const p = lineup.xi[i] != null ? byId.get(lineup.xi[i]!) : undefined;
+                  return (
+                    <tr
+                      key={i}
+                      className={`click ${sel?.kind === 'xi' && sel.i === i ? 'me' : ''}`}
+                      style={{ opacity: p && !isAvailable(p, null) ? 0.5 : 1 }}
+                      onClick={() => clickSlot(i)}
+                      {...dragProps({ kind: 'slot', slot: i }, p != null)}
+                      {...dropProps((src) => onBoardDrop({ kind: 'slot', slot: i }, src))}
+                    >
+                      <td style={{ width: 44 }}>
+                        <PosTag pos={sl.pos} />
+                      </td>
+                      <td>
+                        {p ? (
+                          <>
+                            <span className="faint num">{p.num}</span> {p.name}
+                            {p.pos !== sl.pos && <span className="small warn"> (é {p.pos})</span>}
+                            {p.injury > 0 && <span className="pill bad" style={{ marginLeft: 6 }}>lesão</span>}
+                          </>
+                        ) : (
+                          <span className="faint">vazio: arraste alguém para cá</span>
+                        )}
+                      </td>
+                      <td className="center" style={{ width: 50 }}>
+                        {p && <Str v={effective(p, sl.pos)} />}
+                      </td>
+                      <td style={{ width: 110 }}>{p && <Energy v={p.fitness} w={48} />}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           <div className="panel tight drop-zone" {...dropProps((src) => toBench(src, null), (src) => !(src.kind === 'player' && src.from === 'bench'))}>
             <h3 style={{ padding: '4px 6px' }}>
               Banco ({lineup.bench.length}/{BENCH_SIZE})

@@ -400,8 +400,9 @@ export class HostSession {
       }
     }
     this.tickCount++;
-    // short matches move fast: send every tick so the pitch stays smooth
-    if (speed > 40 || this.tickCount % 2 === 0 || changed) this.pushFrames(this.tickCount % 10 === 0);
+    // a match in a fast stretch moves a lot per tick: send every tick so the pitch stays smooth
+    const fast = [...this.live.values()].some((m) => !m.ended && m.speedNow > 30);
+    if (fast || this.tickCount % 2 === 0 || changed) this.pushFrames(this.tickCount % 10 === 0);
     if (changed) {
       this.md!.allDone = this.md!.done.length >= this.live.size;
       this.broadcast({ t: 'matchday', md: this.md });

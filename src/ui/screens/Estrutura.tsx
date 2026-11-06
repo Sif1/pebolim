@@ -43,7 +43,8 @@ const FOCUS_LABEL: Record<TrainingFocus, string> = {
   tecnico: 'Técnico (jovens evoluem mais)',
 };
 
-export function Estrutura() {
+/** Stadium and training centre, or travel logistics (tabs of the Finanças section). */
+export function Estrutura({ part }: { part: 'estadio' | 'viagens' }) {
   const { state, club } = useMe();
   const [seats, setSeats] = useState(5000);
   if (!state || !club) return null;
@@ -56,7 +57,7 @@ export function Estrutura() {
 
   return (
     <div className="col">
-      <h1>Estádio, CT e viagens</h1>
+      {part === 'estadio' && (
       <div className="grid2" style={{ alignItems: 'start', gridTemplateColumns: 'minmax(280px, 1fr) minmax(480px, 1.7fr)' }}>
         <div className="panel col">
           <h3>Estádio</h3>
@@ -166,6 +167,8 @@ export function Estrutura() {
           </label>
         </div>
       </div>
+      )}
+      {part === 'viagens' && (
       <div className="panel col">
         <h3>Logística de viagem</h3>
         <div className="small muted">
@@ -229,6 +232,7 @@ export function Estrutura() {
           </table>
         )}
       </div>
+      )}
     </div>
   );
 }
