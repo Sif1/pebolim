@@ -20,7 +20,8 @@ export function synthTeam(str: number, rng: Rng, formation: Formation = '4-4-2',
     traits: [],
     tire: 1,
   });
-  for (const sl of slots) players.push(mk(sl.pos));
+  // starters on their natural flank, so a baseline team has no side penalty
+  for (const sl of slots) players.push({ ...mk(sl.pos), flank: sl.y < 0.3 ? 'L' : sl.y > 0.7 ? 'R' : 'C' });
   const benchPos: Pos[] = ['GOL', 'ZAG', 'LAT', 'VOL', 'MEI', 'ATA', 'MEI', 'ATA', 'ZAG'];
   for (const p of benchPos) players.push(mk(p));
   return {

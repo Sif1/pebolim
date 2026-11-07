@@ -71,7 +71,7 @@ export function Propostas() {
                     <td>
                       {p ? (
                         <span className="row click" style={{ gap: 6, flexWrap: 'nowrap', cursor: 'pointer' }} onClick={() => setOpen(p.id)}>
-                          <PosTag pos={p.pos} /> {p.name} <Str v={p.str} />
+                          <PosTag pos={p.pos} flank={p.flank} /> {p.name} <Str v={p.str} />
                         </span>
                       ) : (
                         <span className="faint">jogador aposentado</span>

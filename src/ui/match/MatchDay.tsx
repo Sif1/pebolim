@@ -4,12 +4,12 @@ import { gateOf, usableCapacity } from '../../engine/economy';
 import { MAX_SUBS } from '../../engine/match/core';
 import { FORMATION_LIST, shapeLabel } from '../../engine/match/formations';
 import type { LiveDetail, LiveFrame } from '../../engine/match/live';
-import type { Club, Fixture, Formation, GameState, Marking, Mentality, Style, Tactics } from '../../engine/types';
+import type { AttackFocus, Club, Fixture, Formation, GameState, Marking, Mentality, Style, Tactics } from '../../engine/types';
 import { dateLabel, formatMoney } from '../../engine/util';
 import { MATCH_MINUTES } from '../../net/validate';
 import { useApp, useMe } from '../../store';
 import { awayKit, ClubBadge, compLabel, Energy, Rating, shortName, Str } from '../common';
-import { MARKING_LABEL, MENTALITY_LABEL, STYLE_LABEL } from '../screens/Escalacao';
+import { FOCUS_LABEL, FOCUS_TIP, MARKING_LABEL, MENTALITY_LABEL, STYLE_LABEL } from '../screens/Escalacao';
 import { dragProps, dropProps, moveSlotTo, TacticsBoard, type BoardToken, type DragSrc, type DropTarget } from '../TacticsBoard';
 import { ask } from '../Confirm';
 import { crowd, setSoundOn, soundOn, whistle } from '../sound';
@@ -750,6 +750,20 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
           {Object.entries(STYLE_LABEL).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
+            </option>
+          ))}
+        </select>
+        <select
+          title={FOCUS_TIP}
+          value={tactics.focus ?? ''}
+          onChange={(e) => {
+            const { focus: _drop, ...rest } = tactics;
+            setT(e.target.value ? { ...rest, focus: e.target.value as AttackFocus } : rest);
+          }}
+        >
+          {Object.keys(FOCUS_LABEL).map((k) => (
+            <option key={k} value={k}>
+              {k === 'meio' ? 'Ataques: pelo meio' : k === 'lados' ? 'Ataques: pelas pontas' : 'Ataques: por onde der'}
             </option>
           ))}
         </select>

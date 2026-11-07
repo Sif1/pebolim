@@ -733,7 +733,7 @@ export class LiveMatch {
             a: act.actor ?? 0,
             g: act.target ?? 0,
             id: Math.round(act.t0 * 10),
-            u: Math.round(Math.max(sim.progress(act.side, act.from.x), sim.progress(act.side, act.to.x)) * 100),
+            u: Math.round(Math.min(1, Math.max(0, sim.progress(act.side, act.from.x), sim.progress(act.side, act.to.x))) * 100),
             ...(act.res ? { r: act.res } : {}),
           }
         : undefined,

@@ -78,7 +78,7 @@ export function Contratos() {
               return (
                 <tr key={p.id}>
                   <td>
-                    <PosTag pos={p.pos} />
+                    <PosTag pos={p.pos} flank={p.flank} />
                   </td>
                   <td>
                     {p.name} <Flag nat={p.nat} />

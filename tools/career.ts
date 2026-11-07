@@ -7,6 +7,7 @@
 //   --active  the manager also plays the market (free agents, listed players, auctions, pre-contracts), runs the
 //             youth team, invests in the training centre and takes a clearly bigger job when one is offered
 // Every round the state is checked for broken invariants (orphans, NaN, impossible tables…), printed as BUG lines.
+import { coachRanking } from '../src/engine/coaches';
 import { readFileSync } from 'node:fs';
 import { finishDate, simulateBackground } from '../src/engine/advance';
 import { createManager, PRE_CONTRACT_FROM, runCommand } from '../src/engine/commands';
@@ -273,6 +274,14 @@ function checkState(where: string) {
     if (r.some((x) => !Number.isFinite(x) || x < 0)) bad(`h2h:${k}`, `retrospecto ${k} inválido`);
   }
   for (const c of Object.values(s.clubs)) {
+    // coaches: every club without a human has its own AI coach, and the coach knows it
+    if (c.managerId && c.coachId != null) bad(`coachh:${c.id}`, `${c.name} com técnico humano e técnico da IA ao mesmo tempo`);
+    if (!c.managerId && (c.league || c.contOnly)) {
+      const co = c.coachId != null ? s.coaches?.[c.coachId] : undefined;
+      if (!co) bad(`coach0:${c.id}`, `${c.name} sem técnico`);
+      else if (co.clubId !== c.id) bad(`coachx:${c.id}`, `técnico ${co.name} não reconhece o ${c.name}`);
+    }
+    if (c.pitch != null && !(c.pitch >= 0 && c.pitch <= 100)) bad(`pitch:${c.id}`, `gramado inválido no ${c.name}: ${c.pitch}`);
     const u = c.board.ult;
     if (!u) continue;
     if (!c.managerId) bad(`ult:${c.id}:${s.meta.season}`, `${c.name} com ultimato e sem técnico humano`);
@@ -449,7 +458,7 @@ for (let season = 0; season < SEASONS; season++) {
     .filter((n) => n.season === year && n.text.startsWith('Fechamento da janela'))
     .map((n) => n.text.match(/(\d+) negócio/)?.[1] ?? '?')
     .join('+');
-  const line = `${year}: campeões ${champs.join(' ')} | top100 força média ${(top.reduce((a, p) => a + p.str, 0) / 100).toFixed(1)}, reais ${top.filter((p) => realNames.has(p.name)).length}/100 | força média BRA1 ${lgStr('BRA1')} ENG1 ${lgStr('ENG1')} ESP1 ${lgStr('ESP1')} BRA3 ${lgStr('BRA3')} | livres ${Object.values(s.players).filter((p) => p.clubId == null).length} | fechamentos ${deadline || '—'}`;
+  const line = `${year}: campeões ${champs.join(' ')} | top100 força média ${(top.reduce((a, p) => a + p.str, 0) / 100).toFixed(1)}, reais ${top.filter((p) => realNames.has(p.name)).length}/100 | força média BRA1 ${lgStr('BRA1')} ENG1 ${lgStr('ENG1')} ESP1 ${lgStr('ESP1')} BRA3 ${lgStr('BRA3')} | livres ${Object.values(s.players).filter((p) => p.clubId == null).length} | fechamentos ${deadline || '—'} | técnicos ${coachRanking(s).slice(0, 3).map((r) => `${r.name}${r.human ? '*' : ''} ${r.rec.pts.toFixed(0)}`).join(', ')} · trocas ${s.news.filter((n) => n.season === year && / demite /.test(n.text)).length} · gramados ruins ${Object.values(s.clubs).filter((c) => c.league && (c.pitch ?? 80) < 60).length}`;
   world.push(line);
   console.log(line);
 }

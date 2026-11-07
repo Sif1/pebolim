@@ -1,3 +1,4 @@
+import { rankTitle } from './coaches';
 import { slotsFor, spread } from './calendar';
 import type { Rng } from './rng';
 import type { Club, CompConfig, Competition, Fixture, GameState, Stage, TableRow, Tie } from './types';
@@ -436,6 +437,7 @@ function announceChampion(state: GameState, comp: Competition) {
   if (comp.champion == null) return;
   const c = state.clubs[comp.champion];
   addNews(state, 'title', `${c.name} é campeão: ${comp.cfg.name}!`, [c.id]);
+  rankTitle(state, comp.cfg, c.id);
   if (c.managerId) {
     const m = state.managers[c.managerId];
     m?.trophies.push({ season: state.meta.season, comp: comp.id, clubId: c.id });

@@ -36,6 +36,9 @@ import { endSeason, ensureKeepers, seasonVerdict } from '../src/engine/season';
 import { boardAfterMatch, boardChecks, fireManager } from '../src/engine/board';
 import { juniorsOf, youthMatches } from '../src/engine/youth';
 import { ELITE_GROWTH } from '../src/engine/development';
+import { coachRanking, matchWeight, rankAward, rankMatch, rankTitle, sackCoach, titleWeight } from '../src/engine/coaches';
+import { PITCH_FX, pitchLevel, pitchRound } from '../src/engine/pitch';
+import { effective, laneOf } from '../src/engine/match/ratings';
 import { starsFor } from '../src/engine/potential';
 import { academyLevel, fillerLevel } from '../src/engine/generator';
 import { createWorld } from '../src/engine/world';
@@ -1162,5 +1165,147 @@ describe('player development and the AI squads', () => {
     endSeason(s, new Rng(s.meta.rng), new Set());
     const kept = starters.filter((x) => s.players[x.id]?.clubId === x.club).length;
     expect(kept / starters.length).toBeGreaterThan(0.82);
+  });
+});
+
+describe('coaches and the coaching ranking', () => {
+  it('every club has a named coach, real ones from the database first', () => {
+    const db = synthDb();
+    db.clubs[0].coach = 'Fulano de Tal';
+    db.clubs[0].coachNat = 'POR';
+    const s = createWorld(db, { name: 'test', seed: 'coach-seed' });
+    for (const c of Object.values(s.clubs)) {
+      const coach = s.coaches![c.coachId!];
+      expect(coach).toBeTruthy();
+      expect(coach.clubId).toBe(c.id);
+      expect(coach.name.length).toBeGreaterThan(3);
+    }
+    const first = Object.values(s.clubs).find((c) => c.key === db.clubs[0].key)!;
+    expect(s.coaches![first.coachId!]).toMatchObject({ name: 'Fulano de Tal', nat: 'POR', real: true });
+  });
+
+  it('a human takes over from the AI coach, and results, titles and awards add up in the ranking', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const [club, opp] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const old = s.coaches![club.coachId!];
+    const m = createManager(s, rng, 'A', club.id);
+    expect(club.coachId).toBeNull();
+    expect(old.clubId).toBeNull();
+    const cfg = s.comps.BRA1.cfg;
+    const base = Object.values(s.fixtures).find((f) => f.comp === 'BRA1')!;
+    rankMatch(s, { ...base, home: club.id, away: opp.id, hg: 2, ag: 0 });
+    rankMatch(s, { ...base, home: opp.id, away: club.id, hg: 1, ag: 1 });
+    expect(m.rank).toMatchObject({ p: 2, w: 1, d: 1, l: 0 });
+    expect(m.rank!.pts).toBeCloseTo(matchWeight(cfg) * 1.35, 1);
+    const oppCoach = s.coaches![opp.coachId!];
+    expect(oppCoach.rec).toMatchObject({ p: 2, w: 0, d: 1, l: 1 });
+    rankTitle(s, cfg, club.id);
+    rankAward(s, club, 2);
+    expect(m.rank).toMatchObject({ titles: 1, awards: 1 });
+    expect(m.rank!.pts).toBeCloseTo(matchWeight(cfg) * 1.35 + titleWeight(cfg) + 2, 1);
+    const ranking = coachRanking(s);
+    expect(ranking[0].managerId).toBe(m.id);
+    // the human is sacked: an AI coach takes over the club
+    fireManager(s, m, 'teste');
+    expect(club.coachId).not.toBeNull();
+    expect(s.coaches![club.coachId!].clubId).toBe(club.id);
+  });
+
+  it('an AI club that sacks its coach hires another, and a played round counts for the ranking', () => {
+    const s = world();
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const old = s.coaches![club.coachId!];
+    sackCoach(s, new Rng(s.meta.rng), club);
+    expect(old.clubId).toBeNull();
+    expect(club.coachId).not.toBe(old.id);
+    expect(s.coaches![club.coachId!].clubId).toBe(club.id);
+    expect(s.news.some((n) => n.text.includes(`demite ${old.name}`))).toBe(true);
+    playDates(s, 6);
+    const ranking = coachRanking(s);
+    expect(ranking.length).toBeGreaterThan(20);
+    expect(ranking[0].rec.pts).toBeGreaterThan(0);
+    expect(ranking.every((r, i) => i === 0 || ranking[i - 1].rec.pts >= r.rec.pts)).toBe(true);
+  });
+});
+
+describe('flanks, attack focus and pitch condition', () => {
+  it('a player on his wrong flank loses a little; in the middle it does not matter', () => {
+    const p = { id: 1, pos: 'LAT' as const, str: 80, fitness: 100, morale: 60, traits: [], flank: 'L' as const };
+    const left = effective(p, 'LAT', 0.12);
+    const right = effective(p, 'LAT', 0.88);
+    expect(laneOf(0.12)).toBe(0);
+    expect(laneOf(0.88)).toBe(2);
+    expect(right).toBeLessThan(left);
+    expect(right / left).toBeGreaterThan(0.9);
+    const c = { ...p, pos: 'ZAG' as const };
+    expect(effective(c, 'ZAG', 0.37)).toBe(effective(c, 'ZAG', 0.63));
+  });
+
+  it('every player has a flank, and squads have full-backs for both sides', () => {
+    const s = world();
+    expect(Object.values(s.players).every((p) => p.flank === 'L' || p.flank === 'R' || p.flank === 'C')).toBe(true);
+    const idx = squadIndex(s);
+    for (const c of Object.values(s.clubs).filter((x) => x.league === 'BRA1')) {
+      const lats = (idx.get(c.id) ?? []).filter((p) => p.pos === 'LAT');
+      if (lats.length >= 2) expect(new Set(lats.map((p) => p.flank)).size).toBe(2);
+    }
+  });
+
+  it('the attack focus steers most of the play in the final third through its channel', () => {
+    const share = (focus: 'meio' | 'lados' | undefined) => {
+      let wide = 0;
+      let all = 0;
+      for (let i = 0; i < 12; i++) {
+        const st = synthSetup(70, 70, 900 + i);
+        if (focus) st.home.tactics.focus = focus;
+        const sim = new MatchSim(st);
+        while (!sim.ended) {
+          sim.step(1);
+          if (sim.poss === 0 && sim.progress(0, sim.ball.x) > 0.7) {
+            all++;
+            if (Math.abs(sim.ball.y / 68 - 0.5) > 0.22) wide++;
+          }
+        }
+      }
+      return wide / all;
+    };
+    const free = share(undefined);
+    const flanks = share('lados');
+    const middle = share('meio');
+    expect(flanks).toBeGreaterThan(free + 0.1);
+    expect(middle).toBeLessThan(free - 0.1);
+  });
+
+  it('pitches wear with home matches and recover with care; a poor pitch tires the players more', () => {
+    const s = world();
+    const [a, b] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    for (const c of [a, b]) {
+      c.pitch = 60;
+      c.managerId = 'x';
+    }
+    a.pitchCare = 'premium';
+    b.pitchCare = 'basico';
+    pitchRound(s, new Set());
+    expect(a.pitch! - 60).toBeGreaterThan(b.pitch! - 60);
+    const before = a.pitch!;
+    pitchRound(s, new Set([a.id]));
+    expect(a.pitch!).toBeLessThan(before + 2);
+    expect(pitchLevel(90)).toBe(0);
+    expect(pitchLevel(20)).toBe(3);
+    expect(PITCH_FX[3].drain).toBeGreaterThan(1);
+    let good = 0;
+    let bad = 0;
+    for (let i = 0; i < 6; i++) {
+      for (const pitch of [90, 20]) {
+        const st = synthSetup(70, 70, 400 + i);
+        st.pitch = pitch;
+        const r = new MatchSim(st).runToEnd();
+        const fit = Object.values(r.players).reduce((x, p) => x + p.fitness, 0);
+        if (pitch === 90) good += fit;
+        else bad += fit;
+      }
+    }
+    expect(bad).toBeLessThan(good);
   });
 });

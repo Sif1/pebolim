@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { inCharge } from '../../engine/coaches';
 import { squadOf } from '../../engine/util';
 import { useApp, useMe } from '../../store';
 import { ClubBadge, compLabel, COUNTRY_NAME, FormDots, Str } from '../common';
@@ -24,7 +25,7 @@ export function ClubeView() {
             {c.capacity.toLocaleString('pt-BR')})
           </div>
           <div className="small muted">
-            Treinador: {m ? <b>{m.name}</b> : 'IA'} · reputação {Math.round(c.rep)} · forma <FormDots form={c.form} />
+            Treinador: <b>{m ? m.name : (inCharge(state, c)?.name ?? '—')}</b> · reputação {Math.round(c.rep)} · forma <FormDots form={c.form} />
           </div>
         </div>
         <div className="center">

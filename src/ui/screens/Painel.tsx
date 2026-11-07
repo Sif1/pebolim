@@ -9,6 +9,8 @@ import { Bar, ClubBadge, ClubName, compLabel, Empty, FormDots, PosTag, Str } fro
 import { Traits } from '../PlayerModal';
 import { nextFixture } from '../Shell';
 import { headToHead, isDerby } from '../../engine/rivals';
+import { inCharge } from '../../engine/coaches';
+import { pitchLevel } from '../../engine/pitch';
 import { deadlineDay } from '../../engine/transfers';
 
 export function visibleNews(state: GameState, managerId: string | null, clubId: number | null): News[] {
@@ -147,6 +149,16 @@ export function Painel() {
   );
 }
 
+/** A stadium's pitch condition as a small pill (red for poor and terrible). */
+export function PitchPill({ v }: { v: number | undefined }) {
+  const l = pitchLevel(v);
+  return (
+    <span className={`pill ${l >= 3 ? 'bad' : l === 2 ? 'warn' : ''}`} title="Gramado ruim ou péssimo: os jogadores cansam mais, e a bola longa rende um pouco mais que o toque">
+      {(['Gramado: excelente', 'Gramado: muito bom', 'Gramado: ruim', 'Gramado: péssimo'] as const)[l]}
+    </span>
+  );
+}
+
 /** The board's ultimatum: points so far against the target, and matches left. */
 function UltimatumBox({ u }: { u: Ultimatum }) {
   const left = u.games - u.played;
@@ -193,6 +205,7 @@ function NextMatch() {
           </div>
           <div className="small">{dateLabel(state, f.date)}</div>
           <div className="small faint">{state.clubs[f.home].stadium}</div>
+          <PitchPill v={state.clubs[f.home].pitch} />
         </div>
         <div className="fc-team">
           <ClubBadge club={state.clubs[f.away]} size={58} />
@@ -334,6 +347,13 @@ function ScoutReport() {
   if (plan.mentality === 'defensiva') tips.push('Vai se fechar atrás: chances claras serão raras, tenha paciência.');
   if (plan.mentality === 'ofensiva') tips.push('Vem para cima: o contra-ataque pode render.');
   if (energy && energy < 85) tips.push(`Chega cansado (energia média ${energy}%): acelerar no segundo tempo pode decidir.`);
+  if (plan.focus === 'lados') tips.push('Ataca pelas pontas: laterais fortes (e no lado certo) e zagueiros que cabeceiam seguram.');
+  if (plan.focus === 'meio') tips.push('Ataca pelo meio: volantes e zagueiros fortes fecham o caminho.');
+  const venue = state.clubs[f.home];
+  const pl = pitchLevel(venue.pitch);
+  if (pl === 3) tips.push(`Gramado péssimo no ${venue.stadium}: cansa mais, e a bola longa rende um pouco mais que o toque.`);
+  else if (pl === 2) tips.push(`Gramado ruim no ${venue.stadium}: cansa mais, e a bola longa rende um pouco mais que o toque.`);
+  const coach = human ? null : inCharge(state, opp);
   return (
     <div className="panel col scout">
       <h3>Relatório do adversário · {opp.name}</h3>
@@ -345,12 +365,15 @@ function ScoutReport() {
                 Treinador: <b>{human.name}</b> (humano)
               </>
             ) : (
-              <>Treinador: IA</>
+              <>
+                Treinador: <b>{coach?.name ?? '—'}</b>
+              </>
             )}
           </div>
           <div className="small">
             Provável esquema: <b>{plan.formation}</b> · {`postura ${MENT[plan.mentality]}`} · {STY[plan.style]}
             {plan.marking === 'pressao' ? ' · pressão alta' : ''}
+            {plan.focus === 'lados' ? ' · ataques pelas pontas' : plan.focus === 'meio' ? ' · ataques pelo meio' : ''}
           </div>
           <div className="small row" style={{ gap: 6 }}>
             Forma: <FormDots form={opp.form} />
@@ -365,7 +388,7 @@ function ScoutReport() {
           <div className="small faint">Destaques</div>
           {key.map((p) => (
             <div key={p.id} className="row small" style={{ gap: 6 }}>
-              <PosTag pos={p.pos} /> <span className="nowrap">{p.name}</span> <Str v={p.str} /> <Traits traits={p.traits} small />
+              <PosTag pos={p.pos} flank={p.flank} /> <span className="nowrap">{p.name}</span> <Str v={p.str} /> <Traits traits={p.traits} small />
             </div>
           ))}
           {out.length > 0 && (

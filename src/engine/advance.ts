@@ -1,3 +1,5 @@
+import { pitchRound } from './pitch';
+import { rankMatch } from './coaches';
 import { boardAfterMatch, boardChecks, boardFinanceCheck } from './board';
 import { applyFixtureToTables, progressComps } from './competitions';
 import { dailyPlayers } from './development';
@@ -50,6 +52,7 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
     applyFixtureToTables(state, f);
     recordHeadToHead(state, f);
     recordCareer(state, f);
+    rankMatch(state, f);
     if (isDerby(state, f.home, f.away) && (home.managerId || state.clubs[f.away].managerId)) derbyNews(state, f);
 
     // suspensions already being served in this competition
@@ -126,6 +129,8 @@ function derbyNews(state: GameState, f: Fixture) {
 export function finishDate(state: GameState, results: MatchResult[], present: Set<string>) {
   const rng = new Rng(state.meta.rng);
   const played = applyResults(state, results, rng);
+  // pitches: the ones that hosted a match wear, all recover a little
+  pitchRound(state, new Set(results.map((r) => state.fixtures[r.fixtureId]?.home).filter((x): x is number => x != null)));
   progressComps(state, rng);
   dailyPlayers(state, rng, played);
   youthMatches(state, rng);

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import type { Club, GameState, Pos } from '../engine/types';
+import type { Club, GameState, Pos, Side } from '../engine/types';
 import { formatMoney, kk, parseMoney } from '../engine/util';
 import { STAR_CEILING } from '../engine/potential';
 
@@ -164,9 +164,28 @@ export function ClubName({ id, state, badge = true }: { id: number; state: GameS
   );
 }
 
-export function PosTag({ pos }: { pos: Pos }) {
+/**
+ * Position tag. With the preferred flank: a full-back shows as LE / LD (left / right back), a midfielder or forward
+ * with a side gets a small arrow toward it.
+ */
+export function PosTag({ pos, flank }: { pos: Pos; flank?: Side }) {
+  if (pos === 'LAT' && (flank === 'L' || flank === 'R'))
+    return (
+      <span className="pos pos-LAT" title={flank === 'L' ? 'Lateral esquerdo' : 'Lateral direito'}>
+        {flank === 'L' ? 'LE' : 'LD'}
+      </span>
+    );
+  if ((pos === 'MEI' || pos === 'ATA') && (flank === 'L' || flank === 'R'))
+    return (
+      <span className={`pos pos-${pos}`} title={flank === 'L' ? 'Prefere jogar pela esquerda' : 'Prefere jogar pela direita'}>
+        {flank === 'L' ? '◂' : ''}
+        {pos}
+        {flank === 'R' ? '▸' : ''}
+      </span>
+    );
   return <span className={`pos pos-${pos}`}>{pos}</span>;
 }
+
 
 /** What a força means, in words (for tooltips). */
 export function strLevel(v: number): string {

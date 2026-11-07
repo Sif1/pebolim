@@ -1,5 +1,6 @@
 import { dateLabel } from '../../engine/util';
-import { command, useMe } from '../../store';
+import { command, useApp, useMe } from '../../store';
+import { coachRanking } from '../../engine/coaches';
 import { ask } from '../Confirm';
 import { Bar, ClubBadge, ClubName, compLabel, Empty } from '../common';
 import { CareerRecordPanel, TrophyCabinet } from './Review';
@@ -59,6 +60,7 @@ export function Treinador() {
         <div className="panel">
           <h3>Números da carreira</h3>
           <CareerRecordPanel m={manager} state={state} />
+          <RankLine />
         </div>
         <div className="panel">
           <h3>Carreira</h3>
@@ -85,6 +87,27 @@ export function Treinador() {
           Pedir demissão
         </button>
       )}
+    </div>
+  );
+}
+
+/** Where the manager stands in the coaching ranking, a click away from the full list. */
+function RankLine() {
+  const { state, manager } = useMe();
+  const setScreen = useApp((s) => s.setScreen);
+  if (!state || !manager) return null;
+  const all = coachRanking(state);
+  const i = all.findIndex((r) => r.managerId === manager.id);
+  if (i < 0) return null;
+  const r = all[i].rec;
+  return (
+    <div className="row small" style={{ marginTop: 8 }}>
+      <span>
+        {`Ranking de técnicos: ${i + 1}º de ${all.length} · ${r.pts.toFixed(1)} pontos · títulos ${r.titles} · prêmios ${r.awards}`}
+      </span>
+      <button className="btn sm ghost" onClick={() => setScreen('competicoes', 'tecnicos')}>
+        Ver ranking
+      </button>
     </div>
   );
 }

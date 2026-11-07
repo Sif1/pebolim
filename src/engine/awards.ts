@@ -3,6 +3,8 @@
 import type { MatchResult } from './match/core';
 import type { Club, Fixture, GameState } from './types';
 import { addNews, age } from './util';
+import { AWARD_PTS, inCharge, rankAward } from './coaches';
+import { objectiveDelta } from './review';
 
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const COUNTRY_TXT: Record<string, string> = {
@@ -132,12 +134,35 @@ export function monthlyAwards(state: GameState) {
     if (top) {
       const c: Club = state.clubs[top[0]];
       const m = c.managerId ? state.managers[c.managerId] : null;
+      const who = inCharge(state, c);
       const rec = `${top[1].pts} pts em ${top[1].n} jogos`;
-      parts.push(m ? `treinador do mês: ${m.name} (${c.name}, ${rec})` : `treinador do mês: o técnico do ${c.name} (${rec})`);
+      parts.push(who ? `treinador do mês: ${who.name} (${c.name}, ${rec})` : `treinador do mês: o técnico do ${c.name} (${rec})`);
       if (m) m.rep = Math.min(100, m.rep + 1);
+      rankAward(state, c, AWARD_PTS.month);
       involved.push(c.id);
     }
     if (parts.length) addNews(state, 'award', `Prêmios de ${monthName} ${COUNTRY_TXT[country] ?? `(${country})`}: ${parts.join('; ')}.`, involved);
   }
   state.monthly = { month: state.calendar[state.meta.date + 1]?.month ?? 1, players: {} };
+}
+
+/**
+ * Coach of the season in each top division: whoever did best against the season's objective (the champion
+ * gets a little extra), announced at the season end.
+ */
+export function seasonCoachAwards(state: GameState, ranks: Record<string, number[]>) {
+  for (const [lid, country] of topLeagues(state)) {
+    const order = ranks[lid];
+    if (!order?.length) continue;
+    const n = order.length;
+    const best = order
+      .map((cid, i) => ({ club: state.clubs[cid], pos: i + 1 }))
+      .filter((x) => x.club && inCharge(state, x.club))
+      .map((x) => ({ ...x, score: objectiveDelta(x.club.board.goal, x.pos, n) + (x.pos === 1 ? 6 : 0) - x.pos * 0.01 }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (!best) continue;
+    const who = inCharge(state, best.club)!;
+    rankAward(state, best.club, AWARD_PTS.season);
+    addNews(state, 'award', `Técnico da temporada ${COUNTRY_TXT[country] ?? `(${country})`}: ${who.name}, ${best.pos}º lugar com o ${best.club.name}.`, [best.club.id]);
+  }
 }

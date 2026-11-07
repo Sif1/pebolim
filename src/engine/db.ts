@@ -22,6 +22,9 @@ export interface DbClub {
   contOnly?: boolean;
   /** crest image URL (from data/db/crests.csv or a crest column) */
   crest?: string;
+  /** the club's coach (from data/db/coaches.csv or coach / coach_nat columns); made up when absent */
+  coach?: string;
+  coachNat?: string;
 }
 
 export interface DbPlayer {
@@ -35,6 +38,8 @@ export interface DbPlayer {
   pot?: number;
   /** potential stars 0-5 (wins over pot) */
   stars?: number;
+  /** preferred side: L, R or C (E/D also accepted); assigned in the game when absent */
+  side?: 'L' | 'R' | 'C';
 }
 
 export interface Database {

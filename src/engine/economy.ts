@@ -3,6 +3,7 @@ import type { Club, Competition, Fixture, GameState, SectorPrices, TravelMode } 
 import { addNews, clamp, distanceKm, squadIndex } from './util';
 import { defaultTicket } from './world';
 import { isDerby } from './rivals';
+import { pitchCareCost } from './pitch';
 
 // ---------- travel ----------
 
@@ -237,7 +238,7 @@ export function dailyFinances(state: GameState, squadWages: Map<number, number>)
     const income = Math.round(c.baseIncome / DATES_PER_SEASON);
     const sponsors = Math.round(income * 0.55);
     const tv = income - sponsors;
-    const upkeep = Math.round(c.capacity * 0.11 + TC_UPKEEP[c.tc.level]);
+    const upkeep = Math.round(c.capacity * 0.11 + TC_UPKEEP[c.tc.level] + pitchCareCost(c));
     c.balance += sponsors + tv - wages - upkeep;
     c.ledger.sponsors += sponsors;
     c.ledger.tv += tv;
@@ -291,7 +292,7 @@ export function roughIncome(club: Club): number {
 
 /** Season costs besides wages: stadium and CT upkeep plus typical away trips. */
 export function runningCosts(club: Club): number {
-  const upkeep = (club.capacity * 0.11 + TC_UPKEEP[club.tc.level]) * DATES_PER_SEASON;
+  const upkeep = (club.capacity * 0.11 + TC_UPKEEP[club.tc.level] + pitchCareCost(club)) * DATES_PER_SEASON;
   const travel = 19 * travelCost('comercial', club.continent === 'SA' ? 900 : 600);
   return upkeep + travel;
 }

@@ -11,22 +11,22 @@ const N = Number(process.argv[2] ?? 3000);
 
 type Mod = (t: TeamSetup) => void;
 
-function setup(seed: number, mod: Mod | null, formation: Formation = '4-4-2', tactics?: Partial<Tactics>, swapSides = false): MatchSetup {
+function setup(seed: number, mod: Mod | null, formation: Formation = '4-4-2', tactics?: Partial<Tactics>, swapSides = false, pitch?: number): MatchSetup {
   const rng = Rng.fromSeed(seed);
   const a = synthTeam(70, rng, formation, tactics);
   const b = synthTeam(70, rng);
   a.ai = false;
   if (mod) mod(a);
   const [home, away] = swapSides ? [b, a] : [a, b];
-  return { fixtureId: seed, compId: 'T', home, away, seed: rng.fork(), homeAdv: 1.07, decider: null };
+  return { fixtureId: seed, compId: 'T', home, away, seed: rng.fork(), homeAdv: 1.07, decider: null, pitch };
 }
 
-function measure(mod: Mod | null, formation?: Formation, tactics?: Partial<Tactics>, swapSides = false) {
+function measure(mod: Mod | null, formation?: Formation, tactics?: Partial<Tactics>, swapSides = false, pitch?: number) {
   let pts = 0;
   let gd = 0;
   let xg = 0;
   for (let i = 0; i < N; i++) {
-    const r = new MatchSim(setup(i * 7919 + 17, mod, formation, tactics, swapSides)).runToEnd();
+    const r = new MatchSim(setup(i * 7919 + 17, mod, formation, tactics, swapSides, pitch)).runToEnd();
     const [mine, theirs] = swapSides ? [r.ag, r.hg] : [r.hg, r.ag];
     pts += mine > theirs ? 3 : mine === theirs ? 1 : 0;
     gd += mine - theirs;
@@ -41,7 +41,13 @@ const byPos = (t: TeamSetup, ps: Pos[]) => xi(t).filter((p) => ps.includes(p.pos
 const addStr = (ps: { str: number }[], d: number) => ps.forEach((p) => (p.str += d));
 const trait = (ps: { traits: Trait[] }[], tr: Trait) => ps.forEach((p) => p.traits.push(tr));
 
-const scenarios: { group: string; name: string; mod?: Mod; formation?: Formation; tactics?: Partial<Tactics>; away?: boolean }[] = [
+// the wide players (full-backs and wide midfielders) and the central ones of the 4-4-2 starters
+const wide = (t: TeamSetup) => xi(t).filter((_, i) => [1, 4, 7, 8].includes(i));
+const central = (t: TeamSetup) => xi(t).filter((_, i) => [5, 6, 9, 10].includes(i));
+const flip = (ps: { flank?: 'L' | 'R' | 'C' }[]) => ps.forEach((p) => (p.flank = p.flank === 'L' ? 'R' : p.flank === 'R' ? 'L' : p.flank));
+const both = (...ms: Mod[]): Mod => (t) => ms.forEach((m) => m(t));
+
+const scenarios: { group: string; name: string; mod?: Mod; formation?: Formation; tactics?: Partial<Tactics>; away?: boolean; pitch?: number }[] = [
   { group: 'Força', name: 'Todos os jogadores +5 de força (70 → 75)', mod: (t) => addStr(t.players, 5) },
   { group: 'Força', name: 'Todos os jogadores +10 de força (70 → 80)', mod: (t) => addStr(t.players, 10) },
   { group: 'Força', name: 'Todos os jogadores −5 de força', mod: (t) => addStr(t.players, -5) },
@@ -76,13 +82,31 @@ const scenarios: { group: string; name: string; mod?: Mod; formation?: Formation
   { group: 'Características', name: 'Um líder em campo ("liderança")', mod: (t) => trait(byPos(t, ['VOL', 'MEI']).slice(0, 1), 'lideranca') },
   { group: 'Características', name: 'Defensores com "marcação"', mod: (t) => trait(byPos(t, ['ZAG', 'LAT', 'VOL']), 'marcacao') },
   { group: 'Características', name: 'Zagueiros e atacantes com "cabeceio"', mod: (t) => trait(byPos(t, ['ZAG', 'ATA']), 'cabeceio') },
+  { group: 'Corredores', name: 'Ataques pelas pontas', tactics: { focus: 'lados' } },
+  { group: 'Corredores', name: 'Ataques pelo meio', tactics: { focus: 'meio' } },
+  { group: 'Corredores', name: 'Laterais e meias abertos +10', mod: (t) => addStr(wide(t), 10) },
+  { group: 'Corredores', name: 'Laterais e meias abertos +10, ataques pelas pontas', mod: (t) => addStr(wide(t), 10), tactics: { focus: 'lados' } },
+  { group: 'Corredores', name: 'Laterais e meias abertos +10, ataques pelo meio', mod: (t) => addStr(wide(t), 10), tactics: { focus: 'meio' } },
+  { group: 'Corredores', name: 'Volantes e atacantes +10', mod: (t) => addStr(central(t), 10) },
+  { group: 'Corredores', name: 'Volantes e atacantes +10, ataques pelo meio', mod: (t) => addStr(central(t), 10), tactics: { focus: 'meio' } },
+  { group: 'Corredores', name: 'Pontas com cabeceio na área, ataques pelas pontas', mod: (t) => trait(byPos(t, ['ATA']), 'cabeceio'), tactics: { focus: 'lados' } },
+  { group: 'Lados', name: 'Os dois laterais no lado errado', mod: (t) => flip(byPos(t, ['LAT'])) },
+  { group: 'Lados', name: 'Os dois meias abertos no lado errado', mod: (t) => flip(wide(t).filter((p) => p.pos === 'MEI')) },
+  { group: 'Lados', name: 'Laterais e meias abertos todos no lado errado', mod: both((t) => flip(wide(t))) },
+  { group: 'Gramado', name: 'Gramado péssimo (para os dois)', pitch: 20 },
+  { group: 'Gramado', name: 'Gramado ruim (para os dois)', pitch: 45 },
+  { group: 'Gramado', name: 'Bola longa num gramado péssimo', tactics: { style: 'longa' }, pitch: 20 },
 ];
+
+// optional: only the scenario groups named after N (e.g. "npx tsx tools/sensitivity.ts 3000 Corredores Gramado")
+const only = process.argv.slice(3);
+if (only.length) scenarios.splice(0, scenarios.length, ...scenarios.filter((s) => only.includes(s.group)));
 
 const t0 = performance.now();
 const base = measure(null);
 console.log(`Base: ${N} jogos, 70 x 70 em casa: ${base.ppg.toFixed(3)} pontos/jogo, saldo ${base.gd.toFixed(3)}, xG saldo ${base.xgd.toFixed(3)}\n`);
 const rows = scenarios.map((s) => {
-  const r = measure(s.mod ?? null, s.formation, s.tactics, s.away);
+  const r = measure(s.mod ?? null, s.formation, s.tactics, s.away, s.pitch);
   return { ...s, dppg: r.ppg - base.ppg, dgd: r.gd - base.gd, dxg: r.xgd - base.xgd };
 });
 rows.sort((a, b) => Math.abs(b.dppg) - Math.abs(a.dppg));

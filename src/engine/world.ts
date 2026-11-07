@@ -2,7 +2,9 @@ import { autoLineup, bestFormation, squadStrength } from './ai/lineup';
 import { buildCalendar } from './calendar';
 import { createSeasonComps } from './competitions';
 import type { Database } from './db';
-import { assignNumbers, fillerLevel, fillSquad, randomTraits } from './generator';
+import { assignFlanks, assignNumbers, balanceFullBacks, fillerLevel, fillSquad, randomFlank, randomTraits } from './generator';
+import { resetSeasonRank, setupCoaches } from './coaches';
+import { initialPitch } from './pitch';
 import { ceilingFor, starsFor, tierOf } from './potential';
 import { defaultNamePools } from './names';
 import { Rng } from './rng';
@@ -143,8 +145,12 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
     p.stars = dp.stars ?? (dp.pot ? Math.max(tierOf(dp.str), tierOf(dp.pot)) : starsFor(dp.str, ageY, rng));
     p.pot = Math.max(p.str, ceilingFor(p.stars));
     p.wage = expectedWage(p, season, club?.rep ?? 50);
+    if (dp.side) p.flank = dp.side;
     state.players[p.id] = p;
   }
+  // the database rarely says which flank a player prefers: full-backs alternate right and left, the rest at random
+  for (const squad of squadIndex(state).values()) assignFlanks(squad, rng);
+  for (const p of Object.values(state.players)) if (!p.flank) p.flank = randomFlank(p.pos, rng);
 
   // fill every squad with generated players
   let idx = squadIndex(state);
@@ -160,9 +166,14 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
     fillSquad(state, rng, club.id, existing, level, foreignShareFor(club), target);
   }
 
+  // coaches (real ones from the database, made up otherwise) and pitches
+  setupCoaches(state, db, rng, keyToId);
+  for (const club of Object.values(state.clubs)) initialPitch(club, rng);
+
   idx = squadIndex(state);
   for (const club of Object.values(state.clubs)) {
     const squad = idx.get(club.id) ?? [];
+    balanceFullBacks(squad);
     assignNumbers(squad);
     club.tactics.formation = bestFormation(squad);
     club.lineup = autoLineup(squad, club.tactics.formation, null);
@@ -187,6 +198,7 @@ export function startSeason(state: GameState, rng: Rng) {
     p.ban = {};
   }
   for (const b of Object.values(state.bids)) if (b.status === 'pendente' || b.status === 'contraproposta') b.status = 'expirada';
+  resetSeasonRank(state);
   createSeasonComps(state, rng);
   const idx = squadIndex(state);
   for (const c of Object.values(state.clubs)) {

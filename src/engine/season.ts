@@ -1,5 +1,7 @@
 import { ceilingFor, starsFor } from './potential';
-import { fireManager } from './board';
+import { coachRng, fireManager } from './board';
+import { aiCoachOf, sackCoach } from './coaches';
+import { seasonCoachAwards } from './awards';
 import { homeGameCounts, wageBudget } from './economy';
 import { juniorsOf, promote, release, youthSeasonEnd } from './youth';
 import { objectiveDelta, seasonReviews } from './review';
@@ -42,6 +44,8 @@ export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
   state.history.push(hist);
   // the human managers' season in review, before anyone moves
   seasonReviews(state, ranks);
+  // coach of the season in each top division, before anyone is sacked
+  seasonCoachAwards(state, ranks);
   state.prev = {
     ranks,
     winners: Object.fromEntries(Object.values(state.comps).filter((c) => c.cfg.kind !== 'league' && c.champion != null).map((c) => [c.id, c.champion!])),
@@ -90,6 +94,16 @@ export function seasonVerdict(state: GameState, club: Club, pos: number, n: numb
     state.history.some((h) => h.season >= state.meta.season - 2 && h.season >= Math.floor(m.since / 100) && Object.values(h.champions).includes(club.id));
   if ((firstSeason || trophy) && delta < 0) delta /= 2;
   club.board.conf = clamp(club.board.conf + delta, 0, 100);
+  // an AI coach: his reputation follows the season, and a board this unhappy usually sacks him
+  const ai = m ? null : aiCoachOf(state, club);
+  if (ai) {
+    ai.rep = clamp(ai.rep + delta / 6, 5, 100);
+    const rng = coachRng(state, club);
+    if (club.board.conf < 20 && rng.chance(0.7)) {
+      sackCoach(state, rng, club);
+      club.board.conf = 50;
+    }
+  }
   if (m) {
     m.rep = clamp(m.rep + delta / 6, 5, 100);
     if (club.board.conf < 20 && present.has(m.id)) fireManager(state, m, 'objetivo da temporada não cumprido');

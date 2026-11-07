@@ -6,7 +6,7 @@ import { ensureYouthTeam, promote as promoteJunior, release as releaseJunior } f
 import { FORMATIONS, slotsFor, validShape } from './match/formations';
 import { Rng } from './rng';
 import { auctionCanClose, executeTransfer, refusesClub, resolveAiBid, unlist, wageDemand, windowOpen } from './transfers';
-import type { Bid, GameState, Lineup, Manager, Player, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
+import type { Bid, GameState, Lineup, Manager, PitchCare, Player, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
 import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from './util';
 
 export type Command =
@@ -16,6 +16,7 @@ export type Command =
   | { c: 'setTickets'; comp: string | null; prices: SectorPrices | null }
   | { c: 'setFocus'; focus: TrainingFocus }
   | { c: 'setTravel'; mode: TravelMode | 'auto' }
+  | { c: 'setPitchCare'; care: PitchCare }
   | { c: 'upgradeTC' }
   | { c: 'expandStadium'; seats: number }
   /** price null = take him off the sale list */
@@ -133,6 +134,9 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
     case 'setTravel':
       club.travel = cmd.mode;
       return ok('Logística atualizada.');
+    case 'setPitchCare':
+      club.pitchCare = cmd.care;
+      return ok('Cuidado com o gramado atualizado.');
     case 'upgradeTC': {
       if (club.tc.building > 0) return fail('Já existe uma obra em andamento no CT.');
       if (club.tc.level >= 5) return fail('O CT já está no nível máximo.');

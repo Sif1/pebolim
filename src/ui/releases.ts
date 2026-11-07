@@ -10,6 +10,24 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.10.0',
+    date: '07/11/2026',
+    pt: [
+      'Técnicos de verdade: cada clube tem o seu treinador (os reais onde se sabe, inventados nos outros). Os clubes da IA demitem e contratam técnicos, e quem fica sem clube espera uma nova chance.',
+      'Ranking de técnicos (Competições → Técnicos): vitórias e empates pesados pela competição e pelo nível da liga, títulos e os prêmios de treinador do mês e da temporada, na carreira e na temporada. Na tela do treinador, a sua posição.',
+      'Ataques pelo meio ou pelas pontas: uns 70% das jogadas vão para o corredor escolhido, e cada disputa ali é o seu setor contra o setor deles. Rende quando combina com a escalação; a tela de escalação mostra a força de cada corredor, e a IA também usa.',
+      'Lado preferido: laterais aparecem como LE/LD, pontas com uma setinha, e quem joga do lado que não é o seu rende um pouco menos (aparece no quadro tático).',
+      'Gramado: cada estádio tem o seu, que se gasta a cada jogo em casa e se recupera entre as rodadas, conforme o cuidado escolhido na tela do estádio. Gramado ruim cansa mais e favorece um pouco a bola longa.',
+    ],
+    en: [
+      'Real coaches: every club has its own coach (the real ones where known, made-up ones elsewhere). AI clubs sack and hire coaches, and those out of work wait for another chance.',
+      'A coaching ranking (Competitions → Coaches): wins and draws weighted by the competition and the league’s level, titles and the manager of the month and of the season awards, all-time and this season. Your position shows on the manager screen.',
+      'Attacks through the middle or down the flanks: about 70% of the play goes through the chosen channel, and every duel there is your part of the team against theirs. It pays when it suits the line-up; the line-up screen shows how strong each channel is, and the AI uses it too.',
+      'Preferred side: full-backs show as LB/RB, wide players with a small arrow, and a player on the side that isn’t his plays a little worse (shown on the tactics board).',
+      'Pitch condition: every stadium has its own pitch, worn by every home match and recovering between rounds depending on the care chosen in the stadium screen. A poor pitch is more tiring and favours long balls a little.',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '07/11/2026',
     pt: [

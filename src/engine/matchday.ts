@@ -6,6 +6,8 @@ import { applyTravel } from './economy';
 import type { MatchSetup, MPlayerInit, TeamSetup } from './match/core';
 import type { Rng } from './rng';
 import type { Club, Fixture, GameState, Player, Tactics } from './types';
+import { slotsFor } from './match/formations';
+import { laneStrengths } from './match/ratings';
 import { age, squadIndex } from './util';
 
 export const HOME_ADV = 1.055;
@@ -71,7 +73,34 @@ export function aiPreMatchTactics(
       break;
     }
   }
-  return { formation, mentality: plan.mentality, style: plan.style, marking: plan.marking, shape: null };
+  const focus = aiFocus(state, avail, formation, f.comp, opp, oppSquad, oppHuman);
+  return { formation, mentality: plan.mentality, style: plan.style, marking: plan.marking, shape: null, ...(focus ? { focus } : {}) };
+}
+
+/** How much better one channel must look than the other before the AI coach concentrates its attacks there. */
+export const AI_FOCUS_EDGE = 1.08;
+
+/**
+ * The AI coach's attack focus: its own lanes against the opponent's likely line-up. The flanks when its wide
+ * attack beats their full-backs clearly more than its middle beats their centre, the middle the other way round,
+ * otherwise no focus (a focus is also easier to read, so it needs a real edge).
+ */
+export function aiFocus(state: GameState, avail: Player[], formation: Tactics['formation'], comp: string, opp: Club, oppSquad: Player[], oppHuman: boolean): Tactics['focus'] {
+  const mine = autoLineup(avail, formation, comp);
+  const slots = slotsFor({ formation });
+  const byId = new Map(avail.map((p) => [p.id, p]));
+  const my = laneStrengths(slots, mine.xi.map((id) => (id != null ? (byId.get(id) ?? null) : null)));
+  const oppAvail = oppSquad.filter((p) => p.injury === 0 && !(p.ban[comp] > 0));
+  const oppForm = oppHuman ? opp.tactics.formation : bestFormation(oppAvail, comp);
+  const theirs = oppHuman && !opp.autoLineup ? opp.lineup : autoLineup(oppAvail, oppForm, comp);
+  const oppById = new Map(oppSquad.map((p) => [p.id, p]));
+  const their = laneStrengths(slotsFor(oppHuman ? opp.tactics : { formation: oppForm }), theirs.xi.map((id) => (id != null ? (oppById.get(id) ?? null) : null)));
+  // our left attacks their right, and the other way round
+  const flanks = (my.att[0] / their.def[2] + my.att[2] / their.def[0]) / 2;
+  const middle = my.att[1] / their.def[1];
+  if (flanks > middle * AI_FOCUS_EDGE) return 'lados';
+  if (middle > flanks * AI_FOCUS_EDGE) return 'meio';
+  return undefined;
 }
 
 function teamSetup(state: GameState, club: Club, squad: Player[], compId: string, human: boolean, aiTactics?: Tactics): TeamSetup {
@@ -94,6 +123,7 @@ function teamSetup(state: GameState, club: Club, squad: Player[], compId: string
       fitness: p.fitness,
       morale: p.morale,
       traits: p.traits,
+      flank: p.flank,
       tire: age(p, season) >= 32 ? 1.15 : age(p, season) <= 21 ? 0.95 : 1,
     }));
   return {
@@ -149,6 +179,7 @@ export function prepareMatchday(state: GameState, rng: Rng, present: Set<string>
       seed: rng.fork(),
       homeAdv: HOME_ADV,
       decider: deciderFor(state, f),
+      pitch: home.pitch,
     };
     plan.setups.push(setup);
     if (hHuman || aHuman) plan.live.push(f.id);

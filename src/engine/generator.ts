@@ -1,7 +1,7 @@
 import { ceilingFor, starsFor } from './potential';
 import type { Rng } from './rng';
 import { poolFor } from './names';
-import type { Club, GameState, Player, Pos, Trait } from './types';
+import type { Club, GameState, Player, Pos, Side, Trait } from './types';
 import { clamp, expectedWage } from './util';
 
 const TRAITS_BY_POS: Record<Pos, Trait[]> = {
@@ -71,8 +71,38 @@ export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
   p.stars = starsFor(p.str, o.ageY, rng);
   p.pot = ceilingFor(p.stars);
   p.traits = randomTraits(o.pos, p.str, rng);
+  p.flank = randomFlank(o.pos, rng);
   p.wage = expectedWage(p, season, o.clubRep);
   return p;
+}
+
+/**
+ * A preferred flank for a player of this position: full-backs are left or right, wide-capable midfielders and
+ * forwards often have a side (an inverted winger is common), the rest play centrally.
+ */
+export function randomFlank(pos: Pos, rng: Rng): Side {
+  if (pos === 'LAT') return rng.chance(0.5) ? 'L' : 'R';
+  if (pos === 'MEI' || pos === 'ATA') {
+    const r = rng.next();
+    return r < 0.45 ? 'C' : r < 0.725 ? 'L' : 'R';
+  }
+  return 'C';
+}
+
+/**
+ * Flanks for players who have none (the database leaves it out, or a save from before flanks): a club's
+ * full-backs alternate right and left from the best down, so every squad has both; the rest at random.
+ */
+export function assignFlanks(squad: Player[], rng: Rng) {
+  const lats = squad.filter((p) => p.pos === 'LAT' && !p.flank).sort((a, b) => b.str - a.str);
+  lats.forEach((p, i) => (p.flank = i % 2 === 0 ? 'R' : 'L'));
+  for (const p of squad) if (!p.flank) p.flank = randomFlank(p.pos, rng);
+}
+
+/** A squad whose full-backs all prefer the same side: the second best switches, so both sides are covered. */
+export function balanceFullBacks(squad: Player[]) {
+  const lats = squad.filter((p) => p.pos === 'LAT').sort((a, b) => b.str - a.str);
+  if (lats.length >= 2 && lats.every((p) => p.flank === lats[0].flank)) lats[1].flank = lats[0].flank === 'L' ? 'R' : 'L';
 }
 
 /** Squad composition target. */

@@ -86,7 +86,7 @@ export function AuctionList() {
             return (
               <tr key={p.id} className="click" onClick={() => setOpen(p.id)}>
                 <td>
-                  <PosTag pos={p.pos} />
+                  <PosTag pos={p.pos} flank={p.flank} />
                 </td>
                 <td>
                   <span className="nowrap">{p.name}</span> <Flag nat={p.nat} />

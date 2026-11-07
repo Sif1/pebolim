@@ -5,12 +5,16 @@ import { SAVE_FORMAT_VERSION, type Fixture, type GameState, type Player, type Se
 import { defaultTicket } from './world';
 import { Rng } from './rng';
 import { ensureYouthTeam } from './youth';
+import { assignFlanks } from './generator';
+import { ensureCoaches } from './coaches';
+import { initialPitch } from './pitch';
 
 const APP = 'pebolim-manager';
 
 const PLAYER_KEYS: (keyof Player)[] = [
   'id', 'name', 'nat', 'pos', 'birth', 'str', 'stars', 'pot', 'traits', 'clubId', 'wage', 'contractEnd',
   'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle', 'pre', 'junior', 'ys', 'joined',
+  'flank',
 ];
 const FIXTURE_KEYS: (keyof Fixture)[] = [
   'id', 'comp', 'date', 'home', 'away', 'hg', 'ag', 'pens', 'stage', 'tie', 'leg', 'group', 'round', 'goals', 'att', 'reds',
@@ -124,6 +128,22 @@ function migrate(state: GameState): GameState {
       p.stars = Math.max(tierOf(p.str), tierOf(p.pot ?? p.str));
       p.pot = Math.max(p.str, ceilingFor(p.stars));
     }
+  }
+  // flanks, named coaches and pitches (saves before them had none), the same on every computer
+  if (Object.values(state.players).some((p) => !p.flank)) {
+    const rng = Rng.fromSeed(`flanks:${state.meta.name}`);
+    const bySquad = new Map<number, Player[]>();
+    for (const p of Object.values(state.players)) {
+      if (p.flank) continue;
+      const k = p.clubId ?? -1;
+      bySquad.set(k, [...(bySquad.get(k) ?? []), p]);
+    }
+    for (const sq of bySquad.values()) assignFlanks(sq, rng);
+  }
+  if (!state.coaches || Object.values(state.clubs).some((c) => !c.managerId && c.coachId == null)) ensureCoaches(state, Rng.fromSeed(`coaches:${state.meta.name}`));
+  if (Object.values(state.clubs).some((c) => c.pitch == null)) {
+    const rng = Rng.fromSeed(`pitch:${state.meta.name}`);
+    for (const c of Object.values(state.clubs)) if (c.pitch == null) initialPitch(c, rng);
   }
   // youth teams (saves before them had none): every human club gets one, the same on every computer
   for (const c of Object.values(state.clubs)) {

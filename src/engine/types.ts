@@ -50,6 +50,8 @@ export interface Player {
   /** highest força he can reach (from his stars) */
   pot: number;
   traits: Trait[];
+  /** preferred flank: left, right or central (central players don't mind where they play) */
+  flank?: Side;
   clubId: number | null;
   /** monthly wage in US$ */
   wage: number;
@@ -90,6 +92,12 @@ export type Formation = '4-4-2' | '4-3-3' | '4-2-3-1' | '3-5-2' | '5-3-2' | '4-5
 export type Mentality = 'defensiva' | 'equilibrada' | 'ofensiva';
 export type Marking = 'zona' | 'pressao';
 export type Style = 'toque' | 'contra' | 'longa';
+/** Where the attacks go: through the middle or down the flanks (absent = wherever the play takes them). */
+export type AttackFocus = 'meio' | 'lados';
+/** A player's preferred side. */
+export type Side = 'L' | 'R' | 'C';
+/** How well the pitch is looked after: cheaper or dearer than the normal care included in the stadium upkeep. */
+export type PitchCare = 'basico' | 'normal' | 'premium';
 
 export interface Tactics {
   formation: Formation;
@@ -101,6 +109,7 @@ export interface Tactics {
    * Null/absent = the preset formation's positions.
    */
   shape?: number[] | null;
+  focus?: AttackFocus;
 }
 
 export interface Lineup {
@@ -182,6 +191,11 @@ export interface Club {
   board: { conf: number; goal: Objective; warned?: number; ult?: Ultimatum };
   /** the fans' mood, 0-100 (60 = neutral); affects crowds and the board */
   fans?: number;
+  /** the AI coach in charge when no human manages the club (see coaches.ts) */
+  coachId?: number | null;
+  /** pitch condition, 0-100 (see pitchLevel), and how it is looked after */
+  pitch?: number;
+  pitchCare?: PitchCare;
   /** cached best-XI strength, refreshed at season start and after transfers */
   power: number;
   ledger: Ledger;
@@ -361,6 +375,34 @@ export interface Manager {
   offers: JobOffer[];
   trophies: { season: number; comp: string; clubId: number }[];
   rec?: CareerRecord;
+  /** coaching-ranking points, as for the AI coaches */
+  rank?: RankRecord;
+}
+
+/** Coaching-ranking record: results, titles, awards and the points they add up to (all time and this season). */
+export interface RankRecord {
+  p: number;
+  w: number;
+  d: number;
+  l: number;
+  titles: number;
+  awards: number;
+  pts: number;
+  /** points this season */
+  spts: number;
+}
+
+/** An AI coach: in charge of a club without a human manager, or out of work waiting for a job. */
+export interface Coach {
+  id: number;
+  name: string;
+  nat: string;
+  clubId: number | null;
+  /** reputation 5-100: who hires him */
+  rep: number;
+  /** a real coach from the database (else made up) */
+  real?: boolean;
+  rec: RankRecord;
 }
 
 /** A player in a season review: his numbers at the end of the season. */
@@ -490,7 +532,7 @@ export interface Meta {
   /** index into calendar of the next date to be played */
   date: number;
   rng: RngState;
-  next: { player: number; fixture: number; bid: number; news: number; club: number };
+  next: { player: number; fixture: number; bid: number; news: number; club: number; coach?: number };
   settings: Settings;
   created: string;
   /** true while the season-end screen should be shown */
@@ -520,6 +562,8 @@ export interface GameState {
   h2h?: Record<string, [number, number, number, number, number]>;
   /** end-of-season reviews of the human managers, newest last */
   reviews?: SeasonReview[];
+  /** AI coaches (see coaches.ts) */
+  coaches?: Record<number, Coach>;
   /** last season's final league order and cup winners, used for qualification */
   prev: { ranks: Record<string, number[]>; winners: Record<string, number> };
   config: CompConfig[];

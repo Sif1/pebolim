@@ -1,0 +1,239 @@
+club,name,side
+flamengo,Varela,R
+flamengo,Emerson Royal,R
+flamengo,Alex Sandro,L
+flamengo,Ayrton Lucas,L
+palmeiras,Giay,R
+palmeiras,Khellven,R
+palmeiras,Piquerez,L
+palmeiras,Jefté,L
+botafogo,Vitinho,R
+botafogo,Alex Telles,L
+botafogo,Cuiabano,L
+cruzeiro,William,R
+cruzeiro,Fagner,R
+cruzeiro,Kaiki,L
+saopaulo,Cédric,R
+saopaulo,Wendell,L
+saopaulo,Enzo Díaz,L
+corinthians,Matheuzinho,R
+corinthians,Angileri,L
+corinthians,Matheus Bidu,L
+atleticomg,Natanael,R
+atleticomg,Guilherme Arana,L
+atleticomg,Caio Paulista,L
+fluminense,Samuel Xavier,R
+fluminense,Guga,R
+fluminense,Renê,L
+internacional,Bernabei,L
+internacional,Aguirre,R
+gremio,Marlon,L
+gremio,João Pedro,R
+bahia,Arias,R
+bahia,Luciano Juba,L
+bahia,Gilberto,R
+vasco,Paulo Henrique,R
+vasco,Puma Rodríguez,R
+vasco,Lucas Piton,L
+santos,Igor Vinícius,R
+santos,Escobar,L
+santos,Souza,L
+bragantino,Juninho Capixaba,L
+vitoria,Cáceres,R
+mirassol,Reinaldo,L
+fortaleza,Brítez,R
+benfica,Samuel Dahl,L
+porto,Francisco Moura,L
+sportingcp,Maximiliano Araújo,L
+ajax,Anton Gaaei,R
+psv,Sergiño Dest,R
+rangers,James Tavernier,R
+fenerbahce,Nélson Semedo,R
+arsenal,Jurriën Timber,R
+arsenal,Ben White,R
+arsenal,Riccardo Calafiori,L
+arsenal,Myles Lewis-Skelly,L
+liverpool,Jeremie Frimpong,R
+liverpool,Milos Kerkez,L
+liverpool,Andrew Robertson,L
+liverpool,Conor Bradley,R
+mancity,Rayan Aït-Nouri,L
+mancity,Matheus Nunes,R
+mancity,Rico Lewis,R
+chelsea,Reece James,R
+chelsea,Malo Gusto,R
+chelsea,Marc Cucurella,L
+manutd,Diogo Dalot,R
+manutd,Noussair Mazraoui,R
+manutd,Luke Shaw,L
+tottenham,Pedro Porro,R
+tottenham,Destiny Udogie,L
+tottenham,Djed Spence,R
+newcastle,Kieran Trippier,R
+newcastle,Tino Livramento,R
+newcastle,Lewis Hall,L
+astonvilla,Matty Cash,R
+astonvilla,Lucas Digne,L
+astonvilla,Ian Maatsen,L
+brighton,Ferdi Kadıoğlu,L
+brighton,Maxim De Cuyper,L
+brighton,Joël Veltman,R
+westham,Aaron Wan-Bissaka,R
+westham,El Hadji Malick Diouf,L
+nforest,Ola Aina,R
+nforest,Neco Williams,R
+palace,Daniel Muñoz,R
+palace,Tyrick Mitchell,L
+everton,Vitaliy Mykolenko,L
+everton,Jake O'Brien,R
+bournemouth,Adrien Truffert,L
+bournemouth,Adam Smith,R
+fulham,Kenny Tete,R
+fulham,Antonee Robinson,L
+brentford,Michael Kayode,R
+brentford,Rico Henry,L
+wolves,Matt Doherty,R
+wolves,Hugo Bueno,L
+leeds,Jayden Bogle,R
+leeds,Gabriel Gudmundsson,L
+sunderland,Reinildo,L
+sunderland,Trai Hume,R
+burnley,Kyle Walker,R
+burnley,Quilindschy Hartman,L
+southampton,Ryan Manning,L
+realmadrid,Dani Carvajal,R
+realmadrid,Trent Alexander-Arnold,R
+realmadrid,Álvaro Carreras,L
+realmadrid,Ferland Mendy,L
+barcelona,Jules Koundé,R
+barcelona,Alejandro Balde,L
+barcelona,Gerard Martín,L
+atletico,Marcos Llorente,R
+atletico,Nahuel Molina,R
+atletico,Matteo Ruggeri,L
+athletic,Óscar de Marcos,R
+athletic,Jesús Areso,R
+athletic,Yuri Berchiche,L
+villarreal,Santiago Mouriño,R
+villarreal,Alfonso Pedraza,L
+villarreal,Sergi Cardona,L
+realsociedad,Jon Aramburu,R
+realsociedad,Sergio Gómez,L
+betis,Héctor Bellerín,R
+betis,Ricardo Rodríguez,L
+sevilla,José Ángel Carmona,R
+sevilla,Juanlu,R
+sevilla,Gabriel Suazo,L
+valencia,Dimitri Foulquier,R
+valencia,José Gayà,L
+girona,Arnau Martínez,R
+celta,Óscar Mingueza,R
+osasuna,Valentin Rosier,R
+osasuna,Abel Bretones,L
+rayo,Andrei Rațiu,R
+rayo,Pep Chavarría,L
+mallorca,Pablo Maffeo,R
+mallorca,Johan Mojica,L
+getafe,Diego Rico,L
+getafe,Juan Iglesias,R
+espanyol,Carlos Romero,L
+espanyol,Omar El Hilali,R
+psg,Achraf Hakimi,R
+psg,Nuno Mendes,L
+marseille,Emerson,L
+marseille,Amir Murillo,R
+monaco,Vanderson,R
+monaco,Caio Henrique,L
+lille,Thomas Meunier,R
+lille,Romain Perraud,L
+lyon,Nicolás Tagliafico,L
+lyon,Ainsley Maitland-Niles,R
+lyon,Abner,L
+nice,Melvin Bard,L
+nice,Jonathan Clauss,R
+lens,Ruben Aguilar,R
+rennes,Przemysław Frankowski,R
+strasbourg,Guéla Doué,R
+brest,Kenny Lala,R
+nantes,Kelvin Amian,R
+bayern,Konrad Laimer,R
+bayern,Josip Stanišić,R
+bayern,Alphonso Davies,L
+bayern,Raphaël Guerreiro,L
+dortmund,Ramy Bensebaini,L
+dortmund,Julian Ryerson,R
+dortmund,Yan Couto,R
+dortmund,Daniel Svensson,L
+leverkusen,Álex Grimaldo,L
+leverkusen,Arthur,R
+leverkusen,Lucas Vázquez,R
+leipzig,David Raum,L
+leipzig,Lutsharel Geertruida,R
+leipzig,Ridle Baku,R
+stuttgart,Maximilian Mittelstädt,L
+stuttgart,Josha Vagnoman,R
+frankfurt,Rasmus Kristensen,R
+frankfurt,Nathaniel Brown,L
+freiburg,Lukas Kübler,R
+freiburg,Christian Günter,L
+freiburg,Jordy Makengo,L
+wolfsburg,Kilian Fischer,R
+gladbach,Joe Scally,R
+gladbach,Lukas Ullrich,L
+mainz,Phillipp Mwene,R
+bremen,Felix Agu,L
+bremen,Mitchell Weiser,R
+hoffenheim,Alexander Prass,L
+hoffenheim,Vladimír Coufal,R
+augsburg,Dimitrios Giannoulis,L
+union,Josip Juranović,R
+union,Christopher Trimmel,R
+hamburgo,Miro Muheim,L
+hamburgo,Giorgi Gocholeishvili,R
+koln,Kristoffer Lund,L
+stpauli,Manolis Saliakas,R
+inter,Denzel Dumfries,R
+inter,Federico Dimarco,L
+inter,Carlos Augusto,L
+inter,Luis Henrique,R
+napoli,Giovanni Di Lorenzo,R
+napoli,Mathías Olivera,L
+napoli,Leonardo Spinazzola,L
+milan,Pervis Estupiñán,L
+milan,Alexis Saelemaekers,R
+juventus,Juan Cabal,L
+atalanta,Raoul Bellanova,R
+atalanta,Davide Zappacosta,R
+atalanta,Nicola Zalewski,L
+roma,Zeki Çelik,R
+roma,Wesley,R
+roma,Angeliño,L
+lazio,Adam Marušić,R
+lazio,Nuno Tavares,L
+lazio,Manuel Lazzari,R
+fiorentina,Dodô,R
+fiorentina,Robin Gosens,L
+bologna,Emil Holm,R
+bologna,Juan Miranda,L
+bologna,Nadir Zortea,R
+como,Ivan Smolčić,R
+como,Alex Valle,L
+torino,Marcus Pedersen,R
+torino,Cristiano Biraghi,L
+udinese,Jordan Zemura,L
+udinese,Kingsley Ehizibue,R
+genoa,Brooke Norton-Cuffy,R
+genoa,Aarón Martín,L
+cagliari,Gabriele Zappa,R
+cagliari,Adam Obert,L
+parma,Emanuele Valeri,L
+lecce,Antonino Gallo,L
+sassuolo,Josh Doig,L
+verona,Martin Frese,L
+pisa,Juan Cuadrado,R
+cremonese,Giuseppe Pezzella,L
+river,Montiel,R
+river,Acuña,L
+boca,Advíncula,R
+racingarg,Mura,R
+racingarg,Martirena,R

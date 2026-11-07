@@ -77,7 +77,7 @@ export function Base() {
                     <Portrait id={p.id} nat={p.nat} age={age(p, season)} pos={p.pos} kit={club.colors} num={0} size={26} />
                   </td>
                   <td>
-                    <PosTag pos={p.pos} />
+                    <PosTag pos={p.pos} flank={p.flank} />
                   </td>
                   <td>
                     {editing === p.id ? (

@@ -1,8 +1,9 @@
 import { Rng, type RngState } from '../rng';
 import { AI_COACH, aiPlan, describeChange, MENTALITY_TXT, naturalStyle, preferredFormations, strengthEdge, STYLE_TXT, type Situation } from '../ai/tactics';
-import type { Formation, GoalEvent, Pos, Style, Tactics, Trait } from '../types';
+import type { Formation, GoalEvent, Pos, Side, Style, Tactics, Trait } from '../types';
 import { FORMATIONS, shapeLabel, slotsFor, type Slot } from './formations';
-import { computeRatings, effective, overall, type RatedPlayer, type SectorRatings } from './ratings';
+import { computeRatings, effective, laneStrengths, overall, type RatedPlayer, type SectorRatings } from './ratings';
+import { PITCH_FX, pitchLevel } from '../pitch';
 import { aiDive, aiShot, autoShootout, defaultOrder, kickOutcome, Shootout, type PkTaker } from './shootout';
 
 export const PITCH_W = 105;
@@ -19,6 +20,7 @@ export interface MPlayerInit {
   fitness: number;
   morale: number;
   traits: Trait[];
+  flank?: Side;
   /** fatigue multiplier (older players tire faster) */
   tire: number;
 }
@@ -72,6 +74,8 @@ export interface MatchSetup {
   homeAdv: number;
   /** when set, a winner is required; aggregate goals from earlier legs, from this fixture's home/away view */
   decider: { aggHome: number; aggAway: number } | null;
+  /** the home club's pitch condition, 0-100 (absent = a good pitch) */
+  pitch?: number;
 }
 
 export type MatchEventKind =
@@ -191,6 +195,8 @@ export interface SideState {
   ratings: SectorRatings;
   /** average effective strength of the outfield players on the pitch */
   avgEff: number;
+  /** attack and defence of the left, centre and right lanes relative to the team (1 = average) */
+  lanes: { att: [number, number, number]; def: [number, number, number] };
   ai: boolean;
 }
 
@@ -262,6 +268,17 @@ export const STYLE_TUNE = {
   indiv: 0.8,
   /** shot rate kept for every goal of lead beyond two (teams ease off when the game is won) */
   comfort: 0.6,
+  // ---- lanes and attack focus ----
+  /** how much a lane's strength (relative to the team) counts in its duels: (lane / team)^laneExp */
+  laneExp: 0.8,
+  /** attack focus: a receiver in the chosen channel is this much more likely (one outside it, this much less) */
+  focusPull: 1.9,
+  /** a defence that knows where the attacks will come from is this much stronger there */
+  focusRead: 0.045,
+  /** crosses: chance of a header at goal = base + (duel − 0.5) × slope, + bonus when the team plays for crosses */
+  crossBase: 0.18,
+  crossSlope: 0.5,
+  crossFocus: 0.04,
 };
 
 /** Minutes at which the AI coach reviews posture, style, pressing and formation. */
@@ -327,6 +344,8 @@ export class MatchSim {
   readonly power: [number, number] = [70, 70];
   /** the style each side's players suit */
   readonly natural: [Style, Style] = ['toque', 'toque'];
+  /** what the pitch does to the game (see pitch.ts) */
+  readonly pfx: (typeof PITCH_FX)[number];
   private ai: [AiMemory, AiMemory] = [0, 1].map(() => ({ lastChange: 0, goals: 0, reds: 0, ownReds: 0, formationChanged: false, tiredSubAt: 0 })) as [
     AiMemory,
     AiMemory,
@@ -335,6 +354,7 @@ export class MatchSim {
   constructor(setup: MatchSetup) {
     this.setup = setup;
     this.rng = new Rng(setup.seed);
+    this.pfx = PITCH_FX[pitchLevel(setup.pitch)];
     this.sides = [this.makeSide(setup.home, 0), this.makeSide(setup.away, 1)];
     this.added = [this.rng.int(0, 3) * 60, this.rng.int(2, 6) * 60];
     for (const s of this.sides) {
@@ -384,6 +404,7 @@ export class MatchSim {
       players,
       ratings: { gk: 50, def: 50, mid: 50, att: 50 },
       avgEff: 60,
+      lanes: { att: [1, 1, 1], def: [1, 1, 1] },
       ai: ts.ai,
     };
   }
@@ -423,16 +444,14 @@ export class MatchSim {
 
   recalc() {
     for (const s of this.sides) {
-      s.ratings = computeRatings(
-        s.slots,
-        s.onPitch.map((id) => (id != null ? s.players.get(id)! : null)),
-        s.tactics,
-      );
+      const xi = s.onPitch.map((id) => (id != null ? s.players.get(id)! : null));
+      s.ratings = computeRatings(s.slots, xi, s.tactics);
+      s.lanes = laneStrengths(s.slots, xi);
       let sum = 0;
       let n = 0;
       s.onPitch.forEach((id, i) => {
         if (id == null || s.slots[i].pos === 'GOL') return;
-        sum += effective(s.players.get(id)!, s.slots[i].pos);
+        sum += effective(s.players.get(id)!, s.slots[i].pos, s.slots[i].y);
         n++;
       });
       s.avgEff = n ? sum / n : 60;
@@ -445,7 +464,7 @@ export class MatchSim {
     const s = this.sides[side];
     const slot = s.onPitch.indexOf(pid);
     if (slot < 0) return 0;
-    const e = effective(s.players.get(pid)!, s.slots[slot].pos);
+    const e = effective(s.players.get(pid)!, s.slots[slot].pos, s.slots[slot].y);
     return Math.max(-0.12, Math.min(0.12, (e / Math.max(20, s.avgEff) - 1) * STYLE_TUNE.indiv));
   }
 
@@ -489,7 +508,7 @@ export class MatchSim {
     const current = s.onPitch.filter((x): x is number => x != null).map((id) => s.players.get(id)!);
     const assigned: (number | null)[] = slots.map(() => null);
     const pairs: { si: number; p: MPlayer; e: number }[] = [];
-    slots.forEach((sl, si) => current.forEach((p) => pairs.push({ si, p, e: effective(p, sl.pos) + (sl.pos === 'GOL' ? 1000 : 0) })));
+    slots.forEach((sl, si) => current.forEach((p) => pairs.push({ si, p, e: effective(p, sl.pos, sl.y) + (sl.pos === 'GOL' ? 1000 : 0) })));
     pairs.sort((x, y) => y.e - x.e);
     const used = new Set<number>();
     for (const pr of pairs) {
@@ -642,7 +661,7 @@ export class MatchSim {
       for (const pid of s.onPitch) {
         if (pid == null) continue;
         const p = s.players.get(pid)!;
-        let rate = STYLE_TUNE.drain * p.tire;
+        let rate = STYLE_TUNE.drain * p.tire * this.pfx.drain;
         if (s.tactics.marking === 'pressao') rate *= 1.25;
         if (s.tactics.style === 'contra') rate *= 0.95;
         p.fitness = Math.max(10, p.fitness - rate);
@@ -798,7 +817,7 @@ export class MatchSim {
     let out: { id: number; e: number } | null = null;
     s.onPitch.forEach((id, i) => {
       if (id == null || !outRoles.includes(s.slots[i].pos)) return;
-      const e = effective(s.players.get(id)!, s.slots[i].pos);
+      const e = effective(s.players.get(id)!, s.slots[i].pos, s.slots[i].y);
       if (!out || e < out.e) out = { id, e };
     });
     const o = out as { id: number; e: number } | null;
@@ -848,13 +867,20 @@ export class MatchSim {
   private pickTeammate(side: 0 | 1, u: number, exclude: number | null): { pid: number | null; y: number } {
     const s = this.sides[side];
     const cands: { pid: number; slot: Slot; w: number }[] = [];
+    // attack focus: past the own third, the play is steered through the middle or down the flanks
+    const focus = u > 0.3 ? s.tactics.focus : undefined;
     s.onPitch.forEach((pid, i) => {
       if (pid == null || pid === exclude) return;
       const sl = s.slots[i];
       if (sl.pos === 'GOL' && u > 0.15) return;
       const su = 0.1 + sl.x * 0.85;
       const d = (su - u) / 0.16;
-      cands.push({ pid, slot: sl, w: Math.exp(-d * d) + 0.04 });
+      let w = Math.exp(-d * d) + 0.04;
+      if (focus) {
+        const wide = Math.abs(sl.y - 0.5) > 0.2;
+        w *= (focus === 'lados') === wide ? STYLE_TUNE.focusPull : 1 / STYLE_TUNE.focusPull;
+      }
+      cands.push({ pid, slot: sl, w });
     });
     if (!cands.length) return { pid: null, y: PITCH_H / 2 };
     const c = this.rng.weighted(cands, (x) => x.w);
@@ -899,6 +925,18 @@ export class MatchSim {
     } else {
       atk = 0.65 * a.att + 0.35 * a.mid;
       def = 0.7 * d.def + 0.3 * d.mid;
+    }
+    if (u >= 0.35) {
+      // the lane the ball is in: that part of the attacking side against that part of the defence (its mirror
+      // image: the attackers' left is the defenders' right); a defence that knows the focus reads it a little
+      const A = this.sides[this.poss];
+      const D = this.sides[1 - this.poss];
+      const yOwn = this.dir(this.poss) > 0 ? this.ball.y / PITCH_H : 1 - this.ball.y / PITCH_H;
+      const lane = yOwn < 0.3 ? 0 : yOwn > 0.7 ? 2 : 1;
+      atk *= Math.pow(A.lanes.att[lane], STYLE_TUNE.laneExp);
+      def *= Math.pow(D.lanes.def[2 - lane], STYLE_TUNE.laneExp);
+      const focus = A.tactics.focus;
+      if (focus && (focus === 'lados') === (lane !== 1)) def *= 1 + STYLE_TUNE.focusRead;
     }
     if (this.poss === 0) atk *= this.setup.homeAdv;
     else def *= this.setup.homeAdv;
@@ -1224,7 +1262,7 @@ export class MatchSim {
 
     if (u > 0.7 && Math.abs(yN - 0.5) > 0.27 && this.rng.chance(0.4)) {
       this.lastPasser = this.carrier;
-      if (this.rng.chance(0.18 + (r - 0.5) * 0.3)) {
+      if (this.rng.chance(STYLE_TUNE.crossBase + (r - 0.5) * STYLE_TUNE.crossSlope + (A.tactics.focus === 'lados' ? STYLE_TUNE.crossFocus : 0))) {
         this.passOk(s, this.carrier, 0.06);
         return this.doShot('header', this.headerTaker(s), 'cross');
       }
@@ -1267,7 +1305,7 @@ export class MatchSim {
     let lofted = false;
     switch (kind) {
       case 'pass':
-        p = 0.63 + T.passBonus + space + ind + (r - 0.5) * 0.4 + (has('passe') ? 0.04 : 0) - (pressing ? 0.03 : 0);
+        p = 0.63 + T.passBonus + space + ind + (r - 0.5) * 0.4 + (has('passe') ? 0.04 : 0) - (pressing ? 0.03 : 0) + this.pfx.pass;
         du = this.rng.range(0.06, 0.17);
         dur = this.rng.range(2.5, 5);
         break;
@@ -1277,7 +1315,7 @@ export class MatchSim {
         dur = this.rng.range(2, 4);
         break;
       case 'dribble':
-        p = 0.48 + space + ind * 1.5 + (r - 0.5) * 0.5 + (has('drible') ? 0.08 : 0) + (has('velocidade') ? 0.04 : 0);
+        p = 0.48 + space + ind * 1.5 + (r - 0.5) * 0.5 + (has('drible') ? 0.08 : 0) + (has('velocidade') ? 0.04 : 0) + this.pfx.dribble;
         du = this.rng.range(0.04, 0.12);
         dur = this.rng.range(3, 6);
         break;
@@ -1291,7 +1329,8 @@ export class MatchSim {
           ind +
           (rd - 0.5) * STYLE_TUNE.longSlope +
           (has('passe') ? 0.03 : 0) +
-          (pressing && AI_COACH.matchups ? STYLE_TUNE.longVsPress : 0);
+          (pressing && AI_COACH.matchups ? STYLE_TUNE.longVsPress : 0) +
+          this.pfx.long;
         dur = this.rng.range(3, 5);
         lofted = true;
       }

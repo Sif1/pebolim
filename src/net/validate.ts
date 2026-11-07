@@ -23,12 +23,14 @@ export function validTactics(v: unknown): Tactics | null {
   if (!oneOf(v.marking, ['zona', 'pressao'] as const)) return null;
   if (!oneOf(v.style, ['toque', 'contra', 'longa'] as const)) return null;
   if (v.shape != null && !validShape(v.shape)) return null;
+  if (v.focus != null && !oneOf(v.focus, ['meio', 'lados'] as const)) return null;
   return {
     formation: v.formation,
     mentality: v.mentality,
     marking: v.marking,
     style: v.style,
     shape: v.shape ? [...(v.shape as number[])] : null,
+    ...(v.focus ? { focus: v.focus as 'meio' | 'lados' } : {}),
   };
 }
 
@@ -66,6 +68,8 @@ export function validCommand(v: unknown): Command | null {
       return oneOf(v.focus, ['equilibrado', 'fisico', 'tecnico'] as const) ? { c: 'setFocus', focus: v.focus } : null;
     case 'setTravel':
       return oneOf(v.mode, ['auto', 'onibus', 'comercial', 'fretado'] as const) ? { c: 'setTravel', mode: v.mode } : null;
+    case 'setPitchCare':
+      return oneOf(v.care, ['basico', 'normal', 'premium'] as const) ? { c: 'setPitchCare', care: v.care } : null;
     case 'upgradeTC':
       return { c: 'upgradeTC' };
     case 'expandStadium':

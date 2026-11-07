@@ -1,4 +1,5 @@
-import type { Rng } from './rng';
+import { Rng } from './rng';
+import { hireCoach, releaseCoach, sackCoach } from './coaches';
 import type { Club, Fixture, GameState, Manager, Ultimatum } from './types';
 import { absDate, addNews, clamp, sortTable } from './util';
 import { roughIncome } from './economy';
@@ -80,6 +81,8 @@ export function fireManager(state: GameState, m: Manager, reason: string) {
   club.board.warned = 0;
   delete club.board.ult;
   addNews(state, 'fired', `${m.name} foi demitido do ${club.name} (${reason}).`, [club.id]);
+  // an AI coach takes over until someone claims the club
+  hireCoach(state, coachRng(state, club), club);
 }
 
 /**
@@ -116,7 +119,7 @@ export function boardChecks(state: GameState, rng: Rng, present: Set<string>) {
     } else if (rng.chance(0.5)) {
       c.board.conf = 55;
       vacancies.push(c);
-      addNews(state, 'fired', `${c.name} demite o treinador.`, [c.id]);
+      sackCoach(state, rng, c);
     }
   }
   for (const v of vacancies) offerJob(state, rng, v);
@@ -277,6 +280,7 @@ export function takeJob(state: GameState, m: Manager, clubId: number) {
     old.autoLineup = true;
     old.board.warned = 0;
     delete old.board.ult;
+    hireCoach(state, coachRng(state, old), old);
     addNews(state, 'hired', `${m.name} deixa o ${old.name} e assume o ${club.name}.`, [old.id, club.id]);
   } else {
     addNews(state, 'hired', `${m.name} é o novo treinador do ${club.name}.`, [club.id]);
@@ -289,4 +293,10 @@ export function takeJob(state: GameState, m: Manager, clubId: number) {
   club.board.conf = 60;
   club.board.warned = 0;
   delete club.board.ult;
+  releaseCoach(state, club);
+}
+
+/** Randomness for a coach appointment outside the round's own generator (stable for the round and club). */
+export function coachRng(state: GameState, club: Club): Rng {
+  return Rng.fromSeed(`coach:${state.meta.season}:${state.meta.date}:${club.id}`);
 }

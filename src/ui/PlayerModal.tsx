@@ -96,7 +96,7 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
         <Portrait id={p.id} nat={p.nat} age={a} pos={p.pos} kit={owner?.colors ?? ['#5b6b7d', '#d9e1ea']} num={p.num} size={76} />
         <div className="grow">
           <div className="row">
-            <PosTag pos={p.pos} />
+            <PosTag pos={p.pos} flank={p.flank} />
             <h2 style={{ margin: 0 }}>{p.name}</h2>
             <span className="muted">#{p.num}</span>
           </div>
@@ -146,6 +146,11 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
       <div className="spacer" />
       <div className="row">
         {p.traits.length ? <Traits traits={p.traits} /> : <span className="small faint">Sem características especiais</span>}
+        {p.flank && p.pos !== 'GOL' && (
+          <span className="pill" title="Pelas pontas, quem joga do lado que não é o seu rende um pouco menos (no meio, tanto faz)">
+            {p.flank === 'L' ? 'Prefere a esquerda' : p.flank === 'R' ? 'Prefere a direita' : 'Joga pelo meio'}
+          </span>
+        )}
         {p.injury > 0 && <span className="pill bad">Lesionado ({p.injury} jogos)</span>}
         {banned.map(([c, n]) => (
           <span key={c} className="pill warn">

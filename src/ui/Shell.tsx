@@ -27,6 +27,7 @@ import { Painel } from './screens/Painel';
 import { Propostas } from './screens/Propostas';
 import { Resumo } from './screens/Resumo';
 import { Temporada } from './screens/Temporada';
+import { Tecnicos } from './screens/Tecnicos';
 import { Treinador } from './screens/Treinador';
 
 /** The menu: a short flat list; related screens live as tabs inside one entry. Null = divider. */
@@ -171,6 +172,7 @@ export function Shell() {
               { id: 'tabelas', label: 'Tabelas e jogos', render: () => <Competicoes /> },
               { id: 'calendario', label: 'Meu calendário', hidden: !club, render: () => <Calendario /> },
               { id: 'temporadas', label: 'Temporadas', render: () => <Temporada /> },
+              { id: 'tecnicos', label: 'Técnicos', render: () => <Tecnicos /> },
             ]}
           />
         );

@@ -29,7 +29,10 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 - A season review when the season ends: final position and objective, record, cup runs, biggest win, player of the season, top scorer, best signing, and the league's team of the season on a pitch. The manager screen keeps a trophy room and career numbers (matches, points won, goals, biggest win and heaviest defeat, derbies)
 - Squad with summary chips (best-14 strength, average age, injured, suspended, tired, expiring contracts) and a youth team (Elenco → Base): rename your juniors and follow their age, potential stars and youth-match stats; their força shows only after promotion
 - Line-ups on a drawn pitch: drag players between the field, bench and reserves, and to any of 25 positions (the role follows the area of the pitch)
-- AI coaches that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics
+- Attack focus (through the middle, down the flanks, or wherever the play goes): about 70% of the play goes through the chosen channel, and every duel there is that part of your team against the matching part of theirs, so it pays when it suits the line-up (strong wingers and full-backs and heading strikers for the flanks; strong midfielders and strikers for the middle). The line-up screen shows how strong each channel is
+- Players have a preferred side: full-backs show as LE/LD, wide players carry an arrow, and anyone on his wrong flank plays a little worse (marked on the tactics board)
+- Every stadium has a pitch condition that wears with each home match and recovers between rounds; choose its care in the stadium screen (basic saves money, premium recovers twice as fast). A poor pitch tires both teams more and makes passing a little harder, so long balls gain a little
+- Named AI coaches (the real ones where known, see `coaches.csv`) that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics
 - Contracts with automatic renewal (like Brasfoot's) that respects the wage budget, finances in US$, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions and player development
 - Players have potential (0–5 stars: how far and how fast they grow, how slowly they decline) and traits (finalização, cabeceio, drible, passe…) that matter in the match engine
 
@@ -48,6 +51,8 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 - Fan mood that fills or empties the stadium, lifted by wins and big signings, hurt by defeats and by selling stars (and twice as much by a derby)
 - The board pays half of the training-centre works when it trusts the manager (a quarter when it's unsure)
 - Sacked managers stay in the game and keep receiving job offers, mostly from the country they last worked in
+- AI clubs sack their coaches too, and hire someone out of work or a new name
+- A coaching ranking of every human and AI coach (Competições → Técnicos): wins and draws weighted by the competition and the league's level, titles, and the manager of the month and of the season awards; all-time and this season
 - If the squad is short at the end of a season, the board only tops it up to 18 players with free agents at the club's level and within the wage budget, else local youngsters, and always keeps two goalkeepers
 
 **The interface**
@@ -90,10 +95,11 @@ The host checks the shape of every message (types, number ranges, list sizes) be
 
 Clubs and players live in `data/db/*.csv`. They are meant to be edited in any spreadsheet app.
 
-- `clubs-*.csv` columns: `key, name, short, country, state, city, lat, lon, color1, color2, stadium, capacity, rep, league, estadual, continent, contonly`
-- `players-*.csv` columns: `club, name, pos (GOL/LAT/ZAG/VOL/MEI/ATA), birth, str (1-99), nat, traits`, plus optional `pot` (the força he can reach) and `stars` (0-5). Use the name the player is known by (Arrascaeta, Gabigol, Bruno Henrique); `src/engine/renames.ts` lists the renames so older saves pick them up too.
+- `clubs-*.csv` columns: `key, name, short, country, state, city, lat, lon, color1, color2, stadium, capacity, rep, league, estadual, continent, contonly`, plus optional `coach` and `coach_nat`
+- `players-*.csv` columns: `club, name, pos (GOL/LAT/ZAG/VOL/MEI/ATA), birth, str (1-99), nat, traits`, plus optional `pot` (the força he can reach), `stars` (0-5) and `side` (L/E, R/D or C; when missing, full-backs alternate right and left and the others get one at random). Use the name the player is known by (Arrascaeta, Gabigol, Bruno Henrique); `src/engine/renames.ts` lists the renames so older saves pick them up too.
   - `traits` takes up to two of `finalizacao, cabeceio, velocidade, drible, passe, marcacao, lideranca, reflexos, cobrancas`, separated by `|`; `-` means none. Known players carry their real strengths; `npx tsx tools/fill-traits.ts` fills any blank cell with traits that fit the position and level (the same ones in every new game).
 - `crests.csv` columns: `key, crest, wiki, title`: one crest image link per club, found on Wikipedia by `npx tsx tools/fetch-crests.ts` (the game links to the images; none are stored in the repository). To fix a wrong crest, paste another image link in the `crest` column, or add the club's exact article to `TITLES` in the tool and run it with `--only=key`.
+- `coaches.csv` columns: `key, coach, nat`: the real coach of each club (the start of 2025/26 in Europe, late 2025 in South America; fix any that changed). Clubs left out get a made-up coach in each new game.
 - `competitions.json` holds the formats, promotion and relegation rules, and qualification rules.
 
 Any squad with fewer than about 25 players is filled with generated players at the club's level.
@@ -125,7 +131,7 @@ If a friend can't connect (some mobile or corporate networks block direct WebRTC
 npm test
 ```
 
-Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development and the AI's contract renewals; plus the translation layer.
+Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development, the AI's contract renewals, coaches and the coaching ranking, flanks, the attack focus and pitch condition; plus the translation layer.
 
 ```bash
 npm run sim -- 2

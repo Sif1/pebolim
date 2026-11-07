@@ -398,4 +398,10 @@ export const EN_ENGINE: Record<string, string> = {
   '{0} entrou na sala.': '{0} joined the room.',
   '{0} saiu da sala.': '{0} left the room.',
   'Jogador': 'Player',
+
+  // ---- 0.10.0: coaches, pitch
+  '{0} demite {1}. {2} é o novo técnico.': '{0} sack {1}. {2} is the new coach.',
+  '{0} é o novo técnico do {1}.': '{0} is the new {1} coach.',
+  'Técnico da temporada {0}: {1}, {2}º lugar com o {3}.': 'Coach of the season {0}: {1}, {2}º with {3}.',
+  'Cuidado com o gramado atualizado.': 'Pitch care updated.',
 };

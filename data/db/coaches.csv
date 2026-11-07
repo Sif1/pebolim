@@ -1,0 +1,190 @@
+key,coach,nat
+liverpool,Arne Slot,NED
+mancity,Pep Guardiola,ESP
+arsenal,Mikel Arteta,ESP
+chelsea,Enzo Maresca,ITA
+manutd,Rúben Amorim,POR
+tottenham,Thomas Frank,DEN
+newcastle,Eddie Howe,ENG
+astonvilla,Unai Emery,ESP
+brighton,Fabian Hürzeler,GER
+westham,Graham Potter,ENG
+nforest,Nuno Espírito Santo,POR
+palace,Oliver Glasner,AUT
+everton,David Moyes,SCO
+bournemouth,Andoni Iraola,ESP
+fulham,Marco Silva,POR
+brentford,Keith Andrews,IRL
+wolves,Vítor Pereira,POR
+leeds,Daniel Farke,GER
+sunderland,Régis Le Bris,FRA
+burnley,Scott Parker,ENG
+realmadrid,Xabi Alonso,ESP
+barcelona,Hansi Flick,GER
+atletico,Diego Simeone,ARG
+athletic,Ernesto Valverde,ESP
+villarreal,Marcelino,ESP
+realsociedad,Sergio Francisco,ESP
+betis,Manuel Pellegrini,CHI
+sevilla,Matías Almeyda,ARG
+valencia,Carlos Corberán,ESP
+girona,Míchel,ESP
+celta,Claudio Giráldez,ESP
+osasuna,Alessio Lisci,ITA
+rayo,Íñigo Pérez,ESP
+mallorca,Jagoba Arrasate,ESP
+getafe,José Bordalás,ESP
+espanyol,Manolo González,ESP
+alaves,Eduardo Coudet,ARG
+levante,Julián Calero,ESP
+elche,Eder Sarabia,ESP
+oviedo,Veljko Paunović,SRB
+inter,Cristian Chivu,ROU
+napoli,Antonio Conte,ITA
+milan,Massimiliano Allegri,ITA
+juventus,Igor Tudor,CRO
+atalanta,Ivan Jurić,CRO
+roma,Gian Piero Gasperini,ITA
+lazio,Maurizio Sarri,ITA
+fiorentina,Stefano Pioli,ITA
+bologna,Vincenzo Italiano,ITA
+como,Cesc Fàbregas,ESP
+torino,Marco Baroni,ITA
+udinese,Kosta Runjaić,GER
+genoa,Patrick Vieira,FRA
+cagliari,Fabio Pisacane,ITA
+parma,Carlos Cuesta,ESP
+lecce,Eusebio Di Francesco,ITA
+sassuolo,Fabio Grosso,ITA
+verona,Paolo Zanetti,ITA
+pisa,Alberto Gilardino,ITA
+cremonese,Davide Nicola,ITA
+bayern,Vincent Kompany,BEL
+dortmund,Niko Kovač,CRO
+leverkusen,Erik ten Hag,NED
+leipzig,Ole Werner,GER
+stuttgart,Sebastian Hoeneß,GER
+frankfurt,Dino Toppmöller,GER
+freiburg,Julian Schuster,GER
+wolfsburg,Paul Simonis,NED
+gladbach,Gerardo Seoane,SUI
+mainz,Bo Henriksen,DEN
+bremen,Horst Steffen,GER
+hoffenheim,Christian Ilzer,AUT
+augsburg,Sandro Wagner,GER
+union,Steffen Baumgart,GER
+hamburgo,Merlin Polzin,GER
+koln,Lukas Kwasniok,GER
+stpauli,Alexander Blessin,GER
+heidenheim,Frank Schmidt,GER
+psg,Luis Enrique,ESP
+marseille,Roberto De Zerbi,ITA
+monaco,Adi Hütter,AUT
+lille,Bruno Génésio,FRA
+lyon,Paulo Fonseca,POR
+nice,Franck Haise,FRA
+lens,Pierre Sage,FRA
+rennes,Habib Beye,SEN
+strasbourg,Liam Rosenior,ENG
+brest,Éric Roy,FRA
+toulouse,Carles Martínez Novell,ESP
+nantes,Luís Castro,POR
+auxerre,Christophe Pélissier,FRA
+parisfc,Stéphane Gilli,FRA
+angers,Alexandre Dujeux,FRA
+lehavre,Didier Digard,FRA
+lorient,Olivier Pantaloni,FRA
+metz,Stéphane Le Mignan,FRA
+flamengo,Filipe Luís,BRA
+palmeiras,Abel Ferreira,POR
+botafogo,Davide Ancelotti,ITA
+cruzeiro,Leonardo Jardim,POR
+saopaulo,Hernán Crespo,ARG
+corinthians,Dorival Júnior,BRA
+atleticomg,Jorge Sampaoli,ARG
+fluminense,Renato Gaúcho,BRA
+internacional,Ramón Díaz,ARG
+gremio,Mano Menezes,BRA
+bahia,Rogério Ceni,BRA
+vasco,Fernando Diniz,BRA
+santos,Juan Pablo Vojvoda,ARG
+athletico,Odair Hellmann,BRA
+bragantino,Vagner Mancini,BRA
+coritiba,Mozart,BRA
+vitoria,Jair Ventura,BRA
+mirassol,Rafael Guanaes,BRA
+chapecoense,Gilmar Dal Pozzo,BRA
+remo,Guto Ferreira,BRA
+fortaleza,Martín Palermo,ARG
+ceara,Léo Condé,BRA
+sport,Daniel Paulista,BRA
+juventude,Thiago Carpini,BRA
+novorizontino,Umberto Louzer,BRA
+river,Marcelo Gallardo,ARG
+boca,Claudio Úbeda,ARG
+racingarg,Gustavo Costas,ARG
+estudiantes,Eduardo Domínguez,ARG
+independiente,Gustavo Quinteros,ARG
+velez,Guillermo Barros Schelotto,ARG
+lanus,Mauricio Pellegrino,ARG
+rosariocentral,Ariel Holan,ARG
+sanlorenzo,Damián Ayude,ARG
+argentinos,Nicolás Diez,ARG
+huracan,Frank Kudelka,ARG
+belgrano,Ricardo Zielinski,ARG
+tigre,Diego Dabove,ARG
+unionsf,Leonardo Madelón,ARG
+banfield,Pedro Troglio,ARG
+indrivadavia,Alfredo Berti,ARG
+barracas,Rubén Darío Insúa,ARG
+penarol,Diego Aguirre,URU
+benfica,José Mourinho,POR
+porto,Francesco Farioli,ITA
+sportingcp,Rui Borges,POR
+braga,Carlos Vicens,ESP
+vitoriasc,Luís Pinto,POR
+famalicao,Hugo Oliveira,POR
+ajax,John Heitinga,NED
+psv,Peter Bosz,NED
+feyenoord,Robin van Persie,NED
+az,Maarten Martens,BEL
+twente,Joseph Oosting,NED
+brugge,Nicky Hayen,BEL
+anderlecht,Besnik Hasi,ALB
+unionsg,Sébastien Pocognoli,BEL
+genk,Thorsten Fink,GER
+gent,Ivan Leko,CRO
+salzburg,Thomas Letsch,GER
+sturmgraz,Jürgen Säumel,AUT
+rapidwien,Peter Stöger,AUT
+celtic,Brendan Rodgers,NIR
+rangers,Russell Martin,ENG
+hearts,Derek McInnes,SCO
+galatasaray,Okan Buruk,TUR
+fenerbahce,Domenico Tedesco,ITA
+besiktas,Sergen Yalçın,TUR
+trabzonspor,Fatih Tekke,TUR
+olympiacos,José Luis Mendilibar,ESP
+paok,Răzvan Lucescu,ROU
+aek,Marko Nikolić,SRB
+panathinaikos,Rui Vitória,POR
+slavia,Jindřich Trpišovský,CZE
+sparta,Brian Priske,DEN
+copenhagen,Jacob Neestrup,DEN
+midtjylland,Thomas Thomasberg,DEN
+bodoglimt,Kjetil Knutsen,NOR
+dinamozagreb,Mario Kovačević,CRO
+crvenazvezda,Vladan Milojević,SRB
+youngboys,Giorgio Contini,SUI
+basel,Ludovic Magnin,SUI
+shakhtar,Arda Turan,TUR
+colocolo,Fernando Ortiz,ARG
+uchile,Gustavo Álvarez,ARG
+ucatolica,Daniel Garnero,ARG
+ldu,Tiago Nunes,BRA
+cerroporteno,Jorge Bava,URU
+universitario,Jorge Fossati,URU
+alianzalima,Néstor Gorosito,ARG
+cristal,Paulo Autuori,BRA
+americacali,David González,COL
+junior,Alfredo Arias,URU

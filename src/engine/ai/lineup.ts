@@ -23,7 +23,7 @@ export function autoLineup(squad: Player[], shape: Shape, compId: string | null)
   const avail = squad.filter((p) => isAvailable(p, compId));
   const pairs: { s: number; p: Player; e: number }[] = [];
   for (let si = 0; si < slots.length; si++) {
-    for (const p of avail) pairs.push({ s: si, p, e: effective(p, slots[si].pos) });
+    for (const p of avail) pairs.push({ s: si, p, e: effective(p, slots[si].pos, slots[si].y) });
   }
   pairs.sort((a, b) => b.e - a.e);
   const xi: (number | null)[] = slots.map(() => null);
@@ -95,7 +95,7 @@ export function repairLineup(squad: Player[], lineup: Lineup, shape: Shape, comp
     if (xi[i] != null) continue;
     const cands = squad
       .filter((p) => isAvailable(p, compId) && !used.has(p.id))
-      .sort((a, b) => effective(b, slots[i].pos) - effective(a, slots[i].pos));
+      .sort((a, b) => effective(b, slots[i].pos, slots[i].y) - effective(a, slots[i].pos, slots[i].y));
     if (cands[0]) {
       xi[i] = cands[0].id;
       used.add(cands[0].id);

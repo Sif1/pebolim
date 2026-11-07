@@ -56,7 +56,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
               <tr key={p.id} className={`click ${xi.has(p.id) ? 'starter' : ''}`} onClick={() => onOpen(p.id)}>
                 <td className="faint num">{p.num}</td>
                 <td>
-                  <PosTag pos={p.pos} />
+                  <PosTag pos={p.pos} flank={p.flank} />
                 </td>
                 <td>
                   <span className="nowrap">{p.name}</span> <Flag nat={p.nat} />

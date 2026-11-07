@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { autoLineup, BENCH_SIZE, isAvailable, lineupIssues, lineupRating } from '../../engine/ai/lineup';
 import { nextFixture } from '../Shell';
 import { FORMATION_LIST, shapeLabel, slotsFor } from '../../engine/match/formations';
-import { effective } from '../../engine/match/ratings';
-import type { Formation, Lineup, Marking, Mentality, Player, Style, Tactics } from '../../engine/types';
+import { effective, laneStrengths, sideFactor } from '../../engine/match/ratings';
+import type { AttackFocus, Formation, Lineup, Marking, Mentality, Player, Style, Tactics } from '../../engine/types';
 import { squadOf } from '../../engine/util';
 import { command, useMe } from '../../store';
 import { Energy, PosTag, Str } from '../common';
@@ -12,6 +12,23 @@ import { dragProps, dropProps, moveSlotTo, TacticsBoard, type BoardToken, type D
 export const MENTALITY_LABEL: Record<Mentality, string> = { defensiva: 'Defensiva', equilibrada: 'Equilibrada', ofensiva: 'Ofensiva' };
 export const MARKING_LABEL: Record<Marking, string> = { zona: 'Por zona', pressao: 'Pressão alta' };
 export const STYLE_LABEL: Record<Style, string> = { toque: 'Toque de bola', contra: 'Contra-ataque', longa: 'Bola longa' };
+export const FOCUS_LABEL: Record<AttackFocus | '', string> = { '': 'Por onde der', meio: 'Pelo meio', lados: 'Pelas pontas' };
+export const FOCUS_TIP =
+  'Por onde o time ataca: concentrar pelo meio ou pelas pontas leva uns 70% das jogadas para lá. Pelas pontas rende com laterais e pontas fortes e atacantes que cabeceiam; pelo meio, com meias e atacantes que tocam e driblam. Quem defende percebe e fecha um pouco aquele setor.';
+
+/** Strength of each lane of the line-up relative to the team, as "+4%" for the attack focus hint. */
+export function LaneHint({ tactics, lineup, byId }: { tactics: Tactics; lineup: Lineup; byId: Map<number, Player> }) {
+  const l = laneStrengths(
+    slotsFor(tactics),
+    lineup.xi.map((id) => (id != null ? (byId.get(id) ?? null) : null)),
+  );
+  const pct = (v: number) => `${v >= 1 ? '+' : '−'}${Math.round(Math.abs(v - 1) * 100)}%`;
+  return (
+    <span className="small muted" title="Força do ataque em cada corredor, comparada com a média do time">
+      {`Ataque pela esquerda ${pct(l.att[0])} · pelo meio ${pct(l.att[1])} · pela direita ${pct(l.att[2])}`}
+    </span>
+  );
+}
 
 type Sel = { kind: 'xi'; i: number } | { kind: 'bench'; i: number } | null;
 
@@ -138,7 +155,8 @@ export function Escalacao() {
   lineup.xi.forEach((id, i) => {
     const p = id != null ? byId.get(id) : undefined;
     if (!p || !slots[i]) return;
-    const eff = Math.round(effective(p, slots[i].pos));
+    const eff = Math.round(effective(p, slots[i].pos, slots[i].y));
+    const offSide = sideFactor(p, slots[i].pos, slots[i].y) < 1;
     tokens.set(p.id, {
       id: p.id,
       num: p.num,
@@ -148,7 +166,13 @@ export function Escalacao() {
       dim: !isAvailable(p, compId),
       meta: (
         <>
-          {slots[i].pos} <b style={{ color: eff < p.str - 3 ? '#fca5a5' : '#d1fae5' }}>{eff}</b>
+          {slots[i].pos}{' '}
+          {offSide && (
+            <span title="Fora do lado preferido" style={{ color: '#fcd34d' }}>
+              ⇄{' '}
+            </span>
+          )}
+          <b style={{ color: eff < p.str - 3 ? '#fca5a5' : '#d1fae5' }}>{eff}</b>
         </>
       ),
     });
@@ -163,6 +187,7 @@ export function Escalacao() {
   const used = new Set([...lineup.xi.filter((x): x is number => x != null), ...lineup.bench]);
   const reserves = squad.filter((p) => !used.has(p.id)).sort((a, b) => b.str - a.str);
   const selPos = sel?.kind === 'xi' ? slots[sel.i].pos : null;
+  const selY = sel?.kind === 'xi' ? slots[sel.i].y : undefined;
   const custom = !!tactics.shape;
   const issues = lineupIssues(state, club.id, { lineup, auto });
 
@@ -237,6 +262,16 @@ export function Escalacao() {
             ))}
           </select>
         </label>
+        <label className="field" title={FOCUS_TIP}>
+          Ataques
+          <select value={tactics.focus ?? ''} onChange={(e) => change({ focus: (e.target.value || undefined) as AttackFocus | undefined })}>
+            {Object.entries(FOCUS_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="row small" style={{ alignSelf: 'flex-end' }}>
           <input
             type="checkbox"
@@ -253,6 +288,7 @@ export function Escalacao() {
         <div className="col">
           <div className="row small">
             <span className={`pill ${custom ? 'info' : ''}`}>{custom ? `Posições personalizadas · ${shapeLabel(tactics)}` : `Posições padrão · ${tactics.formation}`}</span>
+            <LaneHint tactics={tactics} lineup={lineup} byId={byId} />
             {custom && (
               <button className="btn sm ghost" onClick={() => change({ shape: null })}>
                 Voltar ao padrão
@@ -292,13 +328,14 @@ export function Escalacao() {
                       {...dropProps((src) => onBoardDrop({ kind: 'slot', slot: i }, src))}
                     >
                       <td style={{ width: 44 }}>
-                        <PosTag pos={sl.pos} />
+                        <PosTag pos={sl.pos} flank={sl.pos === 'LAT' ? (sl.y < 0.3 ? 'L' : sl.y > 0.7 ? 'R' : undefined) : undefined} />
                       </td>
                       <td>
                         {p ? (
                           <>
                             <span className="faint num">{p.num}</span> {p.name}
                             {p.pos !== sl.pos && <span className="small warn"> (é {p.pos})</span>}
+                            {p.pos === sl.pos && sideFactor(p, sl.pos, sl.y) < 1 && <span className="small warn"> (fora do lado preferido)</span>}
                             {p.injury > 0 && <span className="pill bad" style={{ marginLeft: 6 }}>lesão</span>}
                             {compId && (p.ban[compId] ?? 0) > 0 && <span className="pill warn" style={{ marginLeft: 6 }}>suspenso</span>}
                           </>
@@ -307,7 +344,7 @@ export function Escalacao() {
                         )}
                       </td>
                       <td className="center" style={{ width: 50 }}>
-                        {p && <Str v={effective(p, sl.pos)} />}
+                        {p && <Str v={effective(p, sl.pos, sl.y)} />}
                       </td>
                       <td style={{ width: 110 }}>{p && <Energy v={p.fitness} w={48} />}</td>
                     </tr>
@@ -324,6 +361,7 @@ export function Escalacao() {
               players={lineup.bench.map((id) => byId.get(id)).filter((p): p is Player => !!p)}
               from="bench"
               selPos={selPos}
+              selY={selY}
               selected={sel?.kind === 'bench' ? (lineup.bench[sel.i] ?? null) : null}
               onClick={(p, i) => (sel ? place(p.id) : setSel({ kind: 'bench', i }))}
               onDropRow={(src, i) => toBench(src, i)}
@@ -336,7 +374,7 @@ export function Escalacao() {
           </div>
           <div className="panel tight drop-zone" {...dropProps(toReserves, (src) => src.kind === 'slot' || src.from === 'bench')}>
             <h3 style={{ padding: '4px 6px' }}>Fora da lista ({reserves.length})</h3>
-            <PlayerList players={reserves} from="res" selPos={selPos} selected={null} onClick={(p) => sel && place(p.id)} />
+            <PlayerList players={reserves} from="res" selPos={selPos} selY={selY} selected={null} onClick={(p) => sel && place(p.id)} />
           </div>
         </div>
       </div>
@@ -350,6 +388,7 @@ function PlayerList({
   onClick,
   onDropRow,
   selPos,
+  selY,
   selected,
 }: {
   players: Player[];
@@ -357,6 +396,7 @@ function PlayerList({
   onClick: (p: Player, i: number) => void;
   onDropRow?: (src: DragSrc, i: number) => void;
   selPos: string | null;
+  selY?: number;
   selected: number | null;
 }) {
   return (
@@ -375,7 +415,7 @@ function PlayerList({
               {p.num}
             </td>
             <td style={{ width: 44 }}>
-              <PosTag pos={p.pos} />
+              <PosTag pos={p.pos} flank={p.flank} />
             </td>
             <td>
               {p.name}
@@ -383,7 +423,7 @@ function PlayerList({
               {Object.values(p.ban).some((n) => n > 0) && <span className="pill warn" style={{ marginLeft: 6 }}>suspenso</span>}
             </td>
             <td className="center" style={{ width: 50 }}>
-              <Str v={selPos ? effective({ ...p, fitness: 100, morale: 60 }, selPos as Player['pos']) : p.str} />
+              <Str v={selPos ? effective({ ...p, fitness: 100, morale: 60 }, selPos as Player['pos'], selY) : p.str} />
             </td>
             <td style={{ width: 110 }}>
               <Energy v={p.fitness} w={48} />

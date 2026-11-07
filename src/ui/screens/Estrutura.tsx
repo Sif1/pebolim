@@ -15,6 +15,49 @@ import type { GameState, TrainingFocus, TravelMode } from '../../engine/types';
 import { dateLabel, distanceKm, formatMoney } from '../../engine/util';
 import { command, useMe } from '../../store';
 import { Bar, ClubBadge, compLabel } from '../common';
+import { PITCH_CARE, PITCH_CARE_LABEL, PITCH_LABEL, pitchCareCost, pitchLevel } from '../../engine/pitch';
+import type { PitchCare } from '../../engine/types';
+
+/** The pitch: its condition, and how it is looked after (cost and how fast it recovers). */
+function PitchPanel() {
+  const { club } = useMe();
+  if (!club || club.pitch == null) return null;
+  const v = club.pitch;
+  const l = pitchLevel(v);
+  const care = club.pitchCare ?? 'normal';
+  const extra = (c: PitchCare) => {
+    const cost = pitchCareCost({ capacity: club.capacity, pitchCare: c });
+    return cost === 0 ? 'incluído na manutenção' : cost < 0 ? `economiza ${formatMoney(-cost)}/rodada` : `+${formatMoney(cost)}/rodada`;
+  };
+  return (
+    <div className="col" style={{ gap: 6, marginTop: 6 }}>
+      <h3 style={{ margin: 0 }}>Gramado</h3>
+      <div className="row">
+        <span className="small muted" style={{ width: 90 }}>
+          Condição
+        </span>
+        <div className="grow">
+          <Bar v={v} color={l >= 3 ? 'var(--bad)' : l === 2 ? 'var(--warn)' : 'var(--good)'} />
+        </div>
+        <b className={l >= 3 ? 'bad' : l === 2 ? 'warn' : ''}>{PITCH_LABEL[l]}</b>
+      </div>
+      <label className="field">
+        Cuidado com o gramado
+        <select value={care} onChange={(e) => void command({ c: 'setPitchCare', care: e.target.value as PitchCare })}>
+          {(Object.keys(PITCH_CARE) as PitchCare[]).map((c) => (
+            <option key={c} value={c}>
+              {`${PITCH_CARE_LABEL[c]} (${extra(c)})`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="small faint">
+        Cada jogo em casa gasta o gramado, e ele se recupera entre as rodadas (premium: o dobro da velocidade; básico: a metade). Num gramado ruim ou
+        péssimo os jogadores cansam mais e o toque de bola rende um pouco menos que a bola longa, para os dois times.
+      </div>
+    </div>
+  );
+}
 
 /** "pronto em dd/mm" for works that end after `left` more dates. */
 function readyLabel(state: GameState, left: number): string {
@@ -93,6 +136,7 @@ export function Estrutura({ part }: { part: 'estadio' | 'viagens' }) {
               <div className="small faint">Durante a obra, 10% do estádio fica fechado. Os lugares novos abrem quando ela termina.</div>
             </>
           )}
+          <PitchPanel />
         </div>
         <div className="panel col">
           <h3>Centro de treinamento</h3>

@@ -44,8 +44,14 @@ function records(text: string): Record<string, string>[] {
   return rows.slice(1).map((r) => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])));
 }
 
-export const CLUB_COLUMNS = ['key', 'name', 'short', 'country', 'state', 'city', 'lat', 'lon', 'color1', 'color2', 'stadium', 'capacity', 'rep', 'league', 'estadual', 'continent', 'contonly', 'crest'];
-export const PLAYER_COLUMNS = ['club', 'name', 'pos', 'birth', 'str', 'nat', 'traits', 'pot', 'stars'];
+export const CLUB_COLUMNS = ['key', 'name', 'short', 'country', 'state', 'city', 'lat', 'lon', 'color1', 'color2', 'stadium', 'capacity', 'rep', 'league', 'estadual', 'continent', 'contonly', 'crest', 'coach', 'coach_nat'];
+export const PLAYER_COLUMNS = ['club', 'name', 'pos', 'birth', 'str', 'nat', 'traits', 'pot', 'stars', 'side'];
+
+/** A side as written in a CSV: L/E (left), R/D (right), C (central). */
+export function parseSide(v: string | undefined): 'L' | 'R' | 'C' | undefined {
+  const s = (v || '').trim().toUpperCase();
+  return s === 'L' || s === 'E' ? 'L' : s === 'R' || s === 'D' ? 'R' : s === 'C' ? 'C' : undefined;
+}
 
 export interface DbIssues {
   errors: string[];
@@ -79,6 +85,7 @@ export function clubsFromCsv(text: string, issues: DbIssues): DbClub[] {
       continent,
       contOnly: ['1', 'true', 'sim', 'yes', 'x'].includes((r.contonly || '').toLowerCase()),
       ...(/^https?:\/\//.test(r.crest || '') ? { crest: r.crest } : {}),
+      ...(r.coach ? { coach: r.coach.trim(), coachNat: (r.coach_nat || r.country || 'BRA').toUpperCase() } : {}),
     });
   });
   return out;
@@ -109,6 +116,7 @@ export function playersFromCsv(text: string, clubKeys: Set<string>, issues: DbIs
       traits: r.traits ? traits : undefined,
       pot: r.pot ? Number(r.pot) : undefined,
       stars: r.stars !== undefined && r.stars !== '' ? Math.max(0, Math.min(5, Math.round(Number(r.stars)))) : undefined,
+      ...(parseSide(r.side) ? { side: parseSide(r.side) } : {}),
     });
   });
   return out;
