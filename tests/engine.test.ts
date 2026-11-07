@@ -31,10 +31,13 @@ import {
 } from '../src/engine/transfers';
 import { autoLineup, lineupIssues } from '../src/engine/ai/lineup';
 import { autoShootout, Shootout } from '../src/engine/match/shootout';
-import { kk, parseMoney, sortTable, squadOf } from '../src/engine/util';
+import { age, kk, parseMoney, sortTable, squadIndex, squadOf } from '../src/engine/util';
 import { endSeason, ensureKeepers, seasonVerdict } from '../src/engine/season';
 import { boardAfterMatch, boardChecks, fireManager } from '../src/engine/board';
 import { juniorsOf, youthMatches } from '../src/engine/youth';
+import { ELITE_GROWTH } from '../src/engine/development';
+import { starsFor } from '../src/engine/potential';
+import { academyLevel, fillerLevel } from '../src/engine/generator';
 import { createWorld } from '../src/engine/world';
 import { synthSetup } from './helpers';
 import { synthDb } from './synthDb';
@@ -787,7 +790,8 @@ describe('season-end housekeeping', () => {
     p.contractEnd = s.meta.season;
     endSeason(s, rng, new Set());
     expect(p.loan).toBeNull();
-    expect(p.clubId === null || p.clubId === a.id).toBe(true);
+    // back at his club, which kept him or let him go (and then another club may have signed him as a free agent)
+    expect(p.clubId === null || p.clubId === a.id || p.joined === s.meta.season).toBe(true);
     if (p.clubId != null) expect(p.contractEnd).toBeGreaterThanOrEqual(s.meta.season);
     // nobody starts the new season with an expired contract
     expect(Object.values(s.players).filter((x) => x.clubId != null && !x.junior && x.contractEnd < s.meta.season)).toHaveLength(0);
@@ -1059,5 +1063,104 @@ describe('season review and training centre', () => {
     const before = club.balance;
     expect(runCommand(s, m.id, { c: 'upgradeTC' }).ok).toBe(true);
     expect(before - club.balance).toBe(Math.round(before * 0.5));
+  });
+});
+
+describe('board ultimatum', () => {
+  const setup = () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    return { s, rng, club, m, present: new Set([m.id]) };
+  };
+
+  it('a new manager is only warned; after the grace period the last warning is a points target', () => {
+    const { s, rng, club, m, present } = setup();
+    club.board.conf = 10;
+    boardChecks(s, rng, present);
+    expect(club.managerId).toBe(m.id);
+    expect(club.board.ult).toBeUndefined();
+    m.since = 0; // long past the grace period
+    club.board.conf = 10;
+    boardChecks(s, rng, present);
+    // not sacked on the spot: an ultimatum first
+    expect(club.managerId).toBe(m.id);
+    const u = club.board.ult!;
+    expect(u).toBeTruthy();
+    expect(u.games).toBe(5);
+    expect(u.need).toBeGreaterThanOrEqual(3);
+    expect(u.need).toBeLessThanOrEqual(10);
+    expect(s.news.some((n) => n.text.includes(`faça pelo menos ${u.need} pontos nos próximos 5 jogos`))).toBe(true);
+    // still below the sacking line while it runs: no sack
+    club.board.conf = 5;
+    boardChecks(s, rng, present);
+    expect(club.managerId).toBe(m.id);
+    // he meets it: kept, with the board's trust back
+    u.played = 3;
+    u.pts = u.need;
+    boardChecks(s, rng, present);
+    expect(club.managerId).toBe(m.id);
+    expect(club.board.ult).toBeUndefined();
+    expect(club.board.conf).toBeGreaterThanOrEqual(32);
+  });
+
+  it('counts the matches as they are played and sacks the manager who misses the target', () => {
+    const { s, rng, club, m, present } = setup();
+    m.since = 0;
+    club.board.conf = 10;
+    boardChecks(s, rng, present);
+    const u = club.board.ult!;
+    const base = Object.values(s.fixtures).find((f) => f.comp === 'BRA1')!;
+    const opp = Object.values(s.clubs).find((c) => c.league === 'BRA1' && c.id !== club.id)!;
+    boardAfterMatch(s, { ...base, home: club.id, away: opp.id, hg: 2, ag: 0 });
+    expect(u).toMatchObject({ played: 1, pts: 3 });
+    for (let i = 0; i < 4; i++) boardAfterMatch(s, { ...base, home: club.id, away: opp.id, hg: 0, ag: 1 });
+    expect(u).toMatchObject({ played: 5, pts: 3 });
+    boardChecks(s, rng, present);
+    expect(club.managerId).toBeNull();
+    expect(m.history.at(-1)!.note).toMatch(/ultimato não cumprido/);
+  });
+});
+
+describe('player development and the AI squads', () => {
+  it('world class comes slowly, even for the best prospects', () => {
+    expect(ELITE_GROWTH(78)).toBe(1);
+    expect(ELITE_GROWTH(85)).toBeCloseTo(8 / 13, 3);
+    expect(ELITE_GROWTH(90)).toBeLessThan(0.25);
+  });
+
+  it('a better academy turns up more promising youngsters, and big academies start below the first team', () => {
+    const r0 = Rng.fromSeed('acad');
+    const r5 = Rng.fromSeed('acad');
+    let plain = 0;
+    let best = 0;
+    for (let i = 0; i < 2000; i++) {
+      plain += starsFor(60, 16, r0, 0);
+      best += starsFor(60, 16, r5, 5);
+    }
+    expect(best).toBeGreaterThan(plain);
+    const big = { rep: 97, country: 'ENG' };
+    expect(academyLevel(big)).toBeLessThan(fillerLevel(big) - 4);
+    const small = { rep: 40, country: 'BRA' };
+    expect(academyLevel(small)).toBe(fillerLevel(small));
+  });
+
+  it('AI clubs keep nearly all their starters when their contracts end', () => {
+    const s = world();
+    const season = s.meta.season;
+    const idx = squadIndex(s);
+    const starters: { id: number; club: number }[] = [];
+    for (const c of Object.values(s.clubs)) {
+      if (!c.league) continue;
+      for (const p of [...(idx.get(c.id) ?? [])].sort((a, b) => b.str - a.str).slice(0, 11)) {
+        if (age(p, season) >= 32 || p.loan) continue;
+        p.contractEnd = season;
+        starters.push({ id: p.id, club: c.id });
+      }
+    }
+    endSeason(s, new Rng(s.meta.rng), new Set());
+    const kept = starters.filter((x) => s.players[x.id]?.clubId === x.club).length;
+    expect(kept / starters.length).toBeGreaterThan(0.82);
   });
 });

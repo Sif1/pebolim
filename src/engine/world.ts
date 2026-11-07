@@ -230,6 +230,9 @@ export function setObjectives(state: GameState) {
       }
       c.board.goal = goal;
       c.board.conf = Math.round((c.board.conf + 60) / 2);
+      // a new season, a clean slate: earlier warnings and an unfinished ultimatum lapse
+      c.board.warned = 0;
+      delete c.board.ult;
     });
   }
 }

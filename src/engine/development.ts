@@ -21,6 +21,9 @@ function yearlyDelta(a: number): number {
   return -5;
 }
 
+/** How much of the normal growth a young player keeps at this força: all of it up to 80, less and less above. */
+export const ELITE_GROWTH = (str: number) => Math.min(1, Math.max(0.15, (93 - str) / 13));
+
 /** Per-date player updates: recovery, injuries, development. */
 export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number>) {
   const season = state.meta.season;
@@ -51,8 +54,10 @@ export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number
       // youth-team players play youth matches every week
       const play = p.junior ? 0.6 : Math.min(1, p.s.apps / (date * 0.45 + 1));
       d *= TC_DEV[lvl] * (focus === 'tecnico' ? 1.15 : focus === 'fisico' ? 0.9 : 1) * (0.55 + 0.6 * play) * growthMult(p.stars ?? 2);
-      // the last few points before the ceiling come slowly
+      // the last few points before the ceiling come slowly, and so does world class, for everyone: from 80 up
+      // each point is harder (×0.6 at 85, ×0.25 at 89), so even the best prospects peak in their mid-twenties
       d *= Math.min(1, Math.max(0.1, (p.pot - p.str) / 6));
+      d *= ELITE_GROWTH(p.str);
     } else if (d < 0) {
       // decline after 30: more stars, slower decline
       d *= declineMult(p.stars ?? 2);

@@ -5,7 +5,7 @@ import { juniorsOf, promote, release, youthSeasonEnd } from './youth';
 import { objectiveDelta, seasonReviews } from './review';
 import { statureGap, STATURE_MAX_GAP } from './transfers';
 import { foreignShareFor, startSeason } from './world';
-import { assignNumbers, fillerLevel, fillSquad, generatePlayer, SQUAD_SHAPE } from './generator';
+import { academyLevel, assignNumbers, fillerLevel, fillSquad, generatePlayer, SQUAD_SHAPE } from './generator';
 import type { Rng } from './rng';
 import type { Club, GameState, Player, Pos, SeasonHistory } from './types';
 import { absDate, addNews, age, clamp, expectedWage, formatMoney, roundMoney, sortTable, squadIndex, squadOf } from './util';
@@ -181,7 +181,11 @@ function contractsAndLoans(state: GameState, rng: Rng) {
       const squad = idx.get(club.id) ?? [];
       const median = [...squad].sort((x, y) => y.str - x.str)[Math.floor(squad.length / 2)]?.str ?? 50;
       const tight = roomOf(club) < 0;
-      if (a < 33 && p.str >= median + (tight ? 2 : -3) && rng.chance(tight ? 0.6 : 0.75)) {
+      // a starter (one of the best 11, counting a player just back from a loan) is nearly always kept, even over
+      // the wage budget: letting the first team walk out on free transfers drained the big European leagues
+      const starter = squad.filter((x) => x.id !== p.id && x.str > p.str).length < 11;
+      const keep = starter ? (tight ? 0.85 : 0.92) : p.str >= median + (tight ? 2 : -3) ? (tight ? 0.6 : 0.75) : 0;
+      if (a < 33 && rng.chance(keep)) {
         // clubs with plenty of room in the budget pay above the going rate to keep their players
         const rich = roomOf(club) > 0.15 * wageBudget(state, club, homes);
         const wage = roundMoney(expectedWage(p, next, club.rep) * (rich ? rng.range(1.05, 1.3) : 1));
@@ -301,7 +305,7 @@ function youthIntake(state: GameState, rng: Rng) {
       else release(state, j);
     }
     const n = c.league ? rng.int(2, 4) : rng.int(0, 2);
-    const level = fillerLevel(c);
+    const level = academyLevel(c);
     for (let i = 0; i < n; i++) {
       const ageY = rng.int(16, 18);
       const p: Player = generatePlayer(state, rng, {
@@ -374,7 +378,7 @@ function maintainSquads(state: GameState, rng: Rng) {
         for (let i = 0; i < short; i++) {
           const count = (pos: Pos) => squad.filter((p) => p.pos === pos).length;
           const pos = (Object.keys(SQUAD_SHAPE) as Pos[]).sort((a, b) => count(a) / SQUAD_SHAPE[a] - count(b) / SQUAD_SHAPE[b])[0];
-          const p = generatePlayer(state, rng, { pos, str: fillerLevel(c) - 8 + rng.normal(0, 3), nat: c.country, ageY: rng.int(18, 21), clubId: c.id, clubRep: c.rep });
+          const p = generatePlayer(state, rng, { pos, str: academyLevel(c) - 8 + rng.normal(0, 3), nat: c.country, ageY: rng.int(18, 21), clubId: c.id, clubRep: c.rep });
           state.players[p.id] = p;
           squad.push(p);
         }
@@ -435,7 +439,7 @@ export function ensureKeepers(state: GameState, rng: Rng, c: Club, free?: Player
     signed.push(p.name);
   }
   while (have < 2) {
-    const p = generatePlayer(state, rng, { pos: 'GOL', str: fillerLevel(c) - 4 + rng.normal(0, 3), nat: c.country, ageY: rng.int(18, 21), clubId: c.id, clubRep: c.rep });
+    const p = generatePlayer(state, rng, { pos: 'GOL', str: academyLevel(c) - 4 + rng.normal(0, 3), nat: c.country, ageY: rng.int(18, 21), clubId: c.id, clubRep: c.rep });
     state.players[p.id] = p;
     have++;
     signed.push(p.name);

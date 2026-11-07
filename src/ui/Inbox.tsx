@@ -74,7 +74,19 @@ export function useAttention(): Item[] {
   if (counters) out.push({ id: 'counters', icon: '↩', text: counters === 1 ? 'Uma contraproposta para você responder' : `${counters} contrapropostas para você responder`, level: 'warn', screen: 'mercado', tab: 'propostas' });
   const squad = squadOf(state, club.id).filter((p) => !p.junior);
   if (squad.length < 16) out.push({ id: 'short', icon: '👥', text: `Elenco curto: só ${squad.length} jogadores`, level: 'bad', screen: 'mercado', tab: 'buscar' });
-  if (club.board.conf < 35) out.push({ id: 'board', icon: '🏛', text: `A diretoria está insatisfeita: confiança de ${Math.round(club.board.conf)}%`, level: 'bad', screen: 'painel' });
+  const ult = club.board.ult;
+  if (ult) {
+    const left = ult.games - ult.played;
+    const missing = Math.max(0, ult.need - ult.pts);
+    out.push({
+      id: 'board',
+      icon: '🏛',
+      text: missing === 1 ? `Ultimato da diretoria: falta 1 ponto em ${left} jogos` : `Ultimato da diretoria: faltam ${missing} pontos em ${left} jogos`,
+      level: 'bad',
+      screen: 'painel',
+    });
+  } else if (club.board.conf < 35)
+    out.push({ id: 'board', icon: '🏛', text: `A diretoria está insatisfeita: confiança de ${Math.round(club.board.conf)}%`, level: 'bad', screen: 'painel' });
   if ((club.fans ?? 60) < 30) out.push({ id: 'fans', icon: '📣', text: 'A torcida está revoltada', level: 'warn', screen: 'painel' });
   if (club.balance < 0) out.push({ id: 'money', icon: '💸', text: 'O caixa está no vermelho', level: 'warn', screen: 'financas' });
   const expiring = squad.filter((p) => !p.loan && p.contractEnd <= season && !p.pre).length;

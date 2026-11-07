@@ -1,5 +1,5 @@
 import type { Rng } from './rng';
-import type { Club, Fixture, GameState, Manager } from './types';
+import type { Club, Fixture, GameState, Manager, Ultimatum } from './types';
 import { absDate, addNews, clamp, sortTable } from './util';
 import { roughIncome } from './economy';
 import { isDerby } from './rivals';
@@ -21,11 +21,20 @@ export function boardAfterMatch(state: GameState, f: Fixture) {
     const gf = side === 0 ? f.hg : f.ag;
     const ga = side === 0 ? f.ag : f.hg;
     const pts = gf > ga ? 3 : gf === ga ? 1 : 0;
-    const diff = club.power - opp.power + (side === 0 ? 3 : -3);
-    const expected = clamp(1.35 + diff / 9, 0.35, 2.5);
+    const expected = expectedPoints(club, opp, side === 0);
     club.board.conf = clamp(club.board.conf + (pts - expected) * 2.4 * weight, 0, 100);
+    const ult = club.board.ult;
+    if (ult && ult.played < ult.games) {
+      ult.played++;
+      ult.pts += pts;
+    }
     fansAfterMatch(state, club, opp, pts, gf - ga, side === 0, derby);
   }
+}
+
+/** The points the board expects from a match, by the strength of the two sides and who is at home. */
+function expectedPoints(club: Club, opp: Club, home: boolean): number {
+  return clamp(1.35 + (club.power - opp.power + (home ? 3 : -3)) / 9, 0.35, 2.5);
 }
 
 /** The fans' mood after a match: results above all, more so at home, against bigger clubs, and in a derby. */
@@ -68,6 +77,8 @@ export function fireManager(state: GameState, m: Manager, reason: string) {
   club.upForSelection = true;
   club.autoLineup = true;
   club.board.conf = 55;
+  club.board.warned = 0;
+  delete club.board.ult;
   addNews(state, 'fired', `${m.name} foi demitido do ${club.name} (${reason}).`, [club.id]);
 }
 
@@ -87,12 +98,18 @@ export function boardChecks(state: GameState, rng: Rng, present: Set<string>) {
     c.board.conf = clamp(c.board.conf + ((c.fans ?? 60) - 55) * 0.004, 0, 100);
     const m = managerOf(state, c);
     if (m && present.has(m.id)) {
-      boardWarnings(state, c, m);
+      if (c.board.ult && ultimatumOver(c.board.ult)) {
+        if (settleUltimatum(state, c, m)) {
+          vacancies.push(c);
+          continue;
+        }
+      } else boardWarnings(state, c, m, now - m.since < GRACE_DATES);
       if (BOARD_MEETINGS.includes(state.meta.date)) boardMeeting(state, c, m);
     }
     if (c.board.conf >= 12) continue;
     if (m) {
-      if (!present.has(m.id)) continue;
+      // a human manager is never sacked mid-season without the chance of an ultimatum first
+      if (!present.has(m.id) || c.board.ult) continue;
       if (now - m.since < GRACE_DATES) continue;
       fireManager(state, m, 'maus resultados');
       vacancies.push(c);
@@ -163,22 +180,71 @@ function boardMeeting(state: GameState, c: Club, m: Manager) {
   );
 }
 
-/** Written warnings before a sacking: below 30 the board is worried, below 18 it is the last warning. */
-function boardWarnings(state: GameState, c: Club, m: Manager) {
-  const level = c.board.conf < 18 ? 2 : c.board.conf < 30 ? 1 : 0;
-  const warned = c.board.warned ?? 0;
+/**
+ * Written warnings before a sacking: below 30 the board is worried; below 18 (once the new manager's grace period
+ * is over) it is the last warning, an ultimatum with a points target for the next few matches.
+ */
+function boardWarnings(state: GameState, c: Club, m: Manager, grace: boolean) {
+  if (c.board.ult) return;
   if (c.board.conf >= 40) c.board.warned = 0;
-  if (level <= warned) return;
-  c.board.warned = level;
-  addNews(
-    state,
-    'board',
-    level === 2
-      ? `Último aviso da diretoria do ${c.name}: sem reação imediata, você será demitido.`
-      : `A diretoria do ${c.name} está preocupada com os resultados e espera uma reação.`,
-    [c.id],
-    m.id,
-  );
+  const warned = c.board.warned ?? 0;
+  if (c.board.conf < 18 && !grace && warned < 2) {
+    c.board.warned = 2;
+    const ult = ultimatumFor(state, c);
+    if (ult) {
+      c.board.ult = ult;
+      addNews(
+        state,
+        'board',
+        `Último aviso da diretoria do ${c.name}: faça pelo menos ${ult.need} pontos nos próximos ${ult.games} jogos, ou você será demitido.`,
+        [c.id],
+        m.id,
+      );
+    } else addNews(state, 'board', `Último aviso da diretoria do ${c.name}: sem reação imediata, você será demitido.`, [c.id], m.id);
+  } else if (c.board.conf < 30 && warned < 1) {
+    c.board.warned = 1;
+    addNews(state, 'board', `A diretoria do ${c.name} está preocupada com os resultados e espera uma reação.`, [c.id], m.id);
+  }
+}
+
+/** Matches in an ultimatum, and the least that can be asked for. */
+const ULT_GAMES = 5;
+const ULT_MIN_GAMES = 3;
+
+/**
+ * The ultimatum for a club: its next (up to 5) scheduled matches, and a fair points target, 85% of the points
+ * the board would expect from those opponents (at least 60% of the games, at most 2 points a game).
+ * None when the season has fewer than 3 known matches left: the end-of-season verdict decides then.
+ */
+export function ultimatumFor(state: GameState, c: Club): Ultimatum | null {
+  const next = Object.values(state.fixtures)
+    .filter((f) => (f.home === c.id || f.away === c.id) && f.hg == null && f.date >= state.meta.date)
+    .sort((a, b) => a.date - b.date)
+    .slice(0, ULT_GAMES);
+  if (next.length < ULT_MIN_GAMES) return null;
+  const games = next.length;
+  const exp = next.reduce((s, f) => s + expectedPoints(c, state.clubs[f.home === c.id ? f.away : f.home], f.home === c.id), 0);
+  const need = clamp(Math.round(exp * 0.85), Math.ceil(games * 0.6), games * 2);
+  return { need, games, played: 0, pts: 0 };
+}
+
+/** Decided: the target is reached, or can no longer be (or all the matches are played). */
+export function ultimatumOver(u: Ultimatum): boolean {
+  return u.pts >= u.need || u.pts + (u.games - u.played) * 3 < u.need || u.played >= u.games;
+}
+
+/** Settle a finished ultimatum: the manager keeps the job and the board's trust, or is sacked (returns true). */
+function settleUltimatum(state: GameState, c: Club, m: Manager): boolean {
+  const u = c.board.ult!;
+  delete c.board.ult;
+  if (u.pts >= u.need) {
+    c.board.conf = Math.max(c.board.conf, 32);
+    c.board.warned = 1;
+    addNews(state, 'board', `Ultimato cumprido: ${u.pts} pontos em ${u.played} jogos. A diretoria do ${c.name} renova a confiança em você.`, [c.id], m.id);
+    return false;
+  }
+  fireManager(state, m, `ultimato não cumprido, ${u.pts} de ${u.need} pontos`);
+  return true;
 }
 
 function giveOffer(state: GameState, m: Manager, c: Club) {
@@ -209,6 +275,8 @@ export function takeJob(state: GameState, m: Manager, clubId: number) {
     old.managerId = null;
     old.upForSelection = true;
     old.autoLineup = true;
+    old.board.warned = 0;
+    delete old.board.ult;
     addNews(state, 'hired', `${m.name} deixa o ${old.name} e assume o ${club.name}.`, [old.id, club.id]);
   } else {
     addNews(state, 'hired', `${m.name} é o novo treinador do ${club.name}.`, [club.id]);
@@ -219,4 +287,6 @@ export function takeJob(state: GameState, m: Manager, clubId: number) {
   club.managerId = m.id;
   club.upForSelection = false;
   club.board.conf = 60;
+  club.board.warned = 0;
+  delete club.board.ult;
 }

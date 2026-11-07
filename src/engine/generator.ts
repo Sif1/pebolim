@@ -78,11 +78,15 @@ export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
 /** Squad composition target. */
 export const SQUAD_SHAPE: Record<Pos, number> = { GOL: 3, ZAG: 4, LAT: 4, VOL: 4, MEI: 5, ATA: 5 };
 
-/** Young and veteran fillers are a bit weaker than prime-age ones. */
-export function ageAdjust(ageY: number): number {
-  if (ageY <= 19) return -8;
-  if (ageY <= 21) return -5;
-  if (ageY <= 23) return -2;
+/**
+ * Young and veteran fillers are a bit weaker than prime-age ones. At a big club the gap for the young ones is
+ * wider: a teenager at the level of a top European first team is a once-in-a-generation prodigy, not squad depth.
+ */
+export function ageAdjust(ageY: number, level = 70): number {
+  const young = 1 + Math.max(0, level - 70) / 25;
+  if (ageY <= 19) return -8 * young;
+  if (ageY <= 21) return -5 * young;
+  if (ageY <= 23) return -2 * young;
   if (ageY >= 34) return -3;
   return 0;
 }
@@ -128,6 +132,15 @@ const COUNTRY_LEVEL: Record<string, number> = {
 /** Level of the invented players that fill a club's squad. */
 export const fillerLevel = (club: Pick<Club, 'rep' | 'country'>) => strForRep(club.rep) + (COUNTRY_LEVEL[club.country ?? ''] ?? 0);
 
+/**
+ * The level a club's academy works from: its filler level, compressed at the top, so the biggest academies turn
+ * out good prospects rather than teenagers who are already world class.
+ */
+export function academyLevel(club: Pick<Club, 'rep' | 'country'>): number {
+  const l = fillerLevel(club);
+  return l - Math.max(0, l - 72) * 0.4;
+}
+
 /** Fill a club's squad up to the target shape with generated players around `level`. */
 export function fillSquad(state: GameState, rng: Rng, clubId: number, existing: Player[], level: number, foreignShare: number, target = 25) {
   const club = state.clubs[clubId];
@@ -144,7 +157,7 @@ export function fillSquad(state: GameState, rng: Rng, clubId: number, existing: 
       const p = generatePlayer(state, rng, {
         pos,
         // squad depth: around the club's level, never a made-up star above its real ones
-        str: Math.min(level + 5, rng.normal(level + ageAdjust(ageY), 4)),
+        str: Math.min(level + 5, rng.normal(level + ageAdjust(ageY, level), 4)),
         nat,
         ageY,
         clubId,

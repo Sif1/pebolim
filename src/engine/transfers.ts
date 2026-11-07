@@ -314,6 +314,8 @@ export function aiTransfers(state: GameState, rng: Rng) {
   const view = new MarketView(state, idx, aiClubs);
   deals = closing ? [] : null;
   buyListed(state, rng, view, closing);
+  const pool = sellersByPos(state, idx);
+  const moved = new Set<number>();
   let moves = 0;
   for (let i = 0; i < (closing ? 40 : 16) && moves < (closing ? 24 : 10); i++) {
     // clubs with money to spend are more active
@@ -347,23 +349,16 @@ export function aiTransfers(state: GameState, rng: Rng) {
     }
     // over the wage budget: no purchases
     if (view.room(club) <= 0) continue;
-    // 2) buy from a smaller AI club (listed players found their buyers above)
-    const cands: Player[] = [];
-    for (const [cid, sq] of idx) {
-      const c = state.clubs[cid];
-      if (c.id === club.id || c.managerId || c.rep > club.rep + 3) continue;
-      for (const p of sq) if (p.pos === pos && p.str > floor + 1 && !p.loan && !p.auction && statureGap(state, p, club) <= STATURE_MAX_GAP) cands.push(p);
-      if (cands.length > 60) break;
-    }
-    // never more than ~1.6x value for a starter (1.85x when the position is short)
-    const pick = cands
-      .filter((p) => askingPrice(state, p) <= Math.min(budget, aiMaxPrice(state, p, need) * 1.6) && view.affords(club, wageDemand(state, p, club), need))
-      .sort((a, b) => b.str - a.str)[rng.int(0, 2)];
+    // 2) buy from a smaller AI club anywhere in the world (listed players found their buyers above): one of the
+    // three best at the position who would come, whom the club can pay (never more than ~1.6x value for a
+    // starter, 1.85x when the position is short) and whose club can spare him
+    const cands = shopFor(state, view, pool.get(pos) ?? [], club, floor, budget, need, moved);
+    const pick = cands.length ? cands[rng.int(0, cands.length - 1)] : null;
     if (!pick) continue;
     const fromId = pick.clubId!;
-    if (view.squad(fromId).length <= 18) continue;
     executeTransfer(state, pick, club, askingPrice(state, pick), wageDemand(state, pick, club), rng.int(2, 4));
     view.move(pick, fromId, club.id);
+    moved.add(pick.id);
     moves++;
   }
   aiListings(state, rng, view, eve);
@@ -392,6 +387,58 @@ export function aiTransfers(state: GameState, rng: Rng) {
     );
   }
   deals = null;
+}
+
+/** The AI clubs' players by position, strongest first: the pool AI clubs shop from. */
+function sellersByPos(state: GameState, idx: Map<number, Player[]>): Map<Pos, Player[]> {
+  const out = new Map<Pos, Player[]>();
+  for (const [cid, sq] of idx) {
+    const c = state.clubs[cid];
+    if (!c || c.managerId) continue;
+    for (const p of sq) {
+      if (p.loan || p.auction) continue;
+      let arr = out.get(p.pos);
+      if (!arr) out.set(p.pos, (arr = []));
+      arr.push(p);
+    }
+  }
+  for (const arr of out.values()) arr.sort((a, b) => b.str - a.str);
+  return out;
+}
+
+/** How far above its own level an AI club looks, and how many players it weighs at most per search. */
+const SHOP_ABOVE = 12;
+const SHOP_LOOKS = 160;
+
+/**
+ * Up to three players an AI club could buy at a position, best first: above `floor`, not much above the club,
+ * from an AI club no bigger than it (+3 reputation) with more than 18 players, willing to come, and affordable.
+ */
+function shopFor(state: GameState, view: MarketView, list: Player[], club: Club, floor: number, budget: number, need: boolean, moved: Set<number>): Player[] {
+  const out: Player[] = [];
+  // the list is sorted strongest first: skip to about the club's level
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid].str > club.power + SHOP_ABOVE) lo = mid + 1;
+    else hi = mid;
+  }
+  let looks = 0;
+  for (let k = lo; k < list.length && out.length < 3 && looks < SHOP_LOOKS; k++) {
+    const p = list[k];
+    if (p.str <= floor + 1) break;
+    if (moved.has(p.id) || p.clubId == null || p.loan || p.auction) continue;
+    const from = state.clubs[p.clubId];
+    if (!from || from.id === club.id || from.managerId || from.rep > club.rep + 3) continue;
+    looks++;
+    if (statureGap(state, p, club) > STATURE_MAX_GAP) continue;
+    if (askingPrice(state, p) > Math.min(budget, aiMaxPrice(state, p, need) * 1.6)) continue;
+    if (!view.affords(club, wageDemand(state, p, club), need)) continue;
+    if (view.squad(from.id).length <= 18) continue;
+    out.push(p);
+  }
+  return out;
 }
 
 /** At most this many AI players listed (for sale or loan) at once, and open auctions. */

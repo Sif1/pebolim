@@ -111,6 +111,10 @@ export const EN_ENGINE: Record<string, string> = {
     'Board meeting: the objective is {0}. {1} are {2}º in the {3}: {4}. Fans: {5}.',
   'Último aviso da diretoria do {0}: sem reação imediata, você será demitido.': 'Final warning from the {0} board: without an immediate reaction, you will be sacked.',
   'A diretoria do {0} está preocupada com os resultados e espera uma reação.': 'The {0} board is worried about results and expects a reaction.',
+  'Último aviso da diretoria do {0}: faça pelo menos {1} pontos nos próximos {2} jogos, ou você será demitido.':
+    'Final warning from the {0} board: take at least {1} points from the next {2} matches, or you will be sacked.',
+  'Ultimato cumprido: {0} pontos em {1} jogos. A diretoria do {2} renova a confiança em você.': 'Ultimatum met: {0} points from {1} matches. The {2} board renews its confidence in you.',
+  'ultimato não cumprido, {0} de {1} pontos': 'ultimatum missed, {0} of {1} points',
   'Proposta de emprego: o {0} quer contratar você.': 'Job offer: {0} want to hire you.',
   'Saiu para o {0}': 'Left for {0}',
   '{0} deixa o {1} e assume o {2}.': '{0} leaves {1} and takes over at {2}.',

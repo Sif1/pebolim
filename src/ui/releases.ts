@@ -10,6 +10,26 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.9.0',
+    date: '07/11/2026',
+    pt: [
+      'Ultimato da diretoria: o último aviso agora traz uma meta clara ("faça pelo menos 6 pontos nos próximos 5 jogos"), que aparece no Painel e nos avisos. Cumpriu, a diretoria volta a confiar; não cumpriu, demissão. Ninguém é demitido por resultados no meio da temporada sem essa chance.',
+      'Propostas que vencem: se uma proposta por um jogador seu está na última rodada sem resposta, Continuar e Pronto perguntam antes, para ela não vencer sem querer.',
+      'Jovens gerados: as categorias de base dos grandes clubes revelam boas promessas, não garotos de 16 anos já prontos para a seleção, e o nível de craque mundial chega mais devagar para todos. O top 100 do mundo não infla mais com o passar das temporadas.',
+      'Mercado da IA: os clubes procuram reforços no mundo todo (antes viam quase só os primeiros clubes da lista, os brasileiros) e quase sempre renovam com os titulares. As ligas europeias não perdem mais força ano após ano.',
+      'No celular, nenhuma tela empurra mais a página para o lado: tabelas largas rolam dentro do próprio quadro, e telas lado a lado (escalação, estádio, lobby) viram uma coluna.',
+      'Correção: um CT melhor dava menos estrelas de potencial para os garotos da base, em vez de mais.',
+    ],
+    en: [
+      'The board’s ultimatum: the last warning now comes with a clear target ("at least 6 points from the next 5 matches"), shown on the dashboard and in the notifications. Meet it and the board trusts you again; miss it and you are sacked. Nobody is sacked for results mid-season without that chance.',
+      'Bids that lapse: if a bid for one of your players is on its last round unanswered, Continue and Ready ask first, so it does not lapse by accident.',
+      'Generated youngsters: the big clubs’ academies turn out good prospects, not 16-year-olds who are already internationals, and world class comes more slowly for everyone. The world’s top 100 no longer inflates over the seasons.',
+      'AI market: clubs look for signings all over the world (before, they mostly saw the first clubs on the list, the Brazilian ones) and nearly always renew their starters. The European leagues no longer lose strength year after year.',
+      'On phones no screen pushes the page sideways any more: wide tables scroll inside their own panel, and side-by-side screens (line-up, stadium, lobby) become one column.',
+      'Fix: a better training centre gave academy youngsters fewer potential stars instead of more.',
+    ],
+  },
+  {
     version: '0.8.0',
     date: '07/11/2026',
     pt: [

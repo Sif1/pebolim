@@ -1,5 +1,5 @@
 import { travelCost, travelFatigue, travelModeFor, TRAVEL_LABEL } from '../../engine/economy';
-import type { GameState, News } from '../../engine/types';
+import type { GameState, News, Ultimatum } from '../../engine/types';
 import { dateLabel, distanceKm, formatMoney, sortTable, squadOf } from '../../engine/util';
 import { OBJECTIVE_LABEL } from '../../engine/world';
 import { command, useApp, useMe } from '../../store';
@@ -91,7 +91,11 @@ export function Painel() {
               </div>
               <span className="num">{Math.round(club.board.conf)}%</span>
             </div>
-            {club.board.conf < 25 && <div className="bad small">A diretoria está perdendo a paciência. Resultados ruins podem levar à demissão.</div>}
+            {club.board.ult ? (
+              <UltimatumBox u={club.board.ult} />
+            ) : (
+              club.board.conf < 25 && <div className="bad small">A diretoria está perdendo a paciência. Resultados ruins podem levar à demissão.</div>
+            )}
             <div className="row">
               <span className="small muted" style={{ width: 90 }}>
                 Torcida
@@ -139,6 +143,21 @@ export function Painel() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The board's ultimatum: points so far against the target, and matches left. */
+function UltimatumBox({ u }: { u: Ultimatum }) {
+  const left = u.games - u.played;
+  return (
+    <div className="ultimatum">
+      <div className="row">
+        <b className="bad grow">{`⚠ Ultimato: ${u.pts} de ${u.need} pontos`}</b>
+        <span className="small muted">{left === 1 ? 'falta 1 jogo' : `faltam ${left} jogos`}</span>
+      </div>
+      <Bar v={u.pts} max={u.need} color={u.pts >= u.need ? 'var(--good)' : 'var(--bad)'} />
+      <div className="small muted">{`Faça pelo menos ${u.need} pontos em ${u.games} jogos, ou você será demitido. Cumprindo a meta, a diretoria renova a confiança.`}</div>
     </div>
   );
 }

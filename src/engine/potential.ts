@@ -15,8 +15,11 @@ export function tierOf(str: number): number {
 export function starsFor(str: number, ageY: number, rng: Rng, academyBonus = 0): number {
   const base = tierOf(str);
   let bonus = 0;
-  const r = rng.next() - academyBonus * 0.03;
-  if (ageY <= 19) bonus = r < 0.3 ? 0 : r < 0.7 ? 1 : r < 0.94 ? 2 : 3;
+  const r = rng.next();
+  // a better academy (training centre) turns up fewer prospects with no upside; the rare three-star jump, a
+  // future world-class player, stays rare everywhere
+  const a = academyBonus * 0.03;
+  if (ageY <= 19) bonus = r < 0.3 - a ? 0 : r < 0.72 - a ? 1 : r < 0.97 ? 2 : 3;
   else if (ageY <= 22) bonus = r < 0.4 ? 0 : r < 0.8 ? 1 : 2;
   else if (ageY <= 25) bonus = r < 0.65 ? 0 : 1;
   return Math.min(5, base + bonus);

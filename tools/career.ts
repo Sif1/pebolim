@@ -272,6 +272,12 @@ function checkState(where: string) {
   for (const [k, r] of Object.entries(s.h2h ?? {})) {
     if (r.some((x) => !Number.isFinite(x) || x < 0)) bad(`h2h:${k}`, `retrospecto ${k} inválido`);
   }
+  for (const c of Object.values(s.clubs)) {
+    const u = c.board.ult;
+    if (!u) continue;
+    if (!c.managerId) bad(`ult:${c.id}:${s.meta.season}`, `${c.name} com ultimato e sem técnico humano`);
+    if (u.played > u.games || u.pts > u.played * 3 || u.need < 1 || u.need > u.games * 3) bad(`ultv:${c.id}:${s.meta.season}`, `ultimato inválido no ${c.name}: ${JSON.stringify(u)}`);
+  }
   for (const msg of out) console.log(`BUG [${where}] ${msg}`);
 }
 for (let season = 0; season < SEASONS; season++) {

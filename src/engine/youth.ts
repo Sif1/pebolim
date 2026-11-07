@@ -1,7 +1,7 @@
 // The youth team (base), Brasfoot style: human clubs keep their academy players apart from the first team.
 // Juniors train and play youth matches (their stats hint at how good they are), but their força stays hidden
 // until the manager promotes them. They age out at 20: promoted if promising, released otherwise.
-import { fillerLevel, generatePlayer } from './generator';
+import { academyLevel, generatePlayer } from './generator';
 import { ceilingFor, starsFor } from './potential';
 import type { Rng } from './rng';
 import type { Club, GameState, Player, Pos } from './types';
@@ -27,7 +27,7 @@ const POSITIONS: Pos[] = ['GOL', 'ZAG', 'ZAG', 'LAT', 'VOL', 'MEI', 'MEI', 'ATA'
 export function makeJunior(state: GameState, rng: Rng, club: Club, ageY: number): Player {
   const p = generatePlayer(state, rng, {
     pos: rng.pick(POSITIONS),
-    str: fillerLevel(club) - 22 + (ageY - 15) * 2 + rng.normal(0, 5) + club.tc.level,
+    str: academyLevel(club) - 22 + (ageY - 15) * 2 + rng.normal(0, 5) + club.tc.level,
     nat: club.country,
     ageY,
     clubId: club.id,
@@ -57,7 +57,7 @@ export function youthMatches(state: GameState, rng: Rng) {
     const p = state.players[id];
     if (!p.junior || p.clubId == null || p.injury > 0 || !rng.chance(0.75)) continue;
     const club = state.clubs[p.clubId];
-    const rel = p.str - (fillerLevel(club) - 18);
+    const rel = p.str - (academyLevel(club) - 18);
     const ys = (p.ys ??= [0, 0, 0, 0]);
     ys[0]++;
     const scoring = { ATA: 0.45, MEI: 0.2, VOL: 0.08, LAT: 0.05, ZAG: 0.05, GOL: 0 }[p.pos] * Math.max(0.3, 1 + rel / 15);

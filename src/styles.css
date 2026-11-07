@@ -2591,3 +2591,26 @@ table.compare-t td.better {
     font-size: 12px;
   }
 }
+
+/* ---- 0.9.0: the board's ultimatum */
+.ultimatum {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  background: rgba(220, 60, 60, 0.08);
+}
+
+/* ---- phones: nothing pushes the page sideways */
+@media (max-width: 700px) {
+  /* side-by-side layouts stack, even those that set their own columns (a pair of small controls stays a pair) */
+  .grid2:not(.pair) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  /* a wide table scrolls inside its panel; the header and the cells scroll together */
+  .panel:has(table) {
+    overflow-x: auto;
+  }
+}

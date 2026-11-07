@@ -718,4 +718,18 @@ export const EN_UI: Record<string, string> = {
   'Maior vitória:': 'Biggest win:',
   'Pior derrota:': 'Heaviest defeat:',
   '{0} x {1} {2} contra o {3} ({4})': '{0}–{1} with {2} against {3} ({4})',
+
+  // ---- 0.9.0: the board's ultimatum, bids that lapse
+  'Ultimato da diretoria: falta 1 ponto em {0} jogos': "The board's ultimatum: 1 point needed from {0} matches",
+  'Ultimato da diretoria: faltam {0} pontos em {1} jogos': "The board's ultimatum: {0} points needed from {1} matches",
+  '⚠ Ultimato: {0} de {1} pontos': '⚠ Ultimatum: {0} of {1} points',
+  'falta 1 jogo': '1 match left',
+  'faltam {0} jogos': '{0} matches left',
+  'Faça pelo menos {0} pontos em {1} jogos, ou você será demitido. Cumprindo a meta, a diretoria renova a confiança.':
+    'Take at least {0} points from {1} matches, or you will be sacked. Meet the target and the board renews its confidence.',
+  'Uma proposta vence nesta rodada': 'A bid lapses this round',
+  '{0} propostas vencem nesta rodada': '{0} bids lapse this round',
+  'A proposta por {0} ainda não foi respondida e vence quando a rodada começar.': 'The bid for {0} has not been answered and lapses when the round starts.',
+  'As propostas por {0} ainda não foram respondidas e vencem quando a rodada começar.': 'The bids for {0} have not been answered and lapse when the round starts.',
+  'Continuar mesmo assim': 'Continue anyway',
 };

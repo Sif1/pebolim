@@ -179,7 +179,7 @@ export interface Club {
   managerId: string | null;
   upForSelection: boolean;
   custom: boolean;
-  board: { conf: number; goal: Objective; warned?: number };
+  board: { conf: number; goal: Objective; warned?: number; ult?: Ultimatum };
   /** the fans' mood, 0-100 (60 = neutral); affects crowds and the board */
   fans?: number;
   /** cached best-XI strength, refreshed at season start and after transfers */
@@ -283,6 +283,14 @@ export interface GoalEvent {
   ast: number | null;
   pen?: boolean;
   og?: boolean;
+}
+
+/** The board's last warning: at least `need` points from the next `games` matches, or the sack. */
+export interface Ultimatum {
+  need: number;
+  games: number;
+  played: number;
+  pts: number;
 }
 
 export interface Fixture {

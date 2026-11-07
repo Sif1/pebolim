@@ -6,7 +6,7 @@ import { lineupIssues } from '../engine/ai/lineup';
 import { ask } from './Confirm';
 import { AuctionHistory, AuctionList, openAuctions } from './Auctions';
 import { InboxButton } from './Inbox';
-import { deadlineDay } from '../engine/transfers';
+import { bidRoundsLeft, deadlineDay } from '../engine/transfers';
 import { ClubBadge, compLabel, Modal } from './common';
 import { LangToggle } from './LangToggle';
 import { ClaimPanel } from './Lobby';
@@ -256,6 +256,8 @@ function TopBar() {
   const online = useApp((s) => s.online);
   const setScreen = useApp((s) => s.setScreen);
   const [confirm, setConfirm] = useState(false);
+  // the round whose lapsing bids the manager already chose to let go (asked once per round)
+  const [letGo, setLetGo] = useState<string | null>(null);
   if (!state || !lobby) return null;
   const me = lobby.players.find((p) => p.clientId === client.clientId);
   const managers = lobby.players.filter((p) => p.connected && p.managerId);
@@ -265,6 +267,26 @@ function TopBar() {
   const opp = nf && club ? state.clubs[nf.home === club.id ? nf.away : nf.home] : null;
   const cal = state.calendar[state.meta.date];
   const issues = club ? lineupIssues(state, club.id) : [];
+  // bids for my players that nobody has answered and that lapse when this round starts
+  const lapsing = club ? Object.values(state.bids).filter((b) => b.seller === club.id && b.status === 'pendente' && bidRoundsLeft(state, b) === 1) : [];
+  /** Before moving on: a reminder of unanswered bids that would lapse. False when the manager goes to answer them. */
+  const bidsChecked = async (): Promise<boolean> => {
+    const round = `${state.meta.season}:${state.meta.date}`;
+    if (!lapsing.length || letGo === round) return true;
+    const names = lapsing.map((b) => state.players[b.player]?.name ?? '?').join(', ');
+    const go = await ask({
+      title: lapsing.length === 1 ? 'Uma proposta vence nesta rodada' : `${lapsing.length} propostas vencem nesta rodada`,
+      text:
+        lapsing.length === 1
+          ? `A proposta por ${names} ainda não foi respondida e vence quando a rodada começar.`
+          : `As propostas por ${names} ainda não foram respondidas e vencem quando a rodada começar.`,
+      ok: 'Continuar mesmo assim',
+      cancel: 'Ver propostas',
+    });
+    if (go) setLetGo(round);
+    else setScreen('mercado', 'propostas');
+    return go;
+  };
 
   return (
     <header className="topbar">
@@ -338,12 +360,24 @@ function TopBar() {
           data-shortcut={host ? undefined : 'space'}
           disabled={!me?.ready && issues.length > 0}
           title={!me?.ready && issues.length ? `Arrume a escalação antes: ${issues.join('; ')}` : undefined}
-          onClick={() => client.ready(!me?.ready)}
+          onClick={async () => {
+            if (!me?.ready && !(await bidsChecked())) return;
+            client.ready(!me?.ready);
+          }}
         >
           {me?.ready ? 'Cancelar pronto' : 'Pronto ✓'}
         </button>
         {host && (
-          <button className="btn primary lg" data-shortcut="space" title="Jogar a próxima rodada (atalho: Espaço)" onClick={() => (waiting.length === 0 ? client.hostAction('matchday') : setConfirm(true))}>
+          <button
+            className="btn primary lg"
+            data-shortcut="space"
+            title="Jogar a próxima rodada (atalho: Espaço)"
+            onClick={async () => {
+              if (!(await bidsChecked())) return;
+              if (waiting.length === 0) client.hostAction('matchday');
+              else setConfirm(true);
+            }}
+          >
             Continuar ▶
           </button>
         )}

@@ -726,7 +726,7 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
       <h3 style={{ margin: '4px 0 0' }}>
         Tática <span className="faint small">{shapeLabel(d.tactics)}</span>
       </h3>
-      <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+      <div className="grid2 pair" style={{ gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         <select value={tactics.formation} onChange={(e) => setT({ ...tactics, formation: e.target.value as Formation, shape: null })}>
           {FORMATION_LIST.map((x) => (
             <option key={x}>{x}</option>

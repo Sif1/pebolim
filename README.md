@@ -43,6 +43,7 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 
 **Board and fans**
 - A season objective from the club's standing, board confidence that moves with every result, mid-season board meetings and written warnings before a sacking
+- The last warning is an ultimatum with a clear target ("at least 6 points from the next 5 matches"), shown on the dashboard and in the notifications: meet it and the board trusts you again
 - A manager in his first season at the club, or one who won a trophy with it in the last three seasons, takes half the blame for a missed objective
 - Fan mood that fills or empties the stadium, lifted by wins and big signings, hurt by defeats and by selling stars (and twice as much by a derby)
 - The board pays half of the training-centre works when it trusts the manager (a quarter when it's unsure)
@@ -52,6 +53,7 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 **The interface**
 - A notification bell lists what needs your attention (bids to answer, the window closing, line-up problems, auctions worth a look, the board, a derby coming up), each a click from its screen; no pop-ups
 - Keyboard shortcuts: Space continues the round (or gets you ready; pauses your match on match day), 1 to 9 open the menu screens, N the notifications, ? the list
+- Continuing with a bid for one of your players still unanswered on its last round asks first, so it doesn't lapse by accident
 - Tooltips explain força and potential stars wherever they appear
 - Works on phones: the menu becomes a strip at the top and match day fits in one column
 
@@ -123,7 +125,7 @@ If a friend can't connect (some mobile or corporate networks block direct WebRTC
 npm test
 ```
 
-Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review and the training-centre share; plus the translation layer.
+Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development and the AI's contract renewals; plus the translation layer.
 
 ```bash
 npm run sim -- 2
