@@ -106,7 +106,8 @@ export function matchInterest(home: Club, awayRep: number, comp: Competition | u
   if (comp?.cfg.scope === 'continental') interest += 0.15;
   if (comp?.cfg.scope === 'state') interest -= 0.1;
   if (bigStage) interest += 0.12;
-  return interest;
+  // happy fans fill the stadium, angry ones stay home
+  return interest * (1 + ((home.fans ?? 60) - 60) * 0.004);
 }
 
 export interface Gate {

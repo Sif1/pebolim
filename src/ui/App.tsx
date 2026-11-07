@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { leaveGame, useApp, useMe } from '../store';
 import { clubTheme } from './common';
+import { ConfirmHost } from './Confirm';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { MatchDay } from './match/MatchDay';
@@ -55,6 +56,7 @@ export function App() {
     <>
       {body}
       <Notices />
+      <ConfirmHost />
     </>
   );
 }

@@ -3,12 +3,14 @@ import { ceilingFor, tierOf } from './potential';
 import { sectorRefs } from './economy';
 import { SAVE_FORMAT_VERSION, type Fixture, type GameState, type Player, type SectorPrices } from './types';
 import { defaultTicket } from './world';
+import { Rng } from './rng';
+import { ensureYouthTeam } from './youth';
 
 const APP = 'pebolim-manager';
 
 const PLAYER_KEYS: (keyof Player)[] = [
   'id', 'name', 'nat', 'pos', 'birth', 'str', 'stars', 'pot', 'traits', 'clubId', 'wage', 'contractEnd',
-  'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle',
+  'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle', 'pre', 'junior', 'ys',
 ];
 const FIXTURE_KEYS: (keyof Fixture)[] = [
   'id', 'comp', 'date', 'home', 'away', 'hg', 'ag', 'pens', 'stage', 'tie', 'leg', 'group', 'round', 'goals', 'att', 'reds',
@@ -122,6 +124,11 @@ function migrate(state: GameState): GameState {
       p.stars = Math.max(tierOf(p.str), tierOf(p.pot ?? p.str));
       p.pot = Math.max(p.str, ceilingFor(p.stars));
     }
+  }
+  // youth teams (saves before them had none): every human club gets one, the same on every computer
+  for (const c of Object.values(state.clubs)) {
+    if (!c.managerId || Object.values(state.players).some((p) => p.junior && p.clubId === c.id)) continue;
+    ensureYouthTeam(state, Rng.fromSeed(`youth:${state.meta.season}:${c.id}`), c);
   }
   return state;
 }

@@ -1,11 +1,12 @@
 import { ceilingFor, starsFor } from './potential';
 import { fireManager } from './board';
 import { homeGameCounts, wageBudget } from './economy';
+import { youthSeasonEnd } from './youth';
 import { foreignShareFor, startSeason } from './world';
-import { assignNumbers, fillSquad, generatePlayer, strForRep } from './generator';
+import { assignNumbers, fillerLevel, fillSquad, generatePlayer } from './generator';
 import type { Rng } from './rng';
 import type { Club, GameState, Player, SeasonHistory } from './types';
-import { absDate, addNews, age, clamp, expectedWage, roundMoney, sortTable, squadIndex } from './util';
+import { absDate, addNews, age, clamp, expectedWage, formatMoney, roundMoney, sortTable, squadIndex } from './util';
 
 /** Run end-of-season processing and start the next season. */
 export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
@@ -74,7 +75,7 @@ export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
   addNews(state, 'info', `Começa a temporada ${state.meta.season}!`);
 }
 
-function seasonVerdict(state: GameState, club: Club, pos: number, n: number, present: Set<string>) {
+export function seasonVerdict(state: GameState, club: Club, pos: number, n: number, present: Set<string>) {
   const goal = club.board.goal;
   let delta = 0;
   if (goal === 'titulo') delta = pos === 1 ? 25 : pos <= 4 ? 0 : pos <= 8 ? -15 : -35;
@@ -82,11 +83,16 @@ function seasonVerdict(state: GameState, club: Club, pos: number, n: number, pre
   else if (goal === 'meio') delta = pos <= n - 4 ? 8 : -30;
   else if (goal === 'rebaixamento') delta = pos <= n - 4 ? 15 : -20;
   else if (goal === 'acesso') delta = pos <= 4 ? 25 : pos <= 8 ? -5 : -25;
-  club.board.conf = clamp(club.board.conf + delta, 0, 100);
   const m = club.managerId ? state.managers[club.managerId] : null;
+  // a manager in his first season at the club gets the benefit of the doubt: half the blame for a missed objective
+  const firstSeason = !!m && Math.floor(m.since / 100) >= state.meta.season;
+  if (firstSeason && delta < 0) delta /= 2;
+  club.board.conf = clamp(club.board.conf + delta, 0, 100);
   if (m) {
     m.rep = clamp(m.rep + delta / 6, 5, 100);
     if (club.board.conf < 20 && present.has(m.id)) fireManager(state, m, 'objetivo da temporada não cumprido');
+    else if (firstSeason && delta < 0 && present.has(m.id))
+      addNews(state, 'board', `A diretoria do ${club.name} mantém você no cargo apesar do objetivo não cumprido, mas espera muito mais na próxima temporada.`, [club.id], m.id);
   }
 }
 
@@ -156,7 +162,11 @@ function contractsAndLoans(state: GameState, rng: Rng) {
       p.idle++;
       continue;
     }
-    if (p.contractEnd >= next) continue;
+    if (p.junior || p.contractEnd >= next) continue;
+    if (p.pre && state.clubs[p.pre.club] && p.pre.club !== p.clubId) {
+      joinOnPreContract(state, p, next);
+      continue;
+    }
     const club = state.clubs[p.clubId];
     const a = age(p, state.meta.season);
     if (!club.managerId) {
@@ -175,7 +185,18 @@ function contractsAndLoans(state: GameState, rng: Rng) {
       // the player leaves: his wages free up room
       room.set(club.id, roomOf(club) + p.wage * 12);
     }
-    if (club.managerId) addNews(state, 'contract', `${p.name} deixa o ${club.name} ao fim do contrato.`, [club.id], club.managerId);
+    if (club.managerId && (club.autoRenewAll || club.autoRenew?.includes(p.id))) {
+      const squad = idx.get(club.id) ?? [];
+      const key = [...squad].sort((x, y) => y.str - x.str).slice(0, 11).some((x) => x.id === p.id);
+      const before = p.wage;
+      const r = autoRenewal(state, p, club, next, { room: roomOf(club), budget: wageBudget(state, club, homes), key });
+      addNews(state, 'contract', r, [club.id], club.managerId);
+      if (p.contractEnd >= next) {
+        room.set(club.id, roomOf(club) - (p.wage - before) * 12);
+        continue;
+      }
+      room.set(club.id, roomOf(club) + p.wage * 12);
+    } else if (club.managerId) addNews(state, 'contract', `${p.name} deixa o ${club.name} ao fim do contrato.`, [club.id], club.managerId);
     p.clubId = null;
     p.salePrice = null;
     p.loanListed = null;
@@ -183,6 +204,54 @@ function contractsAndLoans(state: GameState, rng: Rng) {
     p.idle = 0;
     p.num = 0;
   }
+}
+
+/**
+ * Automatic renewal for a human club (like Brasfoot's): the player signs on at what he asks (10% more under 30),
+ * for 3 years (2 from 30, 1 from 33), unless he is 35 or older or unhappy (morale below 25). Returns the news text.
+ */
+export function autoRenewal(
+  state: GameState,
+  p: Player,
+  club: Club,
+  next: number,
+  budget?: { room: number; budget: number; key: boolean },
+): string {
+  const a = age(p, state.meta.season);
+  if (a >= 35) return `${p.name} (${a} anos) não renova: só contratos negociados na mão a partir dos 35. Ele deixa o ${club.name}.`;
+  if (p.morale < 25) return `${p.name} está insatisfeito e recusou a renovação automática. Ele deixa o ${club.name}.`;
+  const wage = roundMoney(expectedWage(p, next, club.rep) * (a < 30 ? 1.1 : 1));
+  // within the wage budget; a regular starter may go up to 10% over it
+  const extra = (Math.max(p.wage, wage) - p.wage) * 12;
+  if (budget && extra > budget.room && !(budget.key && extra <= budget.room + budget.budget * 0.1)) {
+    return `Renovação automática cancelada: ${p.name} pede ${formatMoney(wage)}/mês e a folha passaria do orçamento salarial. Ele deixa o ${club.name}.`;
+  }
+  const years = a >= 33 ? 1 : a >= 30 ? 2 : 3;
+  p.wage = Math.max(p.wage, wage);
+  p.contractEnd = next + years - 1;
+  p.morale = Math.min(100, p.morale + 5);
+  return `Renovação automática: ${p.name} fica até ${p.contractEnd} por ${formatMoney(p.wage)}/mês.`;
+}
+
+/** A player with a pre-contract moves to his new club when his contract ends. */
+function joinOnPreContract(state: GameState, p: Player, next: number) {
+  const pre = p.pre!;
+  const from = p.clubId != null ? state.clubs[p.clubId] : null;
+  const to = state.clubs[pre.club];
+  if (from) {
+    from.lineup.xi = from.lineup.xi.map((x) => (x === p.id ? null : x));
+    from.lineup.bench = from.lineup.bench.filter((x) => x !== p.id);
+  }
+  p.clubId = to.id;
+  p.wage = pre.wage;
+  p.contractEnd = next + pre.years - 1;
+  p.salePrice = null;
+  p.loanListed = null;
+  p.auction = null;
+  p.pre = null;
+  p.num = 0;
+  p.idle = 0;
+  addNews(state, 'transfer', `${p.name} chega ao ${to.name} de graça, com o pré-contrato assinado${from ? ` (deixa o ${from.name})` : ''}.`, [to.id, ...(from ? [from.id] : [])]);
 }
 
 function retirements(state: GameState, rng: Rng) {
@@ -212,13 +281,18 @@ function retirements(state: GameState, rng: Rng) {
 function youthIntake(state: GameState, rng: Rng) {
   const nextSeason = state.meta.season + 1;
   for (const c of Object.values(state.clubs)) {
+    // human clubs: the youth team (base) takes the new boys instead
+    if (c.managerId) {
+      youthSeasonEnd(state, rng, c);
+      continue;
+    }
     const n = c.league ? rng.int(2, 4) : rng.int(0, 2);
-    const level = strForRep(c.rep);
+    const level = fillerLevel(c);
     for (let i = 0; i < n; i++) {
       const ageY = rng.int(16, 18);
       const p: Player = generatePlayer(state, rng, {
         pos: rng.pick(['GOL', 'ZAG', 'ZAG', 'LAT', 'VOL', 'MEI', 'MEI', 'ATA', 'ATA'] as const),
-        str: level - 16 + rng.normal(0, 5) + c.tc.level,
+        str: level - 18 + rng.normal(0, 5) + c.tc.level,
         nat: c.country,
         ageY: ageY - 1,
         clubId: c.id,
@@ -252,19 +326,38 @@ function maintainSquads(state: GameState, rng: Rng) {
       }
       squad = squad.filter((p) => !out.includes(p));
     }
-    const min = c.league ? 22 : 20;
+    // a human manager runs his own squad: the board only tops it up to a playable size, with free agents at the
+    // club's own level whose wages fit what is left of the budget, else cheap youngsters (never a free upgrade)
+    const human = !!c.managerId;
+    const min = human ? 18 : c.league ? 22 : 20;
     if (squad.length < min) {
+      const cap = human ? fillerLevel(c) + 2 : c.power + 6;
+      let room = human ? wageBudget(state, c) - squad.reduce((a, p) => a + p.wage, 0) * 12 : Infinity;
+      const signed: string[] = [];
       for (const p of free) {
         if (squad.length >= min) break;
         if (p.clubId != null) continue;
-        if (p.str > c.power + 6) continue;
+        if (p.str > cap) continue;
+        const wage = expectedWage(p, state.meta.season + 1, c.rep);
+        if (wage * 12 > room) continue;
+        room -= wage * 12;
         p.clubId = c.id;
-        p.wage = expectedWage(p, state.meta.season + 1, c.rep);
+        p.wage = wage;
         p.contractEnd = state.meta.season + 1 + rng.int(0, 2);
         p.idle = 0;
         squad.push(p);
+        signed.push(p.name);
       }
-      if (squad.length < min) fillSquad(state, rng, c.id, squad, strForRep(c.rep) - 2, foreignShareFor(c), min);
+      const short = min - squad.length;
+      if (short > 0) fillSquad(state, rng, c.id, squad, fillerLevel(c) - 2, foreignShareFor(c), min);
+      if (human)
+        addNews(
+          state,
+          'board',
+          `A diretoria completou o elenco do ${c.name} para ter ${min} jogadores: ${[...signed, ...(short > 0 ? [`${short} jovens da região`] : [])].join(', ')}.`,
+          [c.id],
+          c.managerId,
+        );
     }
   }
   for (const squad of squadIndex(state).values()) assignNumbers(squad);

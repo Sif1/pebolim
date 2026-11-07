@@ -3,6 +3,9 @@ import { loadDefaultDb, type Database } from '../engine/db';
 import { buildDatabase } from '../engine/dbcsv';
 import { idbGet, type AutoSave } from '../idb';
 import { hostFromBytes, hostNewGame, joinGame, useApp } from '../store';
+import { tr } from '../i18n';
+import { Changelog } from './Changelog';
+import { LangToggle } from './LangToggle';
 
 export function Home() {
   const [name, setName] = useState(() => localStorage.getItem('pebolim.name') ?? '');
@@ -18,7 +21,7 @@ export function Home() {
   const appErr = useApp((s) => s.error);
 
   // new game options
-  const [gameName, setGameName] = useState('Minha carreira');
+  const [gameName, setGameName] = useState(() => tr('Minha carreira'));
   const [minutes, setMinutes] = useState(5);
   const [windows, setWindows] = useState(true);
   const [online, setOnline] = useState(true);
@@ -79,8 +82,11 @@ export function Home() {
   return (
     <div className="hero">
       <div style={{ width: 'min(760px, 100%)' }} className="col">
-        <div className="logo">
-          Pebolim <span>Manager</span>
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div className="logo grow" translate="no">
+            Pebolim <span>Manager</span>
+          </div>
+          <LangToggle />
         </div>
         <div className="muted" style={{ marginTop: -6 }}>
           Futebol de treinador para jogar com os amigos, direto no navegador.
@@ -195,6 +201,7 @@ export function Home() {
           )}
           {(err || appErr) && <div className="bad">{err ?? appErr}</div>}
         </div>
+        <Changelog />
         <IceSettings />
         <div className="small faint">
           Projeto pessoal, sem fins comerciais. Elencos e forças são aproximados e podem ser editados no banco de dados.

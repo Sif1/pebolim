@@ -3,7 +3,7 @@ import { AI_COACH, aiPlan, describeChange, MENTALITY_TXT, naturalStyle, preferre
 import type { Formation, GoalEvent, Pos, Style, Tactics, Trait } from '../types';
 import { FORMATIONS, shapeLabel, slotsFor, type Slot } from './formations';
 import { computeRatings, effective, overall, type RatedPlayer, type SectorRatings } from './ratings';
-import { autoShootout, defaultOrder, Shootout, type PkTaker } from './shootout';
+import { aiDive, aiShot, autoShootout, defaultOrder, kickOutcome, Shootout, type PkTaker } from './shootout';
 
 export const PITCH_W = 105;
 export const PITCH_H = 68;
@@ -86,7 +86,8 @@ export type MatchEventKind =
   | 'kickoff'
   | 'miss'
   | 'save'
-  | 'tactic';
+  | 'tactic'
+  | 'penalty';
 
 export interface MatchEvent {
   t: number;
@@ -305,6 +306,8 @@ export class MatchSim {
   pkMode: 'auto' | 'live' = 'auto';
   /** full time with the tie level: the shootout is due (live mode only) */
   pkPending = false;
+  /** a penalty was given in a match with a human: it waits to be taken kick by kick (live mode only) */
+  spotPending: { side: 0 | 1; taker: number | null } | null = null;
   stats: [SideStats, SideStats] = [emptyStats(), emptyStats()];
   events: MatchEvent[] = [];
   goals: GoalEvent[] = [];
@@ -529,9 +532,9 @@ export class MatchSim {
   // ---------- simulation ----------
   /** Advance the game clock by dt seconds (live mode). */
   step(dt: number) {
-    if (this.ended || this.pkPending) return;
+    if (this.ended || this.pkPending || this.spotPending) return;
     const target = this.t + dt;
-    while (!this.ended && !this.pkPending) {
+    while (!this.ended && !this.pkPending && !this.spotPending) {
       if (!this.action) {
         this.beginNext();
         continue;
@@ -552,6 +555,11 @@ export class MatchSim {
   runToEnd(): MatchResult {
     let guard = 0;
     while (!this.ended && !this.pkPending && guard++ < 20000) {
+      if (this.spotPending) {
+        // nobody is choosing: the penalty is taken with AI choices
+        this.autoSpotKick();
+        continue;
+      }
       if (!this.action) this.beginNext();
       else {
         this.t = this.action.t1;
@@ -577,6 +585,31 @@ export class MatchSim {
   /** Keeper ratings [home, away] for penalties. */
   pkKeepers(): [number, number] {
     return [this.sides[0].ratings.gk, this.sides[1].ratings.gk];
+  }
+
+  /** Take the pending penalty with the given taker and outcome (0 goal, 1 saved, 2 missed). */
+  resolveSpotKick(taker: number, out: 0 | 1 | 2) {
+    const sp = this.spotPending;
+    if (!sp) return;
+    this.spotPending = null;
+    this.poss = sp.side;
+    const onPitch = this.sides[sp.side].onPitch.includes(taker);
+    this.doShot('penalty', onPitch ? taker : sp.taker, undefined, out);
+  }
+
+  /** The pending penalty with AI choices on both sides. */
+  autoSpotKick() {
+    const sp = this.spotPending;
+    if (!sp) return;
+    const takers = this.pkTakers(sp.side);
+    const t = takers.find((x) => x.id === sp.taker) ?? takers.find((x) => !x.gk) ?? takers[0];
+    if (!t) {
+      this.spotPending = null;
+      return;
+    }
+    const dir = aiShot(this.rng);
+    const out = kickOutcome(t, this.pkKeepers()[1 - sp.side], dir, aiDive(this.rng, []), this.rng);
+    this.resolveSpotKick(t.id, out);
   }
 
   /** A new shootout: a coin toss for who kicks first, best takers first. */
@@ -1003,8 +1036,16 @@ export class MatchSim {
         return this.doCorner();
       case 'freekick':
         return this.doFreeKick();
-      case 'penalty':
-        return this.doShot('penalty', this.penaltyTaker(this.poss));
+      case 'penalty': {
+        const taker = this.penaltyTaker(this.poss);
+        // a human in the match: the penalty becomes the mini-game (the live match takes it from here)
+        if (this.pkMode === 'live' && (!this.sides[0].ai || !this.sides[1].ai)) {
+          this.spotPending = { side: this.poss, taker };
+          this.action = null;
+          return;
+        }
+        return this.doShot('penalty', taker);
+      }
       default:
         return this.decide();
     }
@@ -1287,6 +1328,7 @@ export class MatchSim {
       this.rate(fouler, inBox ? -0.4 : -0.06);
       if (fouler != null) this.cardCheck(o, fouler, evs);
       const pen = inBox;
+      if (pen) evs.push({ t: 0, kind: 'penalty', side: s, text: `Pênalti para o ${this.sides[s].setup.name}!` });
       this.start(kind, dur, spot, {
         poss: s,
         carrier: this.carrier,
@@ -1357,7 +1399,7 @@ export class MatchSim {
     this.recalc();
   }
 
-  private doShot(type: 'box' | 'long' | 'header' | 'penalty' | 'freekick', pid: number | null, from?: 'corner' | 'cross' | 'freekick') {
+  private doShot(type: 'box' | 'long' | 'header' | 'penalty' | 'freekick', pid: number | null, from?: 'corner' | 'cross' | 'freekick', forced?: 0 | 1 | 2) {
     const s = this.poss;
     const o = (1 - s) as 0 | 1;
     const A = this.sides[s];
@@ -1386,12 +1428,13 @@ export class MatchSim {
       if (lp && lp.side === s && (from || this.rng.chance(0.75))) ast = this.lastPasser;
     }
     const kind: ActionKind = type === 'header' ? 'header' : type === 'penalty' ? 'penalty' : type === 'freekick' ? 'freekick' : 'shot';
-    const dur = type === 'penalty' ? this.rng.range(40, 60) : type === 'freekick' ? this.rng.range(18, 26) : type === 'header' ? (from === 'corner' ? this.rng.range(18, 26) : 2.5) : this.rng.range(1.5, 2.5);
+    // a penalty decided in the mini-game already took its time on screen: just the kick
+    const dur = forced != null ? 3 : type === 'penalty' ? this.rng.range(40, 60) : type === 'freekick' ? this.rng.range(18, 26) : type === 'header' ? (from === 'corner' ? this.rng.range(18, 26) : 2.5) : this.rng.range(1.5, 2.5);
     if (type === 'header') {
       // ball comes in from the flank first: start the action from the shooter area visually
       this.ball = { x: this.toX(s, from === 'corner' ? 0.995 : 0.82), y: from === 'corner' ? (this.rng.chance(0.5) ? 1 : PITCH_H - 1) : this.ball.y };
     }
-    if (this.rng.chance(pGoal)) {
+    if (forced != null ? forced === 0 : this.rng.chance(pGoal)) {
       const to = { x: goalX + (this.dir(s) > 0 ? 1.5 : -1.5), y: goalY };
       this.start(kind, dur, to, {
         poss: o,
@@ -1406,7 +1449,7 @@ export class MatchSim {
       this.pendingKickoff = o;
       return;
     }
-    const onTarget = this.rng.chance(type === 'penalty' ? 0.6 : 0.36);
+    const onTarget = forced != null ? forced === 1 : this.rng.chance(type === 'penalty' ? 0.6 : 0.36);
     if (onTarget) {
       const gk = this.gkOf(o);
       const to = { x: this.toX(s, 0.985), y: goalY };

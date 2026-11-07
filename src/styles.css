@@ -347,8 +347,21 @@ table.t th {
   white-space: nowrap;
   z-index: 1;
 }
+table.t th.right,
+table.t td.right {
+  text-align: right;
+}
+table.t th.center,
+table.t td.center {
+  text-align: center;
+}
 table.t th.sortable {
   cursor: pointer;
+}
+table.t th .sort-arrow {
+  font-size: 10px;
+  color: var(--gold);
+  margin: 0 3px;
 }
 table.t th.sortable:hover {
   color: var(--gold);
@@ -765,23 +778,28 @@ canvas.pitch {
 /* match day: focused match = pitch | stats | controls */
 .match-focus {
   display: grid;
-  grid-template-columns: minmax(0, 560px) 250px minmax(300px, 380px);
+  grid-template-columns: minmax(0, 640px) minmax(320px, 420px);
   gap: 12px;
   align-items: start;
 }
-@media (max-width: 1280px) {
-  .match-focus {
-    grid-template-columns: minmax(0, 560px) 250px;
-  }
-  .match-focus > :last-child {
-    grid-column: 1 / -1;
-    max-width: 820px;
-  }
-}
-@media (max-width: 860px) {
+@media (max-width: 1000px) {
   .match-focus {
     grid-template-columns: 1fr;
   }
+}
+/* stats under the commentary: two columns of comparisons */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+@media (max-width: 560px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+table.t tr.draggable {
+  cursor: grab;
 }
 .scoreboard {
   display: grid;
@@ -1513,6 +1531,9 @@ img.crest {
 .mm-team.top {
   top: 2px;
 }
+.mm-team {
+  padding-left: 3px;
+}
 .mm-team.bottom {
   bottom: 16px;
 }
@@ -1828,4 +1849,182 @@ img.flag {
   border-radius: 50%;
   background: #0b1626;
   color: var(--good);
+}
+
+/* money fields ("2,5kk") */
+.money-field {
+  display: inline-flex;
+  align-items: center;
+  background: #0b1626;
+  border: 1px solid #2b4a70;
+  border-radius: var(--radius);
+  padding-left: 6px;
+}
+.money-field .money-cur {
+  font-size: 11px;
+  color: var(--faint);
+  margin-right: 2px;
+}
+.money-field input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.money-field input.bad {
+  color: var(--bad);
+}
+
+/* in-game confirmation dialog */
+.confirm-bg {
+  z-index: 80;
+}
+.confirm {
+  width: min(440px, 100%);
+  background: linear-gradient(180deg, #1d3658, #12233a);
+  border: 1px solid #000;
+  border-top: 3px solid var(--club-dark);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), inset 1px 1px 0 var(--edge-hi);
+  animation: confirm-in 0.12s ease-out;
+}
+.confirm.danger {
+  border-top-color: #a52d2a;
+}
+.confirm-title {
+  font-family: var(--cond);
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+  padding: 12px 16px 4px;
+}
+.confirm-text {
+  padding: 0 16px 6px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px 14px;
+}
+@keyframes confirm-in {
+  from {
+    transform: translateY(6px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.panel.auto-renew {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* pixel-art portraits */
+svg.portrait {
+  flex: none;
+  border: 2px solid #050b14;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px var(--edge-hi), 0 2px 6px rgba(0, 0, 0, 0.45);
+  image-rendering: pixelated;
+}
+
+/* ---------- language switch ---------- */
+.lang-toggle {
+  display: inline-flex;
+  border: 1px solid #000;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0b1626;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+  flex: none;
+}
+.lang-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 700 13px var(--cond);
+  letter-spacing: 0.06em;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.lang-toggle button + button {
+  border-left: 1px solid #000;
+}
+.lang-toggle button:hover {
+  color: #fff;
+}
+.lang-toggle button.active {
+  color: #fff;
+  background: linear-gradient(180deg, var(--club-dark), var(--club-deep));
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+.sidebar .lang-toggle {
+  display: flex;
+  margin: 4px 6px;
+}
+.sidebar .lang-toggle button {
+  flex: 1;
+  justify-content: center;
+  padding: 6px 0;
+  margin: 0;
+  width: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 14px;
+  color: var(--muted);
+}
+.sidebar .lang-toggle button + button {
+  border-left: 1px solid #000;
+}
+.sidebar .lang-toggle button.active {
+  color: #fff;
+  background: linear-gradient(180deg, var(--club-dark), var(--club-deep));
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+/* ---------- changelog on the home screen ---------- */
+.changelog h3 {
+  margin: 0;
+}
+.changelog details {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 6px;
+}
+.changelog summary {
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-family: var(--cond);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.changelog .cl-date {
+  color: #fff;
+}
+.changelog .cl-ver {
+  color: var(--gold);
+  font-size: 13px;
+}
+.changelog ul {
+  margin: 6px 0 4px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--text);
 }

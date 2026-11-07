@@ -3,7 +3,7 @@ import { windowOpen } from '../../engine/transfers';
 import { POSITIONS, TRAITS, type Player, type Pos, type Trait } from '../../engine/types';
 import { age, formatMoney, playerValue } from '../../engine/util';
 import { useMe } from '../../store';
-import { ClubBadge, COUNTRY_NAME, Flag, PosTag, Stars, Str, useSort } from '../common';
+import { ClubBadge, COUNTRY_NAME, Flag, MoneyField, PosTag, Stars, Str, useSort } from '../common';
 import { MarketPills, PlayerModal, Traits, traitLabel } from '../PlayerModal';
 
 
@@ -66,7 +66,8 @@ export function Mercado() {
     const out: Player[] = [];
     for (const id in state.players) {
       const p = state.players[id];
-      if (p.clubId === club.id) continue;
+      // own players and other clubs' youth teams are not on the market
+      if (p.clubId === club.id || p.junior) continue;
       if (q && !p.name.toLowerCase().includes(q)) continue;
       if (f.pos && p.pos !== f.pos) continue;
       const a = season - p.birth;
@@ -181,16 +182,8 @@ export function Mercado() {
             <input type="number" value={f.strMax} min={1} max={99} style={{ width: 64 }} onChange={(e) => set({ strMax: Number(e.target.value) })} />
           </label>
           <label className="row small">
-            Valor máx. (US$ mi)
-            <input
-              type="number"
-              value={f.maxValue ? f.maxValue / 1_000_000 : ''}
-              min={0}
-              step={0.5}
-              placeholder="—"
-              style={{ width: 80 }}
-              onChange={(e) => set({ maxValue: Number(e.target.value) * 1_000_000 })}
-            />
+            Valor máx.
+            <MoneyField value={f.maxValue} allowZero={false} placeholder="sem limite" width={110} onChange={(v) => set({ maxValue: v })} />
           </label>
           <button className="btn sm ghost" onClick={() => set(DEFAULT)}>
             Limpar filtros

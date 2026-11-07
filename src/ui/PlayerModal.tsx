@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { preContractBlock } from '../engine/commands';
 import { askingPrice, auctionCanClose, wageDemand, windowOpen } from '../engine/transfers';
 import type { Club, GameState, Player } from '../engine/types';
 import { absDateLabel, age, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from '../engine/util';
 import { command, useMe } from '../store';
-import { Bar, ClubName, compLabel, Energy, Flag, Modal, PosTag, Stars, Str } from './common';
+import { ask } from './Confirm';
+import { Portrait } from './Portrait';
+import { Bar, ClubName, compLabel, Energy, Flag, Modal, MoneyField, PosTag, Stars, Str } from './common';
 
 const TRAIT_LABEL: Record<string, string> = {
   finalizacao: 'Finalização',
@@ -48,14 +51,9 @@ export function Traits({ traits, small }: { traits: string[]; small?: boolean })
   );
 }
 
-/** Money input in US$ with the formatted amount next to it. */
-function MoneyInput({ value, onChange, step = 50_000, width = 130 }: { value: number; onChange: (v: number) => void; step?: number; width?: number }) {
-  return (
-    <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-      <input type="number" min={0} step={step} value={Math.round(value)} onChange={(e) => onChange(Math.max(0, Number(e.target.value)))} style={{ width }} />
-      <span className="small muted nowrap">{formatMoney(value)}</span>
-    </span>
-  );
+/** Money input in the short form ("2,5kk"). */
+function MoneyInput({ value, onChange, step, width = 130 }: { value: number; onChange: (v: number) => void; step?: number; width?: number }) {
+  return <MoneyField value={value} onChange={onChange} step={step} width={width} />;
 }
 
 /** Market status pills for a player (for sale, loan, auction, on loan). */
@@ -67,6 +65,7 @@ export function MarketPills({ p, state, compact }: { p: Player; state: GameState
         {p.loanListed && <span className="pill info" title={`Disponível para empréstimo de ${p.loanListed} meses`}>emp. {p.loanListed}m</span>}
         {p.auction && <span className="pill warn" title={`Lance mínimo ${formatMoney(p.auction.min)}`}>leilão</span>}
         {p.loan && <span className="pill" title={`Volta em ${absDateLabel(state, p.loan.until)}`}>emprestado</span>}
+        {p.pre && <span className="pill info" title={`Pré-contrato com o ${state.clubs[p.pre.club]?.name}`}>pré-contrato</span>}
       </>
     );
   return (
@@ -75,6 +74,7 @@ export function MarketPills({ p, state, compact }: { p: Player; state: GameState
       {p.loanListed && <span className="pill info">empréstimo {p.loanListed}m</span>}
       {p.auction && <span className="pill warn">leilão · mín. {formatMoney(p.auction.min)}</span>}
       {p.loan && <span className="pill">emprestado até {absDateLabel(state, p.loan.until).slice(3)}</span>}
+      {p.pre && <span className="pill info">pré-contrato com o {state.clubs[p.pre.club]?.name}</span>}
     </>
   );
 }
@@ -93,6 +93,7 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
   return (
     <Modal onClose={onClose} wide>
       <div className="row" style={{ alignItems: 'flex-start' }}>
+        <Portrait id={p.id} nat={p.nat} age={a} pos={p.pos} kit={owner?.colors ?? ['#5b6b7d', '#d9e1ea']} num={p.num} size={76} />
         <div className="grow">
           <div className="row">
             <PosTag pos={p.pos} />
@@ -177,19 +178,25 @@ function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameS
   const value = playerValue(p, season);
   const ask = owner && !owner.managerId ? askingPrice(state, p) : p.salePrice;
   const demand = wageDemand(state, p, club);
-  const [kind, setKind] = useState<'compra' | 6 | 12>(p.salePrice == null && p.loanListed ? p.loanListed : 'compra');
+  const preOk = owner != null && !preContractBlock(state, p) && !p.pre;
+  const [kind, setKind] = useState<'compra' | 6 | 12 | 'pre'>(preOk && !windowOpen(state) ? 'pre' : p.salePrice == null && p.loanListed ? p.loanListed : 'compra');
   const [fee, setFee] = useState(ask ?? value);
   const [wage, setWage] = useState(owner ? demand : expectedWage(p, season, club.rep));
   const [years, setYears] = useState(3);
   const winOpen = windowOpen(state);
-  const loan = kind !== 'compra';
-  const blocked = !!p.loan || (owner != null && !winOpen);
+  const pre = kind === 'pre';
+  const loan = kind === 6 || kind === 12;
+  const blocked = !!p.loan || (owner != null && !winOpen && !pre);
 
   return (
     <div className="panel" style={{ marginTop: 14 }}>
       <h3>{owner ? 'Fazer proposta' : 'Contratar jogador livre'}</h3>
       {owner && !winOpen && <div className="warn small">A janela de transferências está fechada. Só jogadores livres podem ser contratados agora.</div>}
       {p.loan && <div className="warn small">Jogador emprestado: não pode ser negociado agora.</div>}
+      {p.pre && <div className="warn small">Já assinou pré-contrato com o {state.clubs[p.pre.club]?.name}: chega lá em {season + 1}.</div>}
+      {preOk && (
+        <div className="small good">Contrato até {season}: dá para assinar um pré-contrato. Ele chega de graça em {season + 1}, mesmo com a janela fechada.</div>
+      )}
       {(p.salePrice != null || p.loanListed) && (
         <div className="small good">
           {p.salePrice != null && <>O {owner?.name} aceita vender por {formatMoney(p.salePrice)}. </>}
@@ -200,8 +207,12 @@ function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameS
         {owner && (
           <label className="field">
             Tipo
-            <select value={String(kind)} onChange={(e) => setKind(e.target.value === 'compra' ? 'compra' : (Number(e.target.value) as 6 | 12))}>
+            <select
+              value={String(kind)}
+              onChange={(e) => setKind(e.target.value === 'compra' || e.target.value === 'pre' ? e.target.value : (Number(e.target.value) as 6 | 12))}
+            >
               <option value="compra">Compra</option>
+              {preOk && <option value="pre">Pré-contrato (de graça em {season + 1})</option>}
               {(p.loanListed ? [p.loanListed] : [6, 12]).map((m) => (
                 <option key={m} value={m}>
                   Empréstimo ({m} meses)
@@ -210,7 +221,7 @@ function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameS
             </select>
           </label>
         )}
-        {owner && !loan && (
+        {owner && !loan && !pre && (
           <label className="field">
             Valor
             <MoneyInput value={fee} onChange={setFee} step={value > 5_000_000 ? 250_000 : 50_000} />
@@ -236,6 +247,11 @@ function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameS
           className="btn primary"
           disabled={blocked}
           onClick={async () => {
+            if (pre) {
+              const r = await command({ c: 'preContract', pid: p.id, wage: Math.round(wage), years });
+              if (r.ok) onDone();
+              return;
+            }
             const r = await command({
               c: 'bid',
               pid: p.id,
@@ -248,7 +264,7 @@ function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameS
             if (r.ok) onDone();
           }}
         >
-          {!owner ? 'Contratar' : loan ? 'Pedir emprestado' : 'Enviar proposta'}
+          {!owner ? 'Contratar' : pre ? 'Assinar pré-contrato' : loan ? 'Pedir emprestado' : 'Enviar proposta'}
         </button>
       </div>
       <div className="small muted" style={{ marginTop: 6 }}>
@@ -379,9 +395,14 @@ function Listing({ p, club, state }: { p: Player; club: Club; state: GameState }
         <button
           className="btn warn-btn"
           disabled={!winOpen || squadSize <= 17}
-          onClick={() => {
-            if (confirm(`Leiloar ${p.name}? Não dá para cancelar: o maior lance acima de ${formatMoney(min)} leva o jogador na próxima rodada.`))
-              void command({ c: 'startAuction', pid: p.id, min: roundMoney(min) });
+          onClick={async () => {
+            const yes = await ask({
+              title: `Leiloar ${p.name}?`,
+              text: `Não dá para cancelar: o maior lance acima de ${formatMoney(min)} leva o jogador no início da próxima rodada.`,
+              ok: 'Leiloar',
+              danger: true,
+            });
+            if (yes) void command({ c: 'startAuction', pid: p.id, min: roundMoney(min) });
           }}
         >
           Leiloar

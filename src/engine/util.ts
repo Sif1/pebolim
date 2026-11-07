@@ -35,6 +35,31 @@ export function roundMoney(v: number): number {
   return Math.round(v / 100) * 100;
 }
 
+// short money for inputs, Brasfoot style
+const trim = (n: number) => (Math.round(n * 100) / 100).toString().replace('.', ',');
+
+/** Short money text for inputs: 2500000 → "2,5kk", 300000 → "300k". */
+export function kk(v: number): string {
+  const a = Math.abs(v);
+  const s = a >= 1e9 ? `${trim(a / 1e9)}kkk` : a >= 1e6 ? `${trim(a / 1e6)}kk` : a >= 1e3 ? `${trim(a / 1e3)}k` : String(Math.round(a));
+  return v < 0 ? `-${s}` : s;
+}
+
+/** Read "2,5kk", "2.5kk", "2,5 mi", "300k", "300 mil", "2.000.000" or "2000000"; null if it isn't money. */
+export function parseMoney(text: string): number | null {
+  const t = text.toLowerCase().replace(/us\$|r\$|\$/g, '').replace(/\s+/g, '');
+  if (!t) return null;
+  const m = t.match(/^(-?[\d.,]+)(kkk|kk|k|mil|mi|m|bi|b)?$/);
+  if (!m) return null;
+  const mult = { kkk: 1e9, bi: 1e9, b: 1e9, kk: 1e6, mi: 1e6, m: 1e6, k: 1e3, mil: 1e3 }[m[2] ?? ''] ?? 1;
+  let num = m[1];
+  // "2.000.000" / "2,000,000": thousands separators
+  if (/^-?\d{1,3}([.,]\d{3})+$/.test(num) && (mult === 1 || /^-?\d{1,3}(\.\d{3}){2,}$/.test(num))) num = num.replace(/[.,]/g, '');
+  else num = num.replace(',', '.');
+  const v = Number(num) * mult;
+  return Number.isFinite(v) ? Math.round(v) : null;
+}
+
 export function formatMoney(v: number): string {
   const neg = v < 0;
   const a = Math.abs(v);
@@ -88,11 +113,12 @@ export function sortTable(table: Record<number, TableRow>, clubs: Record<number,
     });
 }
 
+/** A club's first-team squad (youth-team players are not part of it). */
 export function squadOf(state: GameState, clubId: number): Player[] {
   const out: Player[] = [];
   for (const id in state.players) {
     const p = state.players[id];
-    if (p.clubId === clubId) out.push(p);
+    if (p.clubId === clubId && !p.junior) out.push(p);
   }
   return out;
 }
@@ -102,7 +128,7 @@ export function squadIndex(state: GameState): Map<number, Player[]> {
   const m = new Map<number, Player[]>();
   for (const id in state.players) {
     const p = state.players[id];
-    if (p.clubId == null) continue;
+    if (p.clubId == null || p.junior) continue;
     let arr = m.get(p.clubId);
     if (!arr) m.set(p.clubId, (arr = []));
     arr.push(p);

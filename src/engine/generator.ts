@@ -1,7 +1,7 @@
 import { ceilingFor, starsFor } from './potential';
 import type { Rng } from './rng';
 import { poolFor } from './names';
-import type { GameState, Player, Pos, Trait } from './types';
+import type { Club, GameState, Player, Pos, Trait } from './types';
 import { clamp, expectedWage } from './util';
 
 const TRAITS_BY_POS: Record<Pos, Trait[]> = {
@@ -93,6 +93,40 @@ export function randomAge(rng: Rng): number {
 
 /** Expected squad level for a club reputation. */
 export const strForRep = (rep: number) => 44 + rep * 0.42;
+
+/**
+ * Invented players by country, relative to the generic level for a reputation: the same reputation means a
+ * smaller football economy outside Brazil and the big European leagues (a top Uruguayan club is not Flamengo).
+ */
+const COUNTRY_LEVEL: Record<string, number> = {
+  URU: -6,
+  ARG: -3,
+  PAR: -6,
+  CHI: -6,
+  COL: -5,
+  ECU: -5,
+  PER: -7,
+  BOL: -8,
+  VEN: -8,
+  POR: -1,
+  NED: -1,
+  BEL: -2,
+  TUR: -2,
+  SCO: -3,
+  AUT: -3,
+  SUI: -3,
+  GRE: -3,
+  CZE: -3,
+  DEN: -3,
+  UKR: -3,
+  CRO: -3,
+  SRB: -3,
+  NOR: -4,
+  SWE: -4,
+};
+
+/** Level of the invented players that fill a club's squad. */
+export const fillerLevel = (club: Pick<Club, 'rep' | 'country'>) => strForRep(club.rep) + (COUNTRY_LEVEL[club.country ?? ''] ?? 0);
 
 /** Fill a club's squad up to the target shape with generated players around `level`. */
 export function fillSquad(state: GameState, rng: Rng, clubId: number, existing: Player[], level: number, foreignShare: number, target = 25) {

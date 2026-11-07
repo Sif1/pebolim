@@ -1,11 +1,12 @@
 import { squadStrength } from './ai/lineup';
 import { takeJob } from './board';
 import { calibrateIncome, clubComps, roughIncome, seatCost, sectorBounds, sectorRefs, stadiumBuildDates, TC_BUILD, tcUpgradeCost } from './economy';
-import { assignNumbers, fillSquad, strForRep } from './generator';
+import { assignNumbers, fillerLevel, fillSquad } from './generator';
+import { ensureYouthTeam, promote as promoteJunior, release as releaseJunior } from './youth';
 import { FORMATIONS, slotsFor, validShape } from './match/formations';
 import { Rng } from './rng';
 import { auctionCanClose, executeTransfer, resolveAiBid, unlist, wageDemand, windowOpen } from './transfers';
-import type { Bid, GameState, Lineup, Manager, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
+import type { Bid, GameState, Lineup, Manager, Player, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
 import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from './util';
 
 export type Command =
@@ -29,6 +30,12 @@ export type Command =
   | { c: 'acceptCounter'; bid: number }
   | { c: 'cancelBid'; bid: number }
   | { c: 'renew'; pid: number; wage: number; years: number }
+  | { c: 'setAutoRenew'; pids: number[]; on: boolean }
+  | { c: 'setAutoRenewAll'; on: boolean }
+  | { c: 'preContract'; pid: number; wage: number; years: number }
+  | { c: 'promoteYouth'; pid: number }
+  | { c: 'releaseYouth'; pid: number }
+  | { c: 'renameYouth'; pid: number; name: string }
   | { c: 'release'; pid: number }
   | { c: 'acceptJob'; clubId: number }
   | { c: 'declineJob'; clubId: number }
@@ -66,6 +73,7 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
     if (!offer || !club) return fail('Proposta não encontrada.');
     if (club.managerId) return fail('O cargo já foi ocupado.');
     takeJob(state, m, club.id);
+    ensureYouthTeam(state, rng, club);
     return ok(`Você é o novo treinador do ${club.name}!`);
   }
   if (cmd.c === 'declineJob') {
@@ -194,6 +202,55 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       bids[club.id] = amount;
       return ok(`Lance de ${formatMoney(amount)} registrado. O resultado sai no início da próxima rodada.`);
     }
+    case 'setAutoRenew': {
+      const mine = new Set(squadOf(state, club.id).filter((p) => !p.loan).map((p) => p.id));
+      const set = new Set((club.autoRenew ?? []).filter((id) => mine.has(id)));
+      for (const id of cmd.pids) if (mine.has(id)) (cmd.on ? set.add(id) : set.delete(id));
+      club.autoRenew = [...set];
+      if (cmd.pids.length === 1) {
+        const p = state.players[cmd.pids[0]];
+        return ok(cmd.on ? `${p?.name} renova automaticamente no fim da temporada.` : `${p?.name} não renova mais automaticamente.`);
+      }
+      return ok(cmd.on ? 'Renovação automática marcada.' : 'Renovação automática desmarcada.');
+    }
+    case 'promoteYouth':
+    case 'releaseYouth':
+    case 'renameYouth': {
+      const p = state.players[cmd.pid];
+      if (!p || !p.junior || p.clubId !== club.id) return fail('Jogador não está na sua base.');
+      if (cmd.c === 'renameYouth') {
+        const name = cmd.name.replace(/\s+/g, ' ').trim();
+        if (name.length < 2 || name.length > 30) return fail('Nome entre 2 e 30 letras.');
+        const old = p.name;
+        p.name = name;
+        return ok(`${old} agora se chama ${name}.`);
+      }
+      if (cmd.c === 'releaseYouth') {
+        releaseJunior(state, p);
+        return ok(`${p.name} foi dispensado da base.`);
+      }
+      if (squadOf(state, club.id).length >= 40) return fail('Elenco profissional cheio (máximo 40).');
+      promoteJunior(state, p);
+      assignNumbers(squadOf(state, club.id));
+      return ok(`${p.name} sobe ao profissional: força ${Math.round(p.str)}, contrato até ${p.contractEnd}.`);
+    }
+    case 'preContract': {
+      const p = state.players[cmd.pid];
+      if (!p || p.clubId == null || p.clubId === club.id || p.junior) return fail('Jogador não encontrado.');
+      const why = preContractBlock(state, p);
+      if (why) return fail(why);
+      if (p.pre) return fail(`${p.name} já assinou pré-contrato com o ${state.clubs[p.pre.club]?.name}.`);
+      const demand = wageDemand(state, p, club);
+      if (cmd.wage < demand * rng.range(0.9, 1)) return fail(`${p.name} recusou. Pede cerca de ${formatMoney(demand)}/mês para assinar.`);
+      const years = clamp(Math.round(cmd.years), 1, 5);
+      p.pre = { club: club.id, wage: Math.round(cmd.wage), years };
+      const owner = state.clubs[p.clubId];
+      if (owner.managerId) addNews(state, 'transfer', `${p.name} assinou pré-contrato com o ${club.name} e sai de graça no fim da temporada.`, [owner.id], owner.managerId);
+      return ok(`Pré-contrato assinado: ${p.name} chega de graça em ${state.meta.season + 1}.`);
+    }
+    case 'setAutoRenewAll':
+      club.autoRenewAll = cmd.on;
+      return ok(cmd.on ? 'Todos os contratos que vencem serão renovados automaticamente.' : 'Renovação automática só para os jogadores marcados.');
     case 'renew': {
       const p = state.players[cmd.pid];
       if (!p || p.clubId !== club.id || p.loan) return fail('Jogador não é do seu clube.');
@@ -250,6 +307,17 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
     }
   }
 }
+
+/** Why a player can't sign a pre-contract now (null when he can): only in his contract's last six months. */
+export function preContractBlock(state: GameState, p: Player): string | null {
+  if (p.loan) return 'Jogador emprestado.';
+  if (p.contractEnd > state.meta.season) return `Pré-contrato só com quem tem contrato até ${state.meta.season}.`;
+  if (state.meta.date < PRE_CONTRACT_FROM) return 'Pré-contratos só nos últimos seis meses do contrato (a partir do meio da temporada).';
+  return null;
+}
+
+/** First date (of the season) from which players in their final contract year can sign a pre-contract. */
+export const PRE_CONTRACT_FROM = 39;
 
 function makeBid(state: GameState, m: Manager, cmd: Extract<Command, { c: 'bid' }>, rng: Rng): CmdResult {
   const club = myClub(state, m)!;
@@ -392,7 +460,10 @@ export function createManager(state: GameState, rng: Rng, name: string, clubId: 
     trophies: [],
   };
   state.managers[id] = m;
-  if (clubId != null) takeJob(state, m, clubId);
+  if (clubId != null) {
+    takeJob(state, m, clubId);
+    ensureYouthTeam(state, rng, state.clubs[clubId]);
+  }
   return m;
 }
 
@@ -458,7 +529,7 @@ export function createCustomClub(state: GameState, rng: Rng, spec: CustomClubSpe
   }
   const leagueClubs = Object.values(state.clubs).filter((c) => c.league === club.league && c.id !== club.id);
   const avgPower = leagueClubs.reduce((a, c) => a + c.power, 0) / Math.max(1, leagueClubs.length);
-  fillSquad(state, rng, club.id, [], Math.min(strForRep(club.rep) + 4, avgPower - 2), 0.05, 24);
+  fillSquad(state, rng, club.id, [], Math.min(fillerLevel(club) + 4, avgPower - 2), 0.05, 24);
   const squad = squadOf(state, club.id);
   assignNumbers(squad);
   const monthly = squad.reduce((a, p) => a + p.wage, 0);

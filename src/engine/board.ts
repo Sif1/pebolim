@@ -1,9 +1,11 @@
 import type { Rng } from './rng';
 import type { Club, Fixture, GameState, Manager } from './types';
-import { absDate, addNews, clamp } from './util';
+import { absDate, addNews, clamp, sortTable } from './util';
 import { roughIncome } from './economy';
 
 const OFFER_DATES = 5;
+/** rounds a new manager is safe from the sack */
+const GRACE_DATES = 20;
 
 /** Board confidence after a match. */
 export function boardAfterMatch(state: GameState, f: Fixture) {
@@ -18,8 +20,27 @@ export function boardAfterMatch(state: GameState, f: Fixture) {
     const pts = gf > ga ? 3 : gf === ga ? 1 : 0;
     const diff = club.power - opp.power + (side === 0 ? 3 : -3);
     const expected = clamp(1.35 + diff / 9, 0.35, 2.5);
-    club.board.conf = clamp(club.board.conf + (pts - expected) * 3.2 * weight, 0, 100);
+    club.board.conf = clamp(club.board.conf + (pts - expected) * 2.4 * weight, 0, 100);
+    fansAfterMatch(state, club, opp, pts, gf - ga, side === 0);
   }
+}
+
+/** The fans' mood after a match: results above all, more so at home and against bigger clubs. */
+function fansAfterMatch(state: GameState, club: Club, opp: Club, pts: number, gd: number, home: boolean) {
+  const before = club.fans ?? 60;
+  let d = pts === 3 ? 2.5 + (opp.power > club.power + 2 ? 1.5 : 0) : pts === 1 ? 0 : -2.5 - (home ? 1 : 0);
+  if (gd <= -3) d -= 2;
+  if (gd >= 3) d += 1;
+  const fans = clamp(before + d, 0, 100);
+  club.fans = fans;
+  if (!club.managerId) return;
+  if (before >= 30 && fans < 30) addNews(state, 'board', `Protesto da torcida do ${club.name}: os torcedores cobram o time e o treinador.`, [club.id], club.managerId);
+  else if (before <= 80 && fans > 80) addNews(state, 'board', `A torcida do ${club.name} está em festa: estádio cheio e confiança lá em cima.`, [club.id], club.managerId);
+}
+
+/** Fans' mood in words. */
+export function fansLabel(v: number): string {
+  return v >= 80 ? 'Em festa' : v >= 62 ? 'Animada' : v >= 45 ? 'Tranquila' : v >= 30 ? 'Impaciente' : 'Revoltada';
 }
 
 export function boardFinanceCheck(club: Club) {
@@ -55,11 +76,20 @@ export function boardChecks(state: GameState, rng: Rng, present: Set<string>) {
   const vacancies: Club[] = [];
   for (const c of Object.values(state.clubs)) {
     if (!c.league) continue;
-    if (c.board.conf >= 12) continue;
+    // moods settle back slowly when nothing happens
+    c.board.conf = clamp(c.board.conf + (55 - c.board.conf) * 0.01, 0, 100);
+    c.fans = clamp((c.fans ?? 60) + (58 - (c.fans ?? 60)) * 0.015, 0, 100);
+    // the fans' mood rubs off on the board
+    c.board.conf = clamp(c.board.conf + ((c.fans ?? 60) - 55) * 0.004, 0, 100);
     const m = managerOf(state, c);
+    if (m && present.has(m.id)) {
+      boardWarnings(state, c, m);
+      if (BOARD_MEETINGS.includes(state.meta.date)) boardMeeting(state, c, m);
+    }
+    if (c.board.conf >= 12) continue;
     if (m) {
       if (!present.has(m.id)) continue;
-      if (now - m.since < 8) continue;
+      if (now - m.since < GRACE_DATES) continue;
       fireManager(state, m, 'maus resultados');
       vacancies.push(c);
     } else if (rng.chance(0.5)) {
@@ -69,17 +99,79 @@ export function boardChecks(state: GameState, rng: Rng, present: Set<string>) {
     }
   }
   for (const v of vacancies) offerJob(state, rng, v);
-  // unemployed humans keep receiving offers from smaller clubs
+  // unemployed humans keep receiving offers: clubs around their reputation, at worst from a bottom division
   for (const m of Object.values(state.managers)) {
     m.offers = m.offers.filter((o) => o.until > state.meta.date && state.clubs[o.clubId] && !state.clubs[o.clubId].managerId);
-    if (m.clubId == null && present.has(m.id) && m.offers.length === 0 && rng.chance(0.4)) {
-      const cands = Object.values(state.clubs).filter((c) => c.league && !c.managerId && c.rep <= m.rep + 8);
+    if (m.clubId == null && present.has(m.id) && m.offers.length === 0 && rng.chance(0.5)) {
+      const free = Object.values(state.clubs).filter((c) => c.league && !c.managerId);
+      const near = free.filter((c) => c.rep <= m.rep + 8);
+      const cands = near.length >= 3 ? near : [...free].sort((a, b) => a.rep - b.rep).slice(0, 12);
       if (cands.length) {
         const c = rng.weighted(cands, (x) => Math.pow(x.rep, 2));
         giveOffer(state, m, c);
       }
     }
   }
+}
+
+/** Rounds at which the board meets the manager (about a third and two thirds into the season). */
+const BOARD_MEETINGS = [30, 55];
+
+const GOAL_TEXT: Record<string, string> = {
+  titulo: 'brigar pelo título',
+  continental: 'uma vaga nas copas continentais',
+  meio: 'uma temporada tranquila no meio da tabela',
+  rebaixamento: 'escapar do rebaixamento',
+  acesso: 'conseguir o acesso',
+};
+
+/** Highest league position that meets the season's objective. */
+export function goalPosition(goal: string, n: number): number {
+  if (goal === 'titulo') return 1;
+  if (goal === 'continental') return Math.round(n * 0.3);
+  if (goal === 'acesso') return 4;
+  return n - 4;
+}
+
+/** Mid-season board meeting: the objective, where the club stands, and the board's mood. */
+function boardMeeting(state: GameState, c: Club, m: Manager) {
+  const comp = c.league ? state.comps[c.league] : null;
+  if (!comp || (comp.table[c.id]?.p ?? 0) < 4) return;
+  const order = sortTable(comp.table, state.clubs);
+  const pos = order.indexOf(c.id) + 1;
+  const target = goalPosition(c.board.goal, order.length);
+  const verdict =
+    pos <= target
+      ? 'a diretoria está satisfeita e pede para manter o ritmo'
+      : pos <= target + 3
+        ? 'ainda dá, mas a diretoria quer ver o time subir na tabela'
+        : 'a diretoria está insatisfeita e cobra resultados já';
+  c.board.conf = clamp(c.board.conf + (pos <= target ? 4 : pos <= target + 3 ? 0 : -3), 0, 100);
+  addNews(
+    state,
+    'board',
+    `Reunião da diretoria: o objetivo é ${GOAL_TEXT[c.board.goal] ?? c.board.goal}. O ${c.name} está em ${pos}º no ${comp.cfg.short}: ${verdict}. Torcida: ${fansLabel(c.fans ?? 60).toLowerCase()}.`,
+    [c.id],
+    m.id,
+  );
+}
+
+/** Written warnings before a sacking: below 30 the board is worried, below 18 it is the last warning. */
+function boardWarnings(state: GameState, c: Club, m: Manager) {
+  const level = c.board.conf < 18 ? 2 : c.board.conf < 30 ? 1 : 0;
+  const warned = c.board.warned ?? 0;
+  if (c.board.conf >= 40) c.board.warned = 0;
+  if (level <= warned) return;
+  c.board.warned = level;
+  addNews(
+    state,
+    'board',
+    level === 2
+      ? `Último aviso da diretoria do ${c.name}: sem reação imediata, você será demitido.`
+      : `A diretoria do ${c.name} está preocupada com os resultados e espera uma reação.`,
+    [c.id],
+    m.id,
+  );
 }
 
 function giveOffer(state: GameState, m: Manager, c: Club) {

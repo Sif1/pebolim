@@ -67,6 +67,8 @@ export class Shootout {
   constructor(
     readonly first: 0 | 1,
     public order: [number[], number[]],
+    /** stop after this many kicks (1 for a penalty during the match) */
+    readonly limit = 0,
   ) {}
 
   taken(side: 0 | 1): number {
@@ -75,6 +77,7 @@ export class Shootout {
 
   /** Decided once one side can no longer catch up, or after an equal number of kicks (5+) with a winner. */
   decided(): boolean {
+    if (this.limit && this.kicks.length >= this.limit) return true;
     const [a, b] = [this.taken(0), this.taken(1)];
     const [ga, gb] = this.score;
     if (a <= 5 && b <= 5 && (a < 5 || b < 5)) {

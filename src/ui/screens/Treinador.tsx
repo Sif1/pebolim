@@ -1,5 +1,6 @@
 import { dateLabel } from '../../engine/util';
 import { command, useMe } from '../../store';
+import { ask } from '../Confirm';
 import { Bar, ClubBadge, ClubName, compLabel, Empty } from '../common';
 
 export function Treinador() {
@@ -73,7 +74,13 @@ export function Treinador() {
         <button
           className="btn danger"
           style={{ alignSelf: 'flex-start' }}
-          onClick={() => window.confirm(`Pedir demissão do ${club.name}? O clube fica disponível para outro treinador.`) && void command({ c: 'resign' })}
+          onClick={() =>
+            void ask({ title: `Pedir demissão do ${club.name}?`, text: 'O clube fica disponível para outro treinador e você passa a receber propostas.', ok: 'Pedir demissão', danger: true }).then(
+              (yes) => {
+                if (yes) void command({ c: 'resign' });
+              },
+            )
+          }
         >
           Pedir demissão
         </button>

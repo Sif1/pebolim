@@ -2,7 +2,7 @@ import { autoLineup, bestFormation, squadStrength } from './ai/lineup';
 import { buildCalendar } from './calendar';
 import { createSeasonComps } from './competitions';
 import type { Database } from './db';
-import { assignNumbers, fillSquad, randomTraits, strForRep } from './generator';
+import { assignNumbers, fillerLevel, fillSquad, randomTraits } from './generator';
 import { ceilingFor, starsFor, tierOf } from './potential';
 import { defaultNamePools } from './names';
 import { Rng } from './rng';
@@ -150,7 +150,7 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
   let idx = squadIndex(state);
   for (const club of Object.values(state.clubs)) {
     const existing = idx.get(club.id) ?? [];
-    let level = strForRep(club.rep);
+    let level = fillerLevel(club);
     if (existing.length >= 6) {
       const top = [...existing].sort((a, b) => b.str - a.str).slice(0, 11);
       const avg = top.reduce((a, p) => a + p.str, 0) / top.length;
@@ -182,6 +182,7 @@ export function startSeason(state: GameState, rng: Rng) {
   state.meta.date = 0;
   for (const p of Object.values(state.players)) {
     p.s = { apps: 0, goals: 0, ast: 0, yel: 0, red: 0, rt: 0 };
+    if (p.ys) p.ys = [0, 0, 0, 0];
     p.yel = {};
     p.ban = {};
   }

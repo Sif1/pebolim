@@ -1,9 +1,12 @@
 import { travelCost, travelFatigue, travelModeFor, TRAVEL_LABEL } from '../../engine/economy';
 import type { GameState, News } from '../../engine/types';
-import { dateLabel, distanceKm, formatMoney, sortTable } from '../../engine/util';
+import { dateLabel, distanceKm, formatMoney, sortTable, squadOf } from '../../engine/util';
 import { OBJECTIVE_LABEL } from '../../engine/world';
 import { command, useApp, useMe } from '../../store';
-import { Bar, ClubBadge, ClubName, compLabel, Empty, FormDots, Str } from '../common';
+import { fansLabel } from '../../engine/board';
+import { aiPreMatchTactics } from '../../engine/matchday';
+import { Bar, ClubBadge, ClubName, compLabel, Empty, FormDots, PosTag, Str } from '../common';
+import { Traits } from '../PlayerModal';
 import { nextFixture } from '../Shell';
 
 export function visibleNews(state: GameState, managerId: string | null, clubId: number | null): News[] {
@@ -74,6 +77,18 @@ export function Painel() {
             {club.board.conf < 25 && <div className="bad small">A diretoria está perdendo a paciência. Resultados ruins podem levar à demissão.</div>}
             <div className="row">
               <span className="small muted" style={{ width: 90 }}>
+                Torcida
+              </span>
+              <div className="grow">
+                <Bar v={club.fans ?? 60} color={(club.fans ?? 60) < 35 ? 'var(--bad)' : (club.fans ?? 60) > 75 ? 'var(--good)' : 'var(--info)'} />
+              </div>
+              <span className="small nowrap" style={{ width: 80, textAlign: 'right' }}>
+                {fansLabel(club.fans ?? 60)}
+              </span>
+            </div>
+            <div className="small faint">Torcida feliz enche o estádio e ajuda com a diretoria; vitórias, contratações de peso e preços justos animam.</div>
+            <div className="row">
+              <span className="small muted" style={{ width: 90 }}>
                 Últimos jogos
               </span>
               <FormDots form={club.form} />
@@ -81,6 +96,7 @@ export function Painel() {
           </div>
         </div>
       )}
+      {club && <ScoutReport />}
       {club && <ClubSummary />}
       <div className="panel">
         <div className="row">
@@ -144,6 +160,91 @@ function NextMatch() {
           Viagem: {Math.round(km)} km de {TRAVEL_LABEL[mode]} · custo ~{formatMoney(travelCost(mode, km))} · desgaste −{travelFatigue(mode, km).toFixed(0)} de condição
         </div>
       )}
+    </div>
+  );
+}
+
+const MENT: Record<string, string> = { defensiva: 'defensiva', equilibrada: 'equilibrada', ofensiva: 'ofensiva' };
+const STY: Record<string, string> = { toque: 'toque de bola', contra: 'contra-ataque', longa: 'bola longa' };
+
+/** What the scouts say about the next opponent: likely plan, form, key players, absences and a tip. */
+function ScoutReport() {
+  const { state, club } = useMe();
+  if (!state || !club) return null;
+  const f = nextFixture(state, club.id);
+  if (!f) return null;
+  const opp = state.clubs[f.home === club.id ? f.away : f.home];
+  const mine = squadOf(state, club.id);
+  const theirs = squadOf(state, opp.id);
+  const human = opp.managerId ? state.managers[opp.managerId] : null;
+  // the AI decides its plan before kick-off from the same information: this is what it will do
+  const plan = human ? opp.tactics : aiPreMatchTactics(state, f, opp, theirs, club, mine, true);
+  const avail = theirs.filter((p) => p.injury === 0 && !((p.ban[f.comp] ?? 0) > 0));
+  const key = [...avail].sort((a, b) => b.str - a.str).slice(0, 3);
+  const out = [...theirs]
+    .sort((a, b) => b.str - a.str)
+    .slice(0, 16)
+    .filter((p) => p.injury > 0 || (p.ban[f.comp] ?? 0) > 0);
+  const energy = key.length ? Math.round([...avail].sort((a, b) => b.str - a.str).slice(0, 11).reduce((a, p) => a + p.fitness, 0) / Math.min(11, avail.length)) : 0;
+  const league = opp.league ? state.comps[opp.league] : null;
+  const pos = league ? sortTable(league.table, state.clubs).indexOf(opp.id) + 1 : 0;
+  const edge = club.power - opp.power + (f.home === club.id ? 2 : -2);
+  const tips: string[] = [];
+  if (plan.style === 'contra') tips.push('Joga no contra-ataque: postura ofensiva abre espaço nas suas costas.');
+  if (plan.style === 'longa') tips.push('Aposta na bola longa: marcar pressão não adianta contra eles.');
+  if (plan.style === 'toque' && plan.marking !== 'pressao') tips.push('Gosta de tocar a bola: uma pressão alta em momentos certos atrapalha a saída deles.');
+  if (plan.mentality === 'defensiva') tips.push('Vai se fechar atrás: chances claras serão raras, tenha paciência.');
+  if (plan.mentality === 'ofensiva') tips.push('Vem para cima: o contra-ataque pode render.');
+  if (energy && energy < 85) tips.push(`Chega cansado (energia média ${energy}%): acelerar no segundo tempo pode decidir.`);
+  return (
+    <div className="panel col scout">
+      <h3>Relatório do adversário · {opp.name}</h3>
+      <div className="row" style={{ gap: 16, alignItems: 'flex-start' }}>
+        <div className="col" style={{ gap: 4, minWidth: 220 }}>
+          <div className="small">
+            {human ? (
+              <>
+                Treinador: <b>{human.name}</b> (humano)
+              </>
+            ) : (
+              <>Treinador: IA</>
+            )}
+          </div>
+          <div className="small">
+            Provável esquema: <b>{plan.formation}</b> · {`postura ${MENT[plan.mentality]}`} · {STY[plan.style]}
+            {plan.marking === 'pressao' ? ' · pressão alta' : ''}
+          </div>
+          <div className="small row" style={{ gap: 6 }}>
+            Forma: <FormDots form={opp.form} />
+            {pos > 0 && <span className="faint">· {pos}º no {league!.cfg.short}</span>}
+          </div>
+          <div className="small">
+            Força <Str v={opp.power} /> contra a sua <Str v={club.power} /> ·{' '}
+            <span className={edge >= 3 ? 'good' : edge <= -3 ? 'bad' : 'warn'}>{edge >= 3 ? 'você é favorito' : edge <= -3 ? 'eles são favoritos' : 'jogo equilibrado'}</span>
+          </div>
+        </div>
+        <div className="col" style={{ gap: 4, minWidth: 220 }}>
+          <div className="small faint">Destaques</div>
+          {key.map((p) => (
+            <div key={p.id} className="row small" style={{ gap: 6 }}>
+              <PosTag pos={p.pos} /> <span className="nowrap">{p.name}</span> <Str v={p.str} /> <Traits traits={p.traits} small />
+            </div>
+          ))}
+          {out.length > 0 && (
+            <div className="small warn">
+              Desfalques: {out.map((p) => `${p.name} (${p.injury > 0 ? 'lesão' : 'suspenso'})`).join(', ')}
+            </div>
+          )}
+        </div>
+        <div className="col grow" style={{ gap: 4, minWidth: 220 }}>
+          <div className="small faint">Dicas do olheiro</div>
+          {(tips.length ? tips : ['Sem pontos fracos claros: escale os melhores e mantenha o equilíbrio.']).map((t) => (
+            <div key={t} className="small">
+              • {t}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

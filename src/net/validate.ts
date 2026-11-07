@@ -90,6 +90,19 @@ export function validCommand(v: unknown): Command | null {
     case 'acceptCounter':
     case 'cancelBid':
       return int(v.bid, 0, ID) ? { c: v.c, bid: v.bid } : null;
+    case 'setAutoRenew':
+      return Array.isArray(v.pids) && v.pids.length <= 60 && v.pids.every((x) => int(x, 0, ID)) && typeof v.on === 'boolean'
+        ? { c: 'setAutoRenew', pids: [...(v.pids as number[])], on: v.on }
+        : null;
+    case 'promoteYouth':
+    case 'releaseYouth':
+      return int(v.pid, 0, ID) ? { c: v.c, pid: v.pid } : null;
+    case 'renameYouth':
+      return int(v.pid, 0, ID) && str(v.name, 30) && (v.name as string).trim().length >= 2 ? { c: 'renameYouth', pid: v.pid, name: v.name as string } : null;
+    case 'preContract':
+      return int(v.pid, 0, ID) && num(v.wage, 1, MONEY) && int(v.years, 1, 5) ? { c: 'preContract', pid: v.pid, wage: v.wage, years: v.years } : null;
+    case 'setAutoRenewAll':
+      return typeof v.on === 'boolean' ? { c: 'setAutoRenewAll', on: v.on } : null;
     case 'renew':
       return int(v.pid, 0, ID) && num(v.wage, 1, MONEY) && int(v.years, 1, 5) ? { c: 'renew', pid: v.pid, wage: v.wage, years: v.years } : null;
     case 'release':

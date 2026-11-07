@@ -1,6 +1,6 @@
 import type { Tactics } from '../types';
 import { matchRating, MatchSim, PITCH_H, PITCH_W, type MatchEvent, type MatchResult, type MatchSetup } from './core';
-import { aiDive, aiShot, autoShootout, kickOutcome, type PkDir, type PkOutcome, type PkTaker, type Shootout } from './shootout';
+import { aiDive, aiShot, autoShootout, kickOutcome, Shootout, type PkDir, type PkOutcome, type PkTaker } from './shootout';
 
 /** Real-time length of each shootout step, in ms. */
 export const PK_TIMES = {
@@ -10,10 +10,14 @@ export const PK_TIMES = {
   aim: 10_000,
   /** run-up, shot and reaction on screen */
   anim: 3_400,
+  /** a penalty during the match: the manager picks the taker */
+  spotOrder: 15_000,
 };
 
 /** A shootout as clients see it. During 'aim' nobody sees the other side's choice. */
 export interface PkFrame {
+  /** a penalty shootout, or a single penalty during the match */
+  mode: 'shootout' | 'spot';
   phase: 'order' | 'aim' | 'anim';
   score: [number, number];
   /** kicks so far: side, taker, shot direction, dive direction, outcome (0 goal, 1 save, 2 miss) */
@@ -34,20 +38,40 @@ export const MAX_PAUSES = 3;
 export const PAUSE_LIMIT_MS = 90_000;
 
 /**
- * Highlight pacing: key moments (shots, set-piece deliveries, the ball in the box) play slowly, attacks in the
- * final third at twice that, and the rest speeds up so the match still lasts about the length the host chose.
+ * Highlights, Championship Manager style. The simulation runs a few game seconds ahead of the screen, so
+ * playback knows when a shot is coming: the pitch comes alive a few seconds before each shot worth showing and
+ * plays it at about real speed, and between highlights it sits idle while the clock runs on (commentary and stats
+ * keep updating). When the match is short, only the shots that matter most are shown (goals, then shots on target
+ * and clear-cut chances), so the match still lasts about the length the host chose. `tools/pacing.ts` measures it.
  */
 export const PACING = {
-  /** slowest speed, in game seconds per real second (real time = 1) */
-  minSlow: 6,
-  /** key moments play at least this many times slower than the plain match speed */
-  slowFactor: 3.5,
-  /** expected share of game time in key moments / final-third attacks (the budget corrects itself as it goes) */
-  shareKey: 0.17,
-  shareAttack: 0.1,
-  /** the rest never goes faster than this multiple of the plain speed */
-  maxFast: 4,
+  /** the simulation runs this many game seconds ahead of the screen */
+  lookahead: 12,
+  /** a highlight starts this many game seconds before the shot and lasts this long after it */
+  leadIn: 7,
+  after: 3,
+  /** highlights play at this speed (game seconds per real second): close to real time, easy to follow */
+  watch: 2,
+  /** …and never faster than this, even in very short matches */
+  maxWatch: 5,
+  /** between highlights the clock runs between 1× and this many times the plain match speed */
+  maxIdle: 8,
+  /** shots per game second (measured): goals, other shots on target or clear-cut chances, the rest */
+  rate: { 3: 2.8 / 5700, 2: 6.5 / 5700, 1: 21 / 5700 } as Record<1 | 2 | 3, number>,
 };
+
+/** Game seconds simulated per buffered snapshot. */
+const STEP = 0.5;
+
+/** One buffered moment of the match: what the screen shows, and what kind of moment it is. */
+interface Snap {
+  t: number;
+  frame: Omit<LiveFrame, 'ev' | 'paused' | 'pausedBy' | 'ended' | 'pk'>;
+  ev: MatchEvent[];
+  tier: 0 | 1 | 2;
+  /** 1 = a shot or header starts here */
+  mark: 0 | 1;
+}
 
 /** Snapshot of a live match sent to every client ~5 times per second. */
 export interface LiveFrame {
@@ -78,6 +102,8 @@ export interface LiveFrame {
   ev: MatchEvent[];
   /** penalty shootout in progress */
   pk?: PkFrame;
+  /** a highlight is on screen (false: the pitch sits idle while the clock runs) */
+  hl?: boolean;
 }
 
 /** Lineup details (sent less often): who is where, fitness, subs used. */
@@ -117,8 +143,27 @@ export class LiveMatch {
   pauses: [number, number] = [0, 0];
   quickReq: [boolean, boolean] = [false, false];
   private bodies = new Map<number, Body>();
-  private evSent = 0;
   detailDirty = true;
+  /** simulated but not yet shown */
+  private buf: Snap[] = [];
+  /** game time on screen, and the moment shown */
+  private showT = 0;
+  private shown: Snap | null = null;
+  /** events shown since the last frame */
+  private evQueue: MatchEvent[] = [];
+  /** events already put into snapshots */
+  private evCut = 0;
+  /** the current highlight runs until this game time */
+  private hlUntil = -1;
+  /** the run-up to a pending in-match penalty is already marked as a highlight */
+  private spotMarked = false;
+  /** goals simulated so far (to mark the moment of each one) */
+  private goalsSeen = 0;
+  /** shots already judged for a highlight (by game time) */
+  private judged = new Set<number>();
+  /** speed of the current highlight, and whether one is on screen */
+  private watchSpeed = PACING.watch;
+  private live = false;
   /** real milliseconds played (pauses excluded) */
   private playedMs = 0;
   /** current game seconds per real second */
@@ -148,17 +193,35 @@ export class LiveMatch {
     showing: [0 | 1, number] | null;
   } | null = null;
 
-  get inShootout() {
-    return this.sim.pkPending;
+  /** a highlight is on screen */
+  get highlight() {
+    return this.live;
   }
 
+  /** a shootout or an in-match penalty is being taken */
+  get inShootout() {
+    return this.sim.pkPending || !!this.sim.spotPending;
+  }
+
+  /** what the penalty mini-game is playing: a shootout, or a single penalty during the match */
+  private pkKind: 'shootout' | 'spot' = 'shootout';
+
   private startShootout() {
-    const so = this.sim.newShootout();
+    const spot = this.sim.spotPending;
+    this.pkKind = spot ? 'spot' : 'shootout';
+    let so = this.sim.newShootout();
+    if (spot) {
+      // one kick: the kicking side's usual taker first (the manager may pick another)
+      const order = so.order.map((o) => [...o]) as [number[], number[]];
+      if (spot.taker != null) order[spot.side] = [spot.taker, ...order[spot.side].filter((id) => id !== spot.taker)];
+      so = new Shootout(spot.side, order, 1);
+    }
     this.pk = {
       so,
       phase: 'order',
-      left: PK_TIMES.order,
-      ready: [!this.humans[0], !this.humans[1]],
+      left: spot ? PK_TIMES.spotOrder : PK_TIMES.order,
+      // only the kicking side picks a taker for an in-match penalty
+      ready: spot ? [spot.side !== 0 || !this.humans[0], spot.side !== 1 || !this.humans[1]] : [!this.humans[0], !this.humans[1]],
       shot: null,
       dive: null,
       takers: new Map([...this.sim.pkTakers(0), ...this.sim.pkTakers(1)].map((t) => [t.id, t])),
@@ -200,14 +263,29 @@ export class LiveMatch {
       if ((set(0) && set(1)) || pk.left <= 0) this.beginAim();
     } else if (pk.phase === 'aim') {
       const n = pk.so.next();
-      if (!n) return this.sim.endWithPens(pk.so.score);
+      if (!n) return this.endPk();
       const shotIn = pk.shot != null || !this.humans[n.side];
       const diveIn = pk.dive != null || !this.humans[1 - n.side];
       if ((shotIn && diveIn) || pk.left <= 0) this.takeKick();
     } else if (pk.left <= 0) {
       if (pk.so.next()) this.beginAim();
-      else this.sim.endWithPens(pk.so.score);
+      else this.endPk();
     }
+  }
+
+  /** The mini-game is over: close the match after a shootout, or play on after an in-match penalty. */
+  private endPk() {
+    const pk = this.pk!;
+    if (this.pkKind === 'spot') {
+      const k = pk.so.kicks[0];
+      this.pk = null;
+      if (k) this.sim.resolveSpotKick(k.taker, k.out);
+      else this.sim.autoSpotKick();
+      this.spotMarked = false;
+      this.detailDirty = true;
+      return;
+    }
+    this.sim.endWithPens(pk.so.score);
   }
 
   /** A manager's five takers, in order (the rest follow by skill). */
@@ -216,7 +294,8 @@ export class LiveMatch {
     if (!pk || pk.phase !== 'order') return 'A ordem dos batedores já foi definida.';
     const onPitch = new Set(this.sim.pkTakers(side).map((t) => t.id));
     const clean = order.filter((id, i) => onPitch.has(id) && order.indexOf(id) === i);
-    if (clean.length < Math.min(5, onPitch.size)) return 'Escolha cinco batedores.';
+    const need = this.pkKind === 'spot' ? 1 : Math.min(5, onPitch.size);
+    if (clean.length < need) return need === 1 ? 'Escolha o batedor.' : 'Escolha cinco batedores.';
     pk.so.order[side] = [...clean, ...pk.so.order[side].filter((id) => !clean.includes(id))];
     pk.ready[side] = true;
     return null;
@@ -235,7 +314,7 @@ export class LiveMatch {
 
   private pkFrame(): PkFrame | undefined {
     const pk = this.pk;
-    if (!pk || !this.sim.pkPending) return undefined;
+    if (!pk || !(this.sim.pkPending || this.sim.spotPending)) return undefined;
     const n = pk.phase === 'anim' ? pk.showing : (() => {
       const x = pk.so.next();
       return x ? ([x.side, x.taker] as [0 | 1, number]) : null;
@@ -248,6 +327,7 @@ export class LiveMatch {
       return n[0] === s ? pk.shot == null : pk.dive == null;
     };
     return {
+      mode: this.pkKind,
       phase: pk.phase,
       score: [...pk.so.score] as [number, number],
       kicks: pk.so.kicks.map((k) => [k.side, k.taker, k.dir, k.dive, k.out]),
@@ -260,8 +340,42 @@ export class LiveMatch {
     };
   }
 
+  /** Over once the simulation has ended and the screen has caught up. */
   get ended() {
-    return this.sim.ended;
+    return this.sim.ended && this.buf.length === 0;
+  }
+
+  /** Simulate ahead of the screen, up to `lookahead` game seconds. */
+  private produce() {
+    let guard = 0;
+    while (!this.sim.ended && !this.sim.pkPending && !this.sim.spotPending && this.sim.t < this.showT + PACING.lookahead && guard++ < 400) {
+      this.sim.step(STEP);
+      this.moveBodies(STEP);
+      const a = this.sim.action;
+      // a shot or header, a penalty kick, or any goal (free kicks and own goals included)
+      const goals = this.sim.score[0] + this.sim.score[1];
+      const kick = a && (a.kind === 'shot' || a.kind === 'header' || (a.kind === 'penalty' && this.sim.t > a.t1 - 1));
+      const mark: Snap['mark'] = kick || goals > this.goalsSeen ? 1 : 0;
+      this.goalsSeen = goals;
+      const ev = this.sim.events.slice(this.evCut);
+      this.evCut = this.sim.events.length;
+      this.buf.push({ t: this.sim.t, frame: this.capture(), ev, tier: this.tier(), mark });
+    }
+    // a penalty given: the run-up to it plays as a highlight, then the mini-game
+    if (this.sim.spotPending && !this.spotMarked && this.buf.length) {
+      this.buf[this.buf.length - 1].mark = 1;
+      this.spotMarked = true;
+    }
+  }
+
+  /** Put a buffered moment on screen. */
+  private show(s: Snap) {
+    this.showT = s.t;
+    this.shown = s;
+    if (s.ev.length) {
+      this.evQueue.push(...s.ev);
+      this.detailDirty = true;
+    }
   }
 
   private placeKickoff() {
@@ -306,26 +420,66 @@ export class LiveMatch {
     return u > 0.84 ? 2 : u > 0.7 ? 1 : 0;
   }
 
+  /** How much a shot matters, read from the buffer (its outcome is already simulated): 3 goal, 2 on target or a clear-cut chance, 1 the rest. */
+  private importance(i: number): 1 | 2 | 3 {
+    const before = (i > 0 ? this.buf[i - 1].frame : this.shown?.frame) ?? this.buf[i].frame;
+    let after = this.buf[i].frame;
+    for (let j = i; j < this.buf.length && this.buf[j].t <= this.buf[i].t + 4; j++) after = this.buf[j].frame;
+    const goals = (f: Snap['frame']) => f.sc[0] + f.sc[1];
+    if (goals(after) > goals(before)) return 3;
+    if (after.onT[0] + after.onT[1] > before.onT[0] + before.onT[1] || after.x.bc[0] + after.x.bc[1] > before.x.bc[0] + before.x.bc[1]) return 2;
+    return 1;
+  }
+
+  /** Which shots fit in the time left (all of them, or the more important ones), and how fast to show them. */
+  private plan(base: number): { min: 1 | 2 | 3; watch: number; perGame: number } {
+    const P = PACING;
+    const remGame = Math.max(60, 5700 - this.showT);
+    const remReal = Math.max(1, 5700 / base - this.playedMs / 1000);
+    const win = P.leadIn + P.after;
+    const budget = remReal - remGame / (base * P.maxIdle);
+    for (const k of [1, 2, 3] as const) {
+      const perGame = ([1, 2, 3] as const).filter((x) => x >= k).reduce((sum, x) => sum + P.rate[x], 0);
+      if ((remGame * perGame * win) / P.watch <= budget) return { min: k, watch: P.watch, perGame };
+    }
+    // even the goals alone don't fit at the normal speed: show them a little faster
+    const perGame = P.rate[3];
+    return { min: 3, watch: Math.min(P.maxWatch, Math.max(P.watch, (remGame * perGame * win) / Math.max(1, budget))), perGame };
+  }
+
   /** Game seconds per real second right now, for a match whose plain speed is `base`. */
   private pace(base: number): number {
     const P = PACING;
-    const key = Math.min(base, Math.max(P.minSlow, base / P.slowFactor));
-    const attack = Math.min(base, key * 2);
-    const tier = this.tier();
-    if (tier === 2) return key;
-    if (tier === 1) return attack;
-    const remGame = Math.max(60, 5700 - this.sim.t);
-    const remReal = 5700 / base - this.playedMs / 1000;
-    const slowReal = remGame * (P.shareKey / key + P.shareAttack / attack);
-    const left = remReal - slowReal;
-    const need = left > 1 ? ((1 - P.shareKey - P.shareAttack) * remGame) / left : Infinity;
-    return Math.min(base * P.maxFast, Math.max(base * 0.8, need));
+    if (this.showT < this.hlUntil) {
+      this.live = true;
+      return this.watchSpeed;
+    }
+    // the next shot entering the lead-in: decide now whether it becomes a highlight
+    const i = this.buf.findIndex((s) => s.mark === 1 && s.t <= this.showT + P.leadIn && !this.judged.has(s.t));
+    const plan = this.plan(base);
+    if (i >= 0) {
+      const shot = this.buf[i];
+      this.judged.add(shot.t);
+      if (this.importance(i) >= plan.min) {
+        this.hlUntil = shot.t + P.after;
+        this.watchSpeed = plan.watch;
+        this.live = true;
+        return plan.watch;
+      }
+    }
+    // idle: the clock runs to fill the time the highlights still to come won't use
+    this.live = false;
+    const remGame = Math.max(60, 5700 - this.showT);
+    const remReal = Math.max(1, 5700 / base - this.playedMs / 1000);
+    const hlGame = remGame * plan.perGame * (P.leadIn + P.after);
+    const idle = (remGame - hlGame) / Math.max(0.5, remReal - hlGame / plan.watch);
+    return Math.min(base * P.maxIdle, Math.max(base, idle));
   }
 
   /** Advance by real milliseconds; `base` is the plain match speed (game seconds per real second). */
   tick(realMs: number, base: number) {
-    if (this.sim.ended) return;
-    if (this.sim.pkPending) {
+    if (this.ended) return;
+    if ((this.sim.pkPending || this.sim.spotPending) && this.buf.length === 0) {
       this.paused = false;
       return this.tickShootout(realMs);
     }
@@ -333,32 +487,47 @@ export class LiveMatch {
       if (performance.now() - this.pausedAt > PAUSE_LIMIT_MS) this.resume();
       return;
     }
-    // small slices so a fast stretch can't run through the start of an attack
+    // play the buffer back, one snapshot at a time, at the speed each moment deserves
     let realLeft = realMs / 1000;
     let guard = 0;
-    while (realLeft > 1e-6 && !this.sim.ended && guard++ < 400) {
+    while (realLeft > 1e-6 && guard++ < 2000) {
+      this.produce();
+      const next = this.buf[0];
+      if (!next) break;
       const speed = this.pace(base);
       this.speedNow = speed;
-      const dt = Math.min(1.5, realLeft * speed);
-      const before = this.sim.events.length;
-      this.sim.step(dt);
-      if (this.sim.events.length !== before) this.detailDirty = true;
-      this.moveBodies(dt);
-      const used = dt / speed;
-      realLeft -= used;
-      this.playedMs += used * 1000;
+      const need = Math.max(0, next.t - this.showT) / speed;
+      if (need > realLeft) {
+        this.showT += realLeft * speed;
+        this.playedMs += realLeft * 1000;
+        break;
+      }
+      realLeft -= need;
+      this.playedMs += need * 1000;
+      this.show(this.buf.shift()!);
     }
   }
 
   /** Simulate the rest instantly (Simular rápido). */
   finishNow(): MatchResult {
     this.paused = false;
+    // everything simulated so far goes on screen at once
+    for (const s of this.buf.splice(0)) this.show(s);
+    if (this.sim.spotPending) {
+      // a penalty half-taken: the AI takes it, then the rest is simulated
+      this.pk = null;
+      this.sim.autoSpotKick();
+    }
     if (this.sim.pkPending && this.pk) {
       // finish the shootout already under way with AI choices
       this.sim.endWithPens(autoShootout(this.pk.so, this.pk.takers, this.sim.pkKeepers(), this.sim.rng));
-      return this.sim.result();
-    }
-    return this.sim.runToEnd();
+    } else this.sim.runToEnd();
+    this.evQueue.push(...this.sim.events.slice(this.evCut));
+    this.evCut = this.sim.events.length;
+    this.shown = { t: this.sim.t, frame: this.capture(), ev: [], tier: 0, mark: 0 };
+    this.showT = this.sim.t;
+    this.detailDirty = true;
+    return this.sim.result();
   }
 
   private ballPos(): { x: number; y: number; z: number } {
@@ -452,7 +621,7 @@ export class LiveMatch {
 
   pause(side: 0 | 1): string | null {
     if (this.sim.ended) return 'Partida encerrada';
-    if (this.sim.pkPending) return 'Disputa de pênaltis em andamento';
+    if (this.inShootout) return 'Cobrança de pênalti em andamento';
     if (this.paused) return null;
     if (this.pauses[side] >= MAX_PAUSES) return `Limite de ${MAX_PAUSES} pausas atingido`;
     this.pauses[side]++;
@@ -472,7 +641,35 @@ export class LiveMatch {
     return null;
   }
 
+  /** What the screen shows now (the latest shown moment) plus the events since the last frame. */
   frame(): LiveFrame {
+    let f = this.shown?.frame ?? this.capture();
+    // between two simulated moments: blend positions, so every frame moves (no stop-start on screen)
+    const a = this.shown;
+    const b = this.buf[0];
+    if (a && b && b.t > a.t && this.showT > a.t) {
+      const k = Math.min(1, (this.showT - a.t) / (b.t - a.t));
+      const p = a.frame.p.map((v, i) => {
+        const slot = i >> 1;
+        const w = b.frame.p[i];
+        return a.frame.ids[slot] === b.frame.ids[slot] && v >= 0 && w >= 0 ? Math.round(v + (w - v) * k) : v;
+      });
+      const ball = a.frame.b.map((v, i) => Math.round(v + (b.frame.b[i] - v) * k)) as [number, number, number];
+      f = { ...a.frame, p, b: ball };
+    }
+    return {
+      ...f,
+      paused: this.paused,
+      pausedBy: this.pausedBy,
+      ended: this.ended,
+      hl: this.live,
+      ev: this.evQueue.splice(0),
+      pk: this.buf.length === 0 ? this.pkFrame() : undefined,
+    };
+  }
+
+  /** The current simulated moment as a frame (positions, score, stats). */
+  private capture(): Snap['frame'] {
     const sim = this.sim;
     const ids: number[] = [];
     const p: number[] = [];
@@ -486,8 +683,6 @@ export class LiveMatch {
       }
     }
     const ball = this.ballPos();
-    const ev = sim.events.slice(this.evSent);
-    this.evSent = sim.events.length;
     const st = sim.stats;
     const pair = (k: keyof (typeof st)[0], m = 1): [number, number] => [Math.round(st[0][k] * m), Math.round(st[1][k] * m)];
     const act = sim.action;
@@ -515,11 +710,6 @@ export class LiveMatch {
         sv: pair('saves'),
       },
       car: (act && act.kind !== 'celebrate' ? (act.target ?? act.actor) : sim.carrier) ?? 0,
-      paused: this.paused,
-      pausedBy: this.pausedBy,
-      ended: sim.ended,
-      ev,
-      pk: this.pkFrame(),
     };
   }
 

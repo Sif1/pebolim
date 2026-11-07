@@ -39,11 +39,25 @@ export function ShootoutView({ f, state, fr, mySide }: { f: Fixture; state: Game
 
   return (
     <div className="pk">
-      <PkBoard pk={pk} names={[home.short, away.short]} kits={kits} />
+      {pk.mode === 'spot' ? (
+        <div className="pk-board">
+          <div className="pk-row">
+            <span className="sb-chip" style={{ background: kits[pk.first][0], borderColor: kits[pk.first][1] }} />
+            <b className="pk-team" style={{ width: 'auto' }}>
+              Pênalti para o {pk.first === 0 ? home.name : away.name}
+            </b>
+            <span className="pk-score small faint">
+              {fr.sc[0]} x {fr.sc[1]} · {Math.floor(fr.t / 60) + 1}'
+            </span>
+          </div>
+        </div>
+      ) : (
+        <PkBoard pk={pk} names={[home.short, away.short]} kits={kits} />
+      )}
       <div className="pk-stage">
         <PkCanvas fixtureId={f.id} kits={kits} numberOf={numberOf} />
         <div className="pk-overlay">
-          {pk.phase === 'order' && <div className="pk-banner">DISPUTA DE PÊNALTIS</div>}
+          {pk.phase === 'order' && <div className="pk-banner">{pk.mode === 'spot' ? 'PÊNALTI!' : 'DISPUTA DE PÊNALTIS'}</div>}
           {pk.phase === 'aim' && pk.next && (
             <div className="pk-banner small">
               {name(pk.next[1])} ({pk.next[0] === 0 ? home.short : away.short}) vai bater
@@ -58,11 +72,14 @@ export function ShootoutView({ f, state, fr, mySide }: { f: Fixture; state: Game
           ids={pk.order[mySide]}
           keeper={pk.keepers[mySide]}
           secs={secs}
+          need={pk.mode === 'spot' ? 1 : 5}
           onConfirm={(order) => client.match(f.id, { a: 'pkOrder', order })}
         />
       )}
       {pk.phase === 'order' && (mySide == null || !waitingMe) && (
-        <div className="pk-hint">Os treinadores escolhem os batedores… {secs}s</div>
+        <div className="pk-hint">
+          {pk.mode === 'spot' ? 'O treinador escolhe quem vai bater' : 'Os treinadores escolhem os batedores'}… {secs}s
+        </div>
       )}
       {pk.phase === 'aim' && waitingMe && (
         <div className="pk-aim">
@@ -71,7 +88,7 @@ export function ShootoutView({ f, state, fr, mySide }: { f: Fixture; state: Game
             {[0, 1, 2].map((d) => (
               <button key={d} className="btn lg" onClick={() => client.match(f.id, { a: 'pkAim', dir: d as PkDir })}>
                 {d === 0 ? '◀ ' : d === 1 ? '▲ ' : ''}
-                {kickingMe ? (d === 1 ? 'Meio' : d === 0 ? 'Canto esquerdo' : 'Canto direito') : d === 1 ? 'Ficar no meio' : `Pular à ${DIR_LABEL[d]}`}
+                {kickingMe ? (d === 1 ? 'No meio' : d === 0 ? 'Canto esquerdo' : 'Canto direito') : d === 1 ? 'Ficar no meio' : `Pular à ${DIR_LABEL[d]}`}
                 {d === 2 ? ' ▶' : ''}
               </button>
             ))}
@@ -117,17 +134,32 @@ function PkBoard({ pk, names, kits }: { pk: PkFrame; names: [string, string]; ki
 }
 
 /** Pick five takers in order (click to add, click again to remove). */
-function OrderPicker({ state, ids, keeper, secs, onConfirm }: { state: GameState; ids: number[]; keeper: number; secs: number; onConfirm: (order: number[]) => void }) {
+function OrderPicker({
+  state,
+  ids,
+  keeper,
+  secs,
+  need,
+  onConfirm,
+}: {
+  state: GameState;
+  ids: number[];
+  keeper: number;
+  secs: number;
+  need: number;
+  onConfirm: (order: number[]) => void;
+}) {
   const [order, setOrder] = useState<number[]>([]);
-  const toggle = (id: number) => setOrder((o) => (o.includes(id) ? o.filter((x) => x !== id) : o.length < 5 ? [...o, id] : o));
+  const toggle = (id: number) =>
+    setOrder((o) => (o.includes(id) ? o.filter((x) => x !== id) : need === 1 ? [id] : o.length < need ? [...o, id] : o));
   return (
     <div className="pk-order">
       <div className="row">
-        <b className="grow">Escolha seus 5 batedores, na ordem ({secs}s)</b>
-        <button className="btn sm ghost" onClick={() => setOrder(ids.filter((id) => id !== keeper).slice(0, 5))}>
+        <b className="grow">{need === 1 ? `Quem bate o pênalti? (${secs}s)` : `Escolha seus 5 batedores, na ordem (${secs}s)`}</b>
+        <button className="btn sm ghost" onClick={() => setOrder(ids.filter((id) => id !== keeper).slice(0, need))}>
           Sugestão
         </button>
-        <button className="btn primary" disabled={order.length < 5} onClick={() => onConfirm(order)}>
+        <button className="btn primary" disabled={order.length < need} onClick={() => onConfirm(order)}>
           Confirmar
         </button>
       </div>
@@ -146,7 +178,7 @@ function OrderPicker({ state, ids, keeper, secs, onConfirm }: { state: GameState
           );
         })}
       </div>
-      <div className="small faint">Se o tempo acabar, vale a sugestão. Na morte súbita seguem os demais, pela qualidade.</div>
+      <div className="small faint">{need === 1 ? 'Se o tempo acabar, bate o cobrador habitual do time.' : 'Se o tempo acabar, vale a sugestão. Na morte súbita seguem os demais, pela qualidade.'}</div>
     </div>
   );
 }

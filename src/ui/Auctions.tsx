@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Club, GameState, Player } from '../engine/types';
-import { age, formatMoney, playerValue, roundMoney } from '../engine/util';
+import { age, dateLabel, formatMoney, playerValue, roundMoney } from '../engine/util';
 import { command, useMe } from '../store';
-import { ClubBadge, Empty, Flag, Modal, PosTag, Stars, Str, useSort } from './common';
+import { ClubBadge, Empty, Flag, Modal, MoneyField, PosTag, Stars, Str, useSort } from './common';
 import { PlayerModal, Traits } from './PlayerModal';
 
 /** Players up for auction right now (own ones included, marked). */
@@ -16,15 +16,7 @@ function QuickBid({ p, club, state }: { p: Player; club: Club; state: GameState 
   const [amount, setAmount] = useState(mine ?? p.auction!.min);
   return (
     <span className="row" style={{ gap: 4, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
-      <input
-        type="number"
-        min={p.auction!.min}
-        step={p.auction!.min > 5_000_000 ? 250_000 : 50_000}
-        value={amount}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => setAmount(Number(e.target.value))}
-        style={{ width: 110 }}
-      />
+      <MoneyField value={amount} onChange={setAmount} width={110} />
       <button
         className="btn sm primary"
         disabled={amount < p.auction!.min || amount > club.balance}
@@ -174,5 +166,89 @@ export function AuctionPopup() {
         <AuctionList />
       </div>
     </Modal>
+  );
+}
+
+/** Finished auctions: who bought, for how much, or why nobody did. Newest first. */
+export function AuctionHistory() {
+  const { state, club } = useMe();
+  const log = state?.auctionLog ?? [];
+  const { sorted, th } = useSort(log, { key: 'when', dir: -1 }, {
+    when: (r) => r.season * 100 + r.date,
+    name: (r) => r.name,
+    str: (r) => r.str,
+    age: (r) => r.age,
+    amount: (r) => r.amount ?? -1,
+    min: (r) => r.min,
+    bids: (r) => r.bids,
+  });
+  if (!state) return null;
+  if (!log.length) return <Empty>Nenhum leilão terminou ainda.</Empty>;
+  return (
+    <table className="t">
+      <thead>
+        <tr>
+          {th('when', 'Data')}
+          {th('name', 'Jogador')}
+          {th('age', 'Idade', 'center')}
+          {th('str', 'Força', 'center')}
+          <th>Vendedor</th>
+          <th>Resultado</th>
+          {th('amount', 'Valor', 'right')}
+          {th('min', 'Mínimo', 'right')}
+          {th('bids', 'Lances', 'center')}
+          {club && <th className="right">Seu lance</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((r, i) => {
+          const from = state.clubs[r.from];
+          const to = r.to != null ? state.clubs[r.to] : null;
+          const mine = club ? r.human[club.id] : undefined;
+          const won = club != null && r.to === club.id;
+          return (
+            <tr key={`${r.pid}-${r.season}-${r.date}-${i}`} className={won || (club && r.from === club.id) ? 'me' : ''}>
+              <td className="small nowrap">{r.season === state.meta.season ? dateLabel(state, Math.min(r.date, state.calendar.length - 1)).slice(0, 5) : r.season}</td>
+              <td>
+                <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                  <PosTag pos={r.pos} /> <span className="nowrap">{r.name}</span>
+                </span>
+              </td>
+              <td className="center num">{r.age}</td>
+              <td className="center">
+                <Str v={r.str} />
+              </td>
+              <td>
+                <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                  <ClubBadge club={from} size={16} />
+                  <span className="small nowrap">{from?.name}</span>
+                </span>
+              </td>
+              <td>
+                {to ? (
+                  <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                    <span className="pill good">vendido</span>
+                    <ClubBadge club={to} size={16} />
+                    <span className="small nowrap">{to.name}</span>
+                  </span>
+                ) : r.cancelled ? (
+                  <span className="pill">cancelado (janela fechou)</span>
+                ) : (
+                  <span className="pill bad">sem lance mínimo</span>
+                )}
+              </td>
+              <td className="right num">{r.amount != null ? <b>{formatMoney(r.amount)}</b> : <span className="faint">—</span>}</td>
+              <td className="right small num">{formatMoney(r.min)}</td>
+              <td className="center num">{r.bids || '—'}</td>
+              {club && (
+                <td className="right small num">
+                  {mine != null ? <span className={won ? 'good' : 'bad'}>{formatMoney(mine)} {won ? '· levou' : '· perdeu'}</span> : <span className="faint">—</span>}
+                </td>
+              )}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

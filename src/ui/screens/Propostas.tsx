@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import type { Bid } from '../../engine/types';
+import { bidDeadline, bidRoundsLeft } from '../../engine/transfers';
 import { dateLabel, formatMoney } from '../../engine/util';
 import { command, useMe } from '../../store';
-import { ClubName, Empty, PosTag, Str, useSort } from '../common';
+import { ClubName, Empty, MoneyField, PosTag, Str, useSort } from '../common';
 import { PlayerModal } from '../PlayerModal';
 
 const STATUS: Record<Bid['status'], [string, string]> = {
@@ -84,7 +85,14 @@ export function Propostas() {
                       <span className={`pill ${cls}`}>{label}</span>
                       {b.status === 'contraproposta' && b.counter != null && <div className="small warn">pede {formatMoney(b.counter)}</div>}
                       {b.msg && b.status !== 'pendente' && <div className="small faint">{b.msg}</div>}
-                      <div className="small faint">{dateLabel(state, Math.min(b.date, state.calendar.length - 1)).slice(0, 5)}</div>
+                      {b.status === 'pendente' || b.status === 'contraproposta' ? (
+                        <div className={`small ${bidRoundsLeft(state, b) <= 1 ? 'warn' : 'faint'}`} title="Sem resposta até lá, a proposta expira">
+                          {bidRoundsLeft(state, b) <= 1 ? 'última rodada' : `${bidRoundsLeft(state, b)} rodadas`} · expira{' '}
+                          {dateLabel(state, Math.min(bidDeadline(b), state.calendar.length - 1)).slice(0, 5)}
+                        </div>
+                      ) : (
+                        <div className="small faint">{dateLabel(state, Math.min(b.date, state.calendar.length - 1)).slice(0, 5)}</div>
+                      )}
                     </td>
                     <td className="right">
                       {tab === 'recebidas' && b.status === 'pendente' && (
@@ -99,13 +107,12 @@ export function Propostas() {
                           </div>
                           {b.kind === 'compra' && (
                           <div className="row" style={{ gap: 4 }}>
-                            <input
-                              type="number"
-                              step={100000}
+                            <MoneyField
                               placeholder="Contraproposta"
-                              style={{ width: 130 }}
-                              value={counter[b.id] ?? ''}
-                              onChange={(e) => setCounter({ ...counter, [b.id]: Number(e.target.value) })}
+                              width={130}
+                              allowZero={false}
+                              value={counter[b.id] ?? 0}
+                              onChange={(v) => setCounter({ ...counter, [b.id]: v })}
                             />
                             <button
                               className="btn sm"

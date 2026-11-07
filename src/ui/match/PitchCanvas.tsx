@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { LiveFrame } from '../../engine/match/live';
+import { tr } from '../../i18n';
 import { useApp } from '../../store';
 import { readable } from '../common';
 
@@ -54,11 +55,21 @@ export function PitchCanvas({ fixtureId, homeColors, awayColors, numbers, names,
       ctx.setTransform(s, 0, 0, s, M * s, M * s);
       drawField(ctx);
       if (!buf) return;
-      const cur = buf.cur;
-      const prev = buf.prev;
       const now = performance.now();
-      const span = Math.max(50, buf.at - buf.prevAt);
-      const k = prev && !cur.paused ? Math.min(1, (now - buf.at) / span) : 1;
+      // draw a little behind the newest frame and blend the two frames around that moment, so the players glide
+      // even when frames arrive unevenly (a frame late by a few ms no longer makes everyone stop)
+      const hist = buf.hist.length ? buf.hist : [{ f: buf.cur, at: buf.at }];
+      const gaps = hist.slice(1).map((h, i) => h.at - hist[i].at);
+      const gap = gaps.length ? gaps.reduce((x, y) => x + y, 0) / gaps.length : 100;
+      const renderAt = now - Math.min(400, Math.max(120, gap * 1.6));
+      let ia = 0;
+      while (ia < hist.length - 1 && hist[ia + 1].at <= renderAt) ia++;
+      const A = hist[ia];
+      const B = hist[Math.min(hist.length - 1, ia + 1)];
+      const cur = B.f;
+      const prev = A === B ? null : A.f;
+      // a highlight starting: players appear where they are, without sliding over from the idle picture
+      const k = prev && !cur.paused && (prev.hl || !cur.hl) ? Math.min(1, Math.max(0, (renderAt - A.at) / Math.max(1, B.at - A.at))) : 1;
       const lerp = (a: number, b: number) => a + (b - a) * k;
       const pos = (f: LiveFrame, i: number) => [f.p[i * 2] / 10, f.p[i * 2 + 1] / 10];
 
@@ -69,10 +80,15 @@ export function PitchCanvas({ fixtureId, homeColors, awayColors, numbers, names,
       }
       lastGoals = goals;
 
+      // between highlights the pitch sits idle (Championship Manager style): the minute and the latest commentary
+      if (cur.hl === false && !cur.pk) {
+        idle(ctx, cur, client?.events.get(fixtureId) ?? [], big, now < flashUntil);
+        if (now >= flashUntil) return;
+      }
       const r = big ? 1.55 : 1.9;
       const showNums = s * r > 5;
       let carrierAt: [number, number] | null = null;
-      for (let i = 0; i < 22; i++) {
+      for (let i = 0; i < 22 && cur.hl !== false; i++) {
         const id = cur.ids[i];
         if (!id || cur.p[i * 2] < 0) continue;
         let [x, y] = pos(cur, i);
@@ -107,39 +123,41 @@ export function PitchCanvas({ fixtureId, homeColors, awayColors, numbers, names,
         }
         if (id === cur.car) carrierAt = [x, y];
       }
-      // ball
-      let bx = cur.b[0] / 10;
-      let by = cur.b[1] / 10;
-      let bz = cur.b[2] / 10;
-      if (prev) {
-        bx = lerp(prev.b[0] / 10, bx);
-        by = lerp(prev.b[1] / 10, by);
-        bz = lerp(prev.b[2] / 10, bz);
-      }
-      ctx.beginPath();
-      ctx.arc(bx + bz * 0.18, by + bz * 0.28, 0.6, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(bx, by - bz * 0.35, 0.7 + bz * 0.05, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.lineWidth = 0.18;
-      ctx.strokeStyle = '#111';
-      ctx.stroke();
-      // name of the player on the ball
-      if (big && names && carrierAt && cur.car) {
-        const nm = names.get(cur.car);
-        if (nm) {
-          ctx.font = `600 2.1px system-ui, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          const tw = ctx.measureText(nm).width + 1.2;
-          const ty = Math.min(H - 1, carrierAt[1] + r + 0.5);
-          ctx.fillStyle = 'rgba(0,0,0,0.6)';
-          ctx.fillRect(carrierAt[0] - tw / 2, ty - 0.2, tw, 2.7);
-          ctx.fillStyle = '#fff';
-          ctx.fillText(nm, carrierAt[0], ty);
+      // ball (not while the pitch is idle)
+      if (cur.hl !== false) {
+        let bx = cur.b[0] / 10;
+        let by = cur.b[1] / 10;
+        let bz = cur.b[2] / 10;
+        if (prev) {
+          bx = lerp(prev.b[0] / 10, bx);
+          by = lerp(prev.b[1] / 10, by);
+          bz = lerp(prev.b[2] / 10, bz);
+        }
+        ctx.beginPath();
+        ctx.arc(bx + bz * 0.18, by + bz * 0.28, 0.6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(bx, by - bz * 0.35, 0.7 + bz * 0.05, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.lineWidth = 0.18;
+        ctx.strokeStyle = '#111';
+        ctx.stroke();
+        // name of the player on the ball
+        if (big && names && carrierAt && cur.car) {
+          const nm = names.get(cur.car);
+          if (nm) {
+            ctx.font = `600 2.1px system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const tw = ctx.measureText(nm).width + 1.2;
+            const ty = Math.min(H - 1, carrierAt[1] + r + 0.5);
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(carrierAt[0] - tw / 2, ty - 0.2, tw, 2.7);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(nm, carrierAt[0], ty);
+          }
         }
       }
       if (now < flashUntil) {
@@ -151,19 +169,19 @@ export function PitchCanvas({ fixtureId, homeColors, awayColors, numbers, names,
         ctx.textBaseline = 'middle';
         ctx.lineWidth = 0.8;
         ctx.strokeStyle = `rgba(0,0,0,${a})`;
-        ctx.strokeText('GOL!', W / 2, H / 2);
+        ctx.strokeText(tr('GOL!'), W / 2, H / 2);
         ctx.fillStyle = flashSide === 0 ? homeColors[0] : awayColors[0];
         ctx.globalAlpha = a;
-        ctx.fillText('GOL!', W / 2, H / 2);
+        ctx.fillText(tr('GOL!'), W / 2, H / 2);
         ctx.globalAlpha = 1;
-      } else if (cur.paused) {
+      } else if (cur.paused && cur.hl !== false) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
         ctx.fillRect(-M, -M, TW, TH);
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 7px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('PAUSADO', W / 2, H / 2);
+        ctx.fillText(tr('PAUSADO'), W / 2, H / 2);
       }
     };
     draw();
@@ -171,6 +189,25 @@ export function PitchCanvas({ fixtureId, homeColors, awayColors, numbers, names,
   }, [fixtureId, homeColors, awayColors, numbers, names, big, mine]);
 
   return <canvas ref={ref} className={`pitch ${big ? 'big' : ''}`} />;
+}
+
+/** The idle pitch between highlights: dimmed, with the clock and the latest line of commentary. */
+function idle(ctx: CanvasRenderingContext2D, f: LiveFrame, events: LiveFrame['ev'], big: boolean | undefined, goalFlash: boolean) {
+  ctx.fillStyle = 'rgba(4, 12, 8, 0.42)';
+  ctx.fillRect(-M, -M, TW, TH);
+  if (goalFlash) return;
+  const m = Math.floor(f.t / 60);
+  const minute = f.ended ? tr('FIM') : f.half === 1 && m >= 45 ? `45+${m - 44}'` : f.half === 2 && m >= 90 ? `90+${m - 89}'` : `${m + 1}'`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = `800 ${big ? 9 : 12}px system-ui, sans-serif`;
+  ctx.fillText(f.paused ? tr('PAUSADO') : minute, W / 2, H / 2 - (big ? 3 : 2));
+  const last = [...events].reverse().find((e) => e.kind !== 'tactic');
+  ctx.font = `600 ${big ? 2.6 : 3.6}px system-ui, sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  const text = tr(f.ended ? 'Fim de jogo' : last && f.t - last.t < 240 ? last.text : 'sem lances de perigo…');
+  ctx.fillText(text.length > 46 ? `${text.slice(0, 45)}…` : text, W / 2, H / 2 + (big ? 5 : 6));
 }
 
 function drawField(ctx: CanvasRenderingContext2D) {

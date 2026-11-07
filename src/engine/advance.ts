@@ -1,6 +1,7 @@
 import { boardAfterMatch, boardChecks, boardFinanceCheck } from './board';
 import { applyFixtureToTables, progressComps } from './competitions';
 import { dailyPlayers } from './development';
+import { youthMatches } from './youth';
 import { monthEnds, monthlyAwards, tallyMatch } from './awards';
 import { aiInvest, dailyFinances, gateOf } from './economy';
 import { MatchSim, type MatchResult, type MatchSetup } from './match/core';
@@ -107,6 +108,7 @@ export function finishDate(state: GameState, results: MatchResult[], present: Se
   const played = applyResults(state, results, rng);
   progressComps(state, rng);
   dailyPlayers(state, rng, played);
+  youthMatches(state, rng);
   if (monthEnds(state)) monthlyAwards(state);
   const wages = new Map<number, number>();
   for (const id in state.players) {

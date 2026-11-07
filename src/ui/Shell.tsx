@@ -3,9 +3,13 @@ import type { GameState } from '../engine/types';
 import { dateLabel, formatMoney } from '../engine/util';
 import { downloadSave, leaveGame, useApp, useMe, type Screen } from '../store';
 import { lineupIssues } from '../engine/ai/lineup';
-import { AuctionList, AuctionPopup, openAuctions } from './Auctions';
+import { ask } from './Confirm';
+import { AuctionHistory, AuctionList, AuctionPopup, openAuctions } from './Auctions';
 import { ClubBadge, compLabel, Modal } from './common';
+import { LangToggle } from './LangToggle';
 import { ClaimPanel } from './Lobby';
+import { juniorsOf } from '../engine/youth';
+import { Base } from './screens/Base';
 import { Calendario } from './screens/Calendario';
 import { ClubeView } from './screens/ClubeView';
 import { Competicoes } from './screens/Competicoes';
@@ -82,7 +86,7 @@ export function Shell() {
   const pendingBids = club ? Object.values(state.bids).filter((b) => b.seller === club.id && b.status === 'pendente').length : 0;
   const counters = club ? Object.values(state.bids).filter((b) => b.buyer === club.id && b.status === 'contraproposta').length : 0;
   const offers = manager?.offers.length ?? 0;
-  const expiring = club ? Object.values(state.players).filter((p) => p.clubId === club.id && !p.loan && p.contractEnd <= state.meta.season).length : 0;
+  const expiring = club ? Object.values(state.players).filter((p) => p.clubId === club.id && !p.loan && !p.junior && p.contractEnd <= state.meta.season).length : 0;
   const auctions = club ? openAuctions(state).filter((p) => p.clubId !== club.id).length : 0;
 
   if (!managerId) {
@@ -102,7 +106,15 @@ export function Shell() {
   const body = (() => {
     switch (screen) {
       case 'elenco':
-        return <Elenco />;
+        return (
+          <Tabbed
+            screen="elenco"
+            tabs={[
+              { id: 'profissional', label: 'Profissional', render: () => <Elenco /> },
+              { id: 'base', label: `Base (${club ? juniorsOf(state, club.id).length : 0})`, render: () => <Base /> },
+            ]}
+          />
+        );
       case 'escalacao':
         return <Escalacao />;
       case 'mercado':
@@ -116,8 +128,15 @@ export function Shell() {
                 label: 'Leilões',
                 count: auctions,
                 render: () => (
-                  <div className="panel tight scroll">
-                    <AuctionList />
+                  <div className="col">
+                    <div className="panel tight scroll">
+                      <h3 style={{ padding: '4px 6px' }}>Leilões abertos</h3>
+                      <AuctionList />
+                    </div>
+                    <div className="panel tight scroll" style={{ maxHeight: '50vh' }}>
+                      <h3 style={{ padding: '4px 6px' }}>Resultados anteriores</h3>
+                      <AuctionHistory />
+                    </div>
                   </div>
                 ),
               },
@@ -177,6 +196,8 @@ export function Shell() {
             </button>
           );
         })}
+        <div className="nav-divider" />
+        <LangToggle compact />
       </nav>
       <main className="content">{body}</main>
       {club && <AuctionPopup />}
@@ -311,7 +332,12 @@ function TopBar() {
             {lobby.code}
           </span>
         )}
-        <button className="btn ghost sm" onClick={() => window.confirm('Sair do jogo? Baixe o save antes, se for o anfitrião.') && leaveGame()}>
+        <button
+          className="btn ghost sm"
+          onClick={() =>
+            void ask({ title: 'Sair do jogo?', text: 'Se você é o anfitrião, baixe o save antes: a sala fecha para todos.', ok: 'Sair', danger: true }).then((yes) => yes && leaveGame())
+          }
+        >
           Sair
         </button>
       </div>

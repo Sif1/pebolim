@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import type { Club, GameState, Pos } from '../engine/types';
-import { formatMoney } from '../engine/util';
+import { formatMoney, kk, parseMoney } from '../engine/util';
+
+export { kk, parseMoney };
 import { useApp } from '../store';
 
 /** Crest images that failed to load (offline, moved file): draw the shield instead. */
@@ -266,15 +268,21 @@ export function useSort<T>(rows: T[], initial: { key: string; dir: 1 | -1 }, get
         return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))) * sort.dir;
       })
     : rows;
-  const th = (key: string, label: ReactNode, cls = '') => (
-    <th
-      className={`sortable ${cls}`}
-      onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : -1 }))}
-    >
-      {label}
-      {sort.key === key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
-    </th>
-  );
+  const th = (key: string, label: ReactNode, cls = '') => {
+    // the arrow goes on the inner side, so a right-aligned label still lines up with its numbers
+    const arrow = sort.key === key ? <span className="sort-arrow">{sort.dir === 1 ? '▲' : '▼'}</span> : null;
+    return (
+      <th
+        className={`sortable ${cls}`}
+        title="Clique para ordenar"
+        onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : -1 }))}
+      >
+        {cls.includes('right') && arrow}
+        {label}
+        {!cls.includes('right') && arrow}
+      </th>
+    );
+  };
   return { sorted, th };
 }
 
@@ -398,6 +406,63 @@ export function Flag({ nat, label = false }: { nat: string; label?: boolean }) {
     <span className="nat">
       {img}
       {label && <span className="small muted">{name}</span>}
+    </span>
+  );
+}
+
+// ---------- money fields: "2,5kk" for 2.5 million, "300k" for 300 thousand (Brasfoot style) ----------
+
+/**
+ * Money input that shows and accepts the short form ("2,5kk"). Arrow keys step up and down; the value is sent
+ * as you type whenever it reads as money, and the text tidies itself when you leave the field.
+ */
+export function MoneyField({
+  value,
+  onChange,
+  step,
+  width = 110,
+  placeholder,
+  allowZero = true,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+  width?: number;
+  placeholder?: string;
+  allowZero?: boolean;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? (value || allowZero ? kk(value) : '');
+  const stepOf = (v: number) => step ?? (v >= 10e6 ? 500_000 : v >= 1e6 ? 100_000 : v >= 100_000 ? 10_000 : 1_000);
+  const bad = text != null && text.trim() !== '' && parseMoney(text) == null;
+  return (
+    <span className="money-field" style={{ width }}>
+      <span className="money-cur">US$</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        className={bad ? 'bad' : ''}
+        value={shown}
+        placeholder={placeholder}
+        title="Ex.: 2,5kk = US$ 2,5 milhões · 300k = US$ 300 mil · setas ↑↓ mudam o valor"
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = parseMoney(e.target.value);
+          if (v != null) onChange(Math.max(0, v));
+          else if (e.target.value.trim() === '' && !allowZero) onChange(0);
+        }}
+        onBlur={() => setText(null)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') setText(null);
+          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+          e.preventDefault();
+          const base = parseMoney(text ?? '') ?? value;
+          const next = Math.max(0, base + (e.key === 'ArrowUp' ? 1 : -1) * stepOf(base));
+          setText(null);
+          onChange(next);
+        }}
+      />
     </span>
   );
 }

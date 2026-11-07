@@ -14,6 +14,8 @@ export interface FrameBuf {
   prevAt: number;
   cur: LiveFrame;
   at: number;
+  /** the last few frames with their arrival times, for smooth drawing a little behind real time */
+  hist: { f: LiveFrame; at: number }[];
 }
 
 export interface ClientEvents {
@@ -141,7 +143,8 @@ export class ClientSession {
         const now = performance.now();
         for (const f of m.frames) {
           const buf = this.frames.get(f.f);
-          this.frames.set(f.f, buf ? { prev: buf.cur, prevAt: buf.at, cur: f, at: now } : { prev: null, prevAt: now, cur: f, at: now });
+          const hist = [...(buf?.hist ?? []), { f, at: now }].slice(-8);
+          this.frames.set(f.f, buf ? { prev: buf.cur, prevAt: buf.at, cur: f, at: now, hist } : { prev: null, prevAt: now, cur: f, at: now, hist });
           if (f.ev.length) this.events.set(f.f, [...(this.events.get(f.f) ?? []), ...f.ev]);
         }
         for (const d of m.details) this.details.set(d.f, d);

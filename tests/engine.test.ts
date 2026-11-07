@@ -17,7 +17,10 @@ import type { GameState } from '../src/engine/types';
 import { datePlusMonths, resolveAuctions, returnLoans } from '../src/engine/transfers';
 import { autoLineup, lineupIssues } from '../src/engine/ai/lineup';
 import { autoShootout, Shootout } from '../src/engine/match/shootout';
-import { sortTable, squadOf } from '../src/engine/util';
+import { kk, parseMoney, sortTable, squadOf } from '../src/engine/util';
+import { endSeason, seasonVerdict } from '../src/engine/season';
+import { boardChecks, fireManager } from '../src/engine/board';
+import { juniorsOf, youthMatches } from '../src/engine/youth';
 import { createWorld } from '../src/engine/world';
 import { synthSetup } from './helpers';
 import { synthDb } from './synthDb';
@@ -204,6 +207,29 @@ describe('commands', () => {
   });
 });
 
+describe('money shorthand', () => {
+  it('reads and writes 2,5kk / 300k', () => {
+    expect(kk(2_500_000)).toBe('2,5kk');
+    expect(kk(2_000_000)).toBe('2kk');
+    expect(kk(300_000)).toBe('300k');
+    expect(kk(1_250_000_000)).toBe('1,25kkk');
+    for (const [t, v] of [
+      ['2,5kk', 2_500_000],
+      ['2.5kk', 2_500_000],
+      ['2,5 mi', 2_500_000],
+      ['US$ 300k', 300_000],
+      ['300 mil', 300_000],
+      ['2.000.000', 2_000_000],
+      ['2000000', 2_000_000],
+      ['1,2', 1],
+      ['750', 750],
+    ] as const)
+      expect(parseMoney(t)).toBe(v);
+    expect(parseMoney('abc')).toBeNull();
+    expect(parseMoney('')).toBeNull();
+  });
+});
+
 describe('penalty shootout', () => {
   it('follows the five-each then sudden-death rules', () => {
     const so = new Shootout(0, [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]);
@@ -245,7 +271,12 @@ describe('penalty shootout', () => {
     for (let seed = 1; seed < 80 && !m; seed++) {
       const lm = new LiveMatch(synthSetup(70, 70, seed, true), [true, false]);
       lm.sim.step(99999);
-      if (lm.inShootout) m = lm;
+      // penalties during the match are taken automatically here: this test is about the shootout
+      while (lm.sim.spotPending) {
+        lm.sim.autoSpotKick();
+        lm.sim.step(99999);
+      }
+      if (lm.sim.pkPending) m = lm;
     }
     expect(m).not.toBeNull();
     const live = m!;
@@ -265,6 +296,35 @@ describe('penalty shootout', () => {
     const r = live.sim.result();
     expect(r.pens).not.toBeNull();
     expect(r.pens![0]).not.toBe(r.pens![1]);
+  });
+});
+
+describe('in-match penalties', () => {
+  it('turn into the mini-game when a human is playing, and the match goes on', () => {
+    let seen = 0;
+    for (let seed = 1; seed < 60 && seen < 2; seed++) {
+      const m = new LiveMatch(synthSetup(70, 70, 500 + seed), [true, true]);
+      let spots = 0;
+      let guard = 0;
+      while (!m.ended && guard++ < 20000) {
+        m.tick(200, 19);
+        const pk = m.frame().pk;
+        if (pk?.mode === 'spot') {
+          if (pk.phase === 'order') {
+            spots += pk.wait[pk.first] ? 1 : 0;
+            m.pkOrder(pk.first, [pk.order[pk.first][1]]);
+          }
+          if (pk.phase === 'aim') {
+            m.pkAim(0, 2);
+            m.pkAim(1, 0);
+          }
+        }
+      }
+      expect(m.ended).toBe(true);
+      expect(m.sim.spotPending).toBeNull();
+      seen += spots;
+    }
+    expect(seen).toBeGreaterThan(0);
   });
 });
 
@@ -331,6 +391,10 @@ describe('market', () => {
     expect(p.auction).toBeNull();
     expect(cb.balance).toBe(before - huge);
     expect(s.auctionBids[p.id]).toBeUndefined();
+    // and it shows in the auction history, with the human bid
+    const last = s.auctionLog!.at(-1)!;
+    expect(last).toMatchObject({ pid: p.id, to: cb.id, amount: huge });
+    expect(last.human[cb.id]).toBe(huge);
   });
 
   it('flags injured or suspended players in a manual lineup for today', () => {
@@ -350,6 +414,115 @@ describe('market', () => {
     // picking the team automatically sidesteps them
     club.autoLineup = true;
     expect(lineupIssues(s, club.id)).toEqual([]);
+  });
+
+  it('renews marked contracts automatically at the end of the season', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    const season = s.meta.season;
+    const [kept, gone, old] = squadOf(s, club.id).filter((p) => !p.loan && season - p.birth < 33);
+    for (const p of [kept, gone, old]) {
+      p.contractEnd = season;
+      p.morale = 70;
+    }
+    old.birth = season - 36;
+    expect(runCommand(s, m.id, { c: 'setAutoRenew', pids: [kept.id, old.id], on: true }).ok).toBe(true);
+    endSeason(s, rng, new Set([m.id]));
+    expect(kept.clubId).toBe(club.id);
+    expect(kept.contractEnd).toBeGreaterThan(season);
+    expect(s.news.some((n) => n.text === `${gone.name} deixa o ${club.name} ao fim do contrato.`)).toBe(true);
+    // 35 and older: no automatic renewal
+    expect(s.news.some((n) => n.text.startsWith(`${old.name} (36 anos) não renova`))).toBe(true);
+    expect(s.news.some((n) => n.text.startsWith(`Renovação automática: ${kept.name}`))).toBe(true);
+  });
+
+  it('signs pre-contracts in the final six months and moves the player at season end', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    const p = Object.values(s.players).find((x) => x.clubId != null && x.clubId !== club.id && !x.loan)!;
+    p.contractEnd = s.meta.season;
+    expect(runCommand(s, m.id, { c: 'preContract', pid: p.id, wage: 1e7, years: 2 }).ok).toBe(false); // too early
+    s.meta.date = 40;
+    expect(runCommand(s, m.id, { c: 'preContract', pid: p.id, wage: 1e7, years: 2 }).ok).toBe(true);
+    endSeason(s, rng, new Set([m.id]));
+    expect(p.clubId).toBe(club.id);
+    expect(p.contractEnd).toBe(s.meta.season + 1);
+    expect(p.pre).toBeNull();
+  });
+
+  it('keeps offering jobs to a sacked manager, even with a low reputation', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA2')!;
+    const m = createManager(s, rng, 'A', club.id);
+    fireManager(s, m, 'teste');
+    m.rep = 5;
+    for (let i = 0; i < 12 && !m.offers.length; i++) boardChecks(s, rng, new Set([m.id]));
+    expect(m.offers.length).toBeGreaterThan(0);
+  });
+
+  it("only tops a human club's short squad up to a playable size, at its own level", () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA2')!;
+    const m = createManager(s, rng, 'A', club.id);
+    // most of the squad leaves; a star is free on the market
+    const squad = squadOf(s, club.id).sort((a, b) => a.str - b.str);
+    for (const p of squad.slice(0, squad.length - 10)) p.clubId = null;
+    const star = Object.values(s.players).sort((a, b) => b.str - a.str)[0];
+    star.clubId = null;
+    endSeason(s, rng, new Set([m.id]));
+    const after = squadOf(s, club.id);
+    expect(after.length).toBeGreaterThanOrEqual(18);
+    expect(star.clubId).not.toBe(club.id);
+    expect(s.news.some((n) => n.to === m.id && n.text.startsWith('A diretoria completou o elenco'))).toBe(true);
+  });
+
+  it('gives a manager in his first season half the blame for a missed objective', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const [a, b] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const fresh = createManager(s, rng, 'Novo', a.id);
+    const old = createManager(s, rng, 'Antigo', b.id);
+    old.since -= 100; // hired a season ago
+    for (const c of [a, b]) {
+      c.board.goal = 'titulo';
+      c.board.conf = 45;
+    }
+    const present = new Set([fresh.id, old.id]);
+    seasonVerdict(s, a, 12, 20, present);
+    seasonVerdict(s, b, 12, 20, present);
+    expect(fresh.clubId).toBe(a.id); // 45 − 17.5: kept, with a message
+    expect(s.news.some((n) => n.to === fresh.id && n.text.includes('mantém você no cargo'))).toBe(true);
+    expect(old.clubId).toBeNull(); // 45 − 35: sacked
+  });
+
+  it('keeps a youth team apart from the first team, with hidden força until promoted', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    const youth = juniorsOf(s, club.id);
+    expect(youth.length).toBeGreaterThanOrEqual(7);
+    // not in the squad, not in line-ups
+    const squad = squadOf(s, club.id);
+    expect(squad.some((p) => p.junior)).toBe(false);
+    const j = youth[0];
+    expect(runCommand(s, m.id, { c: 'renameYouth', pid: j.id, name: 'Pebolinho' }).ok).toBe(true);
+    expect(j.name).toBe('Pebolinho');
+    expect(runCommand(s, m.id, { c: 'promoteYouth', pid: j.id }).ok).toBe(true);
+    expect(squadOf(s, club.id).some((p) => p.id === j.id)).toBe(true);
+    expect(j.junior).toBe(false);
+    // youth matches give them stats over a few weekends
+    for (let d = 0; d < 6; d++) {
+      s.meta.date = d;
+      youthMatches(s, rng);
+    }
+    expect(juniorsOf(s, club.id).some((p) => (p.ys?.[0] ?? 0) > 0)).toBe(true);
   });
 
   it('checks the new market commands from clients', () => {
@@ -536,6 +709,33 @@ describe('momentum', () => {
       expect(sim.momentum[0].some((v) => v > 0) && sim.momentum[1].some((v) => v > 0)).toBe(true);
     }
     expect(strong).toBeGreaterThan(weak * 1.2);
+  });
+});
+
+describe('live highlights', () => {
+  it('shows every goal as a highlight at a followable speed and idles in between', () => {
+    const base = 5700 / 300;
+    let goals = 0;
+    let shown = 0;
+    let idle = 0;
+    let hlFast = 0;
+    for (const seed of [11, 12, 13]) {
+      const m = new LiveMatch(synthSetup(74, 68, seed), [false, false]);
+      while (!m.ended) {
+        const before = m.frame();
+        m.tick(100, base);
+        const fr = m.frame();
+        const g = fr.sc[0] + fr.sc[1] - (before.sc[0] + before.sc[1]);
+        goals += g;
+        if (fr.hl || before.hl) shown += g;
+        if (!fr.hl) idle++;
+        if (fr.hl && m.speedNow > 4) hlFast++;
+      }
+    }
+    expect(goals).toBeGreaterThan(0);
+    expect(shown).toBe(goals);
+    expect(idle).toBeGreaterThan(0);
+    expect(hlFast).toBe(0);
   });
 });
 

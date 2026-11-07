@@ -2,8 +2,8 @@ import { squadStrength } from './ai/lineup';
 import { DATES_PER_SEASON, homeGameCounts, wageBudget } from './economy';
 import { assignNumbers, SQUAD_SHAPE } from './generator';
 import type { Rng } from './rng';
-import type { Bid, Club, GameState, Player, Pos } from './types';
-import { absDate, addNews, age, clamp, expectedWage, playerValue, roundMoney, squadIndex, squadOf } from './util';
+import type { AuctionResult, Bid, Club, GameState, Player, Pos } from './types';
+import { absDate, addNews, age, clamp, dateLabel, expectedWage, playerValue, roundMoney, squadIndex, squadOf } from './util';
 
 export function windowOpen(state: GameState): boolean {
   return windowOpenAt(state, state.meta.date);
@@ -47,6 +47,7 @@ export function executeTransfer(state: GameState, p: Player, to: Club, fee: numb
   p.clubId = to.id;
   p.wage = wage;
   unlist(state, p);
+  if (!loan) p.pre = null;
   p.num = 0;
   if (loan && from) {
     p.loan = { from: from.id, until: datePlusMonths(state, months) };
@@ -59,6 +60,12 @@ export function executeTransfer(state: GameState, p: Player, to: Club, fee: numb
   const verb = loan ? `é emprestado por ${months} meses ao` : 'é contratado pelo';
   const feeTxt = fee > 0 ? ` por ${moneyShort(fee)}` : '';
   addNews(state, 'transfer', `${p.name} ${verb} ${to.name}${from ? ` (vindo do ${from.name})` : ''}${feeTxt}.`, [to.id, ...(from ? [from.id] : [])]);
+  if (!loan) {
+    // fans: a big signing lifts them, selling one of the best players hurts
+    const best3 = (cid: number) => squadOf(state, cid).sort((a, b) => b.str - a.str)[2]?.str ?? 99;
+    if (p.str >= best3(to.id)) to.fans = Math.min(100, (to.fans ?? 60) + 4);
+    if (from && p.str >= best3(from.id) - 0.5) from.fans = Math.max(0, (from.fans ?? 60) - 5);
+  }
   to.power = squadStrength(squadOf(state, to.id));
   if (from) from.power = squadStrength(squadOf(state, from.id));
 }
@@ -325,6 +332,18 @@ function aiListings(state: GameState, rng: Rng, view: MarketView) {
   let auctions = all.filter((p) => p.auction).length;
   let listed = all.filter((p) => p.clubId != null && (p.salePrice != null || p.loanListed) && !state.clubs[p.clubId].managerId).length;
   const canAuction = auctionCanClose(state);
+  // now and then a big AI club is open to selling one of its stars (an older one, or one in his final year)
+  if (rng.chance(0.3)) {
+    const bigs = view.aiClubs.filter((c) => c.rep >= 72);
+    const club = bigs.length ? rng.pick(bigs) : null;
+    const stars = club ? view.squad(club.id).filter((p) => !p.loan && p.salePrice == null && !p.auction && !p.loanListed).sort((a, b) => b.str - a.str).slice(0, 6) : [];
+    const p = stars.find((x) => x.contractEnd <= season || age(x, season) >= 29);
+    if (club && p) {
+      p.salePrice = roundMoney(playerValue(p, season) * rng.range(1.0, 1.25));
+      addNews(state, 'transfer', `Mercado: o ${club.name} aceita negociar ${p.name} (${p.pos}, força ${Math.round(p.str)}) por ${moneyShort(p.salePrice)}.`, [club.id]);
+      listed++;
+    }
+  }
   // clubs in the red or over their wage budget sell a well-paid player who is not a regular starter
   for (const club of view.aiClubs) {
     if (!rng.chance(0.25)) continue;
@@ -391,11 +410,13 @@ function aiBidsForHumans(state: GameState, rng: Rng, idx: Map<number, Player[]>)
       years: rng.int(2, 4),
       status: 'pendente',
       counter: null,
-      date: state.meta.date,
+      // made as this date finishes: the manager first sees it in the next round, and has BID_ROUNDS rounds to answer
+      date: state.meta.date + 1,
       season: state.meta.season,
       msg: '',
     };
-    addNews(state, 'bid', `O ${buyer.name} fez uma proposta de ${moneyShort(fee)} por ${target.name}.`, [hc.id, buyer.id], hc.managerId);
+    const until = dateLabel(state, Math.min(state.calendar.length - 1, bidDeadline({ date: state.meta.date + 1 }))).slice(0, 5);
+    addNews(state, 'bid', `O ${buyer.name} fez uma proposta de ${moneyShort(fee)} por ${target.name} (vale até ${until}).`, [hc.id, buyer.id], hc.managerId);
   }
 }
 
@@ -410,8 +431,13 @@ export function resolveAuctions(state: GameState, rng: Rng) {
     const a = p.auction;
     if (!a || absDate(a.season, a.date) >= now || p.clubId == null) continue;
     const owner = state.clubs[p.clubId];
+    const human: Record<number, number> = {};
+    for (const [cid, amount] of Object.entries(state.auctionBids[p.id] ?? {})) if (state.clubs[Number(cid)]?.managerId) human[Number(cid)] = amount;
+    const log = (to: number | null, amount: number | null, bids: number, cancelled = false) =>
+      logAuction(state, { pid: p.id, name: p.name, pos: p.pos, str: Math.round(p.str), age: age(p, state.meta.season), from: owner.id, to, amount, min: a.min, bids, human, season: state.meta.season, date: state.meta.date, ...(cancelled ? { cancelled } : {}) });
     if (!windowOpen(state)) {
       unlist(state, p);
+      log(null, null, 0, true);
       if (owner.managerId) addNews(state, 'transfer', `O leilão de ${p.name} foi cancelado: a janela de transferências fechou.`, [owner.id], owner.managerId);
       continue;
     }
@@ -435,9 +461,11 @@ export function resolveAuctions(state: GameState, rng: Rng) {
     const win = bids[0];
     if (!win) {
       unlist(state, p);
+      log(null, null, 0);
       addNews(state, 'transfer', `Leilão: ninguém deu o lance mínimo por ${p.name} (${owner.name}).`, [owner.id], owner.managerId);
       continue;
     }
+    log(win.club.id, win.amount, bids.length);
     const others = bids.length - 1;
     executeTransfer(state, p, win.club, win.amount, wageDemand(state, p, win.club), rng.int(2, 4));
     addNews(
@@ -449,10 +477,30 @@ export function resolveAuctions(state: GameState, rng: Rng) {
   }
 }
 
-/** Expire old pending bids. */
+const AUCTION_LOG_MAX = 80;
+
+function logAuction(state: GameState, r: AuctionResult) {
+  const log = (state.auctionLog ??= []);
+  log.push(r);
+  if (log.length > AUCTION_LOG_MAX) log.splice(0, log.length - AUCTION_LOG_MAX);
+}
+
+/** A bid can be answered for this many rounds, the one it was made in included. */
+export const BID_ROUNDS = 3;
+
+/** Last date (of the bid's season) on which a bid can still be answered. */
+export const bidDeadline = (b: Pick<Bid, 'date'>) => b.date + BID_ROUNDS - 1;
+
+/** Rounds left to answer a bid (0 = expired). */
+export function bidRoundsLeft(state: GameState, b: Pick<Bid, 'date' | 'season'>): number {
+  if (b.season !== state.meta.season) return 0;
+  return Math.max(0, bidDeadline(b) - state.meta.date + 1);
+}
+
+/** Expire bids nobody answered in time (checked as each date finishes). */
 export function expireBids(state: GameState) {
   for (const b of Object.values(state.bids)) {
-    if ((b.status === 'pendente' || b.status === 'contraproposta') && (b.season < state.meta.season || state.meta.date - b.date > 4)) {
+    if ((b.status === 'pendente' || b.status === 'contraproposta') && (b.season < state.meta.season || state.meta.date >= bidDeadline(b))) {
       b.status = 'expirada';
     }
   }

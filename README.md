@@ -1,18 +1,24 @@
 # Pebolim Manager
 
-A browser football-manager game for playing with friends. One player hosts from their browser; friends join with a 6-letter room code (peer-to-peer, no server). The whole game is in Portuguese (BR).
+A browser football-manager game for playing with friends. One player hosts from their browser; friends join with a 6-letter room code (peer-to-peer, no server). The game is in Portuguese (BR) or English: switch with the PT / EN buttons on the home screen or at the bottom of the menu (each player picks their own language). The home screen also lists what's new in each version.
 
 - Brazil Série A, B and C, Copa do Brasil and 10 state championships
 - Big 5 European leagues (two divisions each) with their domestic cups
 - Argentina and Uruguay (two divisions each)
 - Libertadores, Sul-Americana, Champions League and Europa League
 - Live 2D match day: every human match on screen at once, each with its own clock; you pause and change only your own match
+  - Championship Manager-style highlights: the pitch comes alive a few seconds before each chance and plays it at about real speed, then sits idle with the clock and commentary running; short matches show only the shots that matter most (goals always)
   - Live stats beside the pitch (possession, shots, xG, clear-cut chances, passes, tackles, saves) and a rating for every player next to their energy
   - Drag a substitute onto a player to bring him on, or drag players to new positions mid-match
 - AI coaches that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics, with every change shown in the match feed
 - Line-ups on a drawn pitch: drag players between the field, bench and reserves, and drag them to any of 25 positions (the role follows the area of the pitch)
 - Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
-- Penalty shootouts you play: pick your five takers, then choose the corner for each kick and the side your keeper dives, with a pixel-art run-up and shot
+- Penalty shootouts you play: pick your five takers, then choose the corner for each kick and the side your keeper dives, with a pixel-art run-up and shot. Penalties during a match work the same way: pick the taker, then the corner
+- Match sounds (Web Audio, no files): whistles for cards, penalties, half-time and full time; the crowd cheers a home goal and boos an away goal. Mute with the 🔊 button on match day
+- Opponent scouting report on the dashboard: their likely shape and style, form, key players, absentees, energy and tips
+- Youth team (Elenco → Base): rename your juniors and follow their age, potential stars and youth-match stats; their força shows only after promotion
+- Mid-season board meetings, written warnings before a sacking, and a fan mood that fills or empties the stadium
+- Pre-contracts: sign a player in the last six months of his contract for free, to join when it ends
 - Transfer market with search filters (position, age, força, potential, trait, nationality with flags, for sale / for loan / in auction), sortable columns, bids between humans and the AI
   - Put your players up for sale at your price, offer them on loan for 6 or 12 months (the borrower pays the wages), or auction them: sealed bids from every manager and the AI, decided at the next round. The AI lists, loans and auctions its surplus players too, and buys listed players when the price is fair
 - Players have potential (0–5 stars: how far and how fast they grow, how slowly they decline) and traits (finalização, cabeceio, drible, passe…) that matter in the match engine
@@ -119,9 +125,17 @@ The manager ladder: real squads of similar strength managed by a poor, a passive
 ```bash
 npx tsx tools/finsim.ts 3
 npx tsx tools/marketsim.ts
+npx tsx tools/pacing.ts 5
+npx tsx tools/career.ts 4
 ```
 
-Economy checks: three seasons of club balances per league (who is in the red, wages against income, where the money comes from), and one season of the transfer market (AI listings, loans, auctions, and whether a human's fairly priced player sells).
+Economy and match-day checks: three seasons of club balances per league (who is in the red, wages against income, where the money comes from); one season of the transfer market (AI listings, loans, auctions, and whether a human's fairly priced player sells); how live matches of a given length spend their time (highlights shown, their speed, the idle clock); and a career from the managers' side (four human clubs over several seasons: results, board patience, money, squad strength, bids, market opportunities, news, and how the world's champions and player strength evolve).
+
+```bash
+npx tsx tools/i18n-extract.ts
+```
+
+Lists the Portuguese texts in the source that have no English entry yet (`--all` lists every text). The English lives in `src/i18n/en-*.ts`, keyed by the Portuguese text with `{0}`, `{1}`… for names and numbers. In English the page is translated as React draws it (`src/i18n/index.ts`), so the game state, the saves and the network messages stay in Portuguese; text drawn on a canvas goes through `tr()`.
 
 ```bash
 npm run typecheck

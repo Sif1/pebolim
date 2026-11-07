@@ -417,7 +417,8 @@ export class HostSession {
     }
     this.tickCount++;
     // a match in a fast stretch moves a lot per tick: send every tick so the pitch stays smooth
-    const fast = [...this.live.values()].some((m) => !m.ended && m.speedNow > 30);
+    // a highlight on screen, or a fast stretch: send every tick so the pitch stays smooth
+    const fast = [...this.live.values()].some((m) => !m.ended && (m.speedNow > 30 || m.highlight));
     if (fast || this.tickCount % 2 === 0 || changed) this.pushFrames(this.tickCount % 10 === 0);
     if (changed) {
       this.md!.allDone = this.md!.done.length >= this.live.size;

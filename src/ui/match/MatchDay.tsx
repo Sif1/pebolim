@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { gateOf, usableCapacity } from '../../engine/economy';
 import { MAX_SUBS } from '../../engine/match/core';
 import { FORMATION_LIST, shapeLabel } from '../../engine/match/formations';
@@ -7,9 +7,11 @@ import type { Club, Fixture, Formation, GameState, Marking, Mentality, Style, Ta
 import { dateLabel, formatMoney } from '../../engine/util';
 import { MATCH_MINUTES } from '../../net/validate';
 import { useApp, useMe } from '../../store';
-import { awayKit, ClubBadge, compLabel, contrastPair, Energy, Rating, shortName } from '../common';
+import { awayKit, ClubBadge, compLabel, Energy, Rating, shortName, Str } from '../common';
 import { MARKING_LABEL, MENTALITY_LABEL, STYLE_LABEL } from '../screens/Escalacao';
 import { dragProps, dropProps, moveSlotTo, TacticsBoard, type BoardToken, type DragSrc, type DropTarget } from '../TacticsBoard';
+import { ask } from '../Confirm';
+import { crowd, setSoundOn, soundOn, whistle } from '../sound';
 import { PitchCanvas } from './PitchCanvas';
 import { ShootoutView } from './Shootout';
 
@@ -29,6 +31,15 @@ export function MatchDay() {
   const client = useApp((s) => s.client)!;
   useApp((s) => s.frameTick);
   const [focus, setFocus] = useState<number | null>(null);
+  const [sound, setSoundState] = useState(soundOn());
+  const setSound = (on: boolean) => {
+    setSoundOn(on);
+    setSoundState(on);
+  };
+  // the match on screen (yours, or the one you clicked) is the one you hear
+  const liveIds = md?.live ?? [];
+  const myLive = state && club ? liveIds.find((id) => state.fixtures[id] && (state.fixtures[id].home === club.id || state.fixtures[id].away === club.id)) : undefined;
+  useMatchSounds(focus ?? myLive ?? liveIds[0]);
   if (!state || !md) return <div className="hero">Preparando a rodada…</div>;
 
   const fixtures = md.live.map((id) => state.fixtures[id]).filter(Boolean);
@@ -61,6 +72,9 @@ export function MatchDay() {
           )}
           <span className="md-date">{dateLabel(state, md.date)}</span>
         </h1>
+        <button className="btn sm ghost" title={sound ? 'Som ligado (apito, torcida)' : 'Som desligado'} onClick={() => setSound(!sound)}>
+          {sound ? '🔊 Som' : '🔇 Mudo'}
+        </button>
         <label className="row small muted" style={{ gap: 6 }} title={host ? 'Vale para todas as partidas, na hora' : 'Só o anfitrião muda'}>
           Duração
           {host ? (
@@ -95,7 +109,7 @@ export function MatchDay() {
           <span>🏟 {venue.stadium}</span>
           <span>
             <b>{gate.total.toLocaleString('pt-BR')}</b> ingressos vendidos
-            <span className="faint"> de {usableCapacity(venue).toLocaleString('pt-BR')} lugares ({Math.round((gate.total / Math.max(1, usableCapacity(venue))) * 100)}%)</span>
+            <span className="faint">{` de ${usableCapacity(venue).toLocaleString('pt-BR')} lugares (${Math.round((gate.total / Math.max(1, usableCapacity(venue))) * 100)}%)`}</span>
           </span>
           {club?.id === venue.id && <span className="faint">renda de {formatMoney(gate.revenue)}</span>}
         </div>
@@ -110,10 +124,10 @@ export function MatchDay() {
       )}
       {focused && (
         <div className="match-focus" style={{ marginBottom: 14 }}>
-          <div className="col" style={{ gap: 0, minWidth: 0 }}>
+          <div className="col" style={{ gap: 12, minWidth: 0 }}>
             <MatchView f={focused} state={state} big />
+            <StatsPanel f={focused} state={state} />
           </div>
-          <StatsPanel f={focused} state={state} />
           {mine && focused.id === mine.id ? (
             <MatchControl f={mine} state={state} side={mine.home === club!.id ? 0 : 1} />
           ) : (
@@ -139,6 +153,44 @@ export function MatchDay() {
       )}
     </div>
   );
+}
+
+/**
+ * Sounds for the match on screen, from the home crowd's point of view: a roar for a home goal, boos for an away
+ * goal, the referee's whistle for cards, penalties, half-time and full time. History is not replayed when the
+ * focused match changes.
+ */
+function useMatchSounds(fid: number | undefined) {
+  const client = useApp((s) => s.client);
+  const seen = useRef<{ fid?: number; n: number; kicks: number }>({ n: 0, kicks: 0 });
+  useEffect(() => {
+    if (!client || fid == null) return;
+    const evs = client.events.get(fid) ?? [];
+    const s = seen.current;
+    const pk = client.frames.get(fid)?.cur.pk;
+    if (s.fid !== fid) {
+      seen.current = { fid, n: evs.length, kicks: pk?.kicks.length ?? 0 };
+      return;
+    }
+    for (const e of evs.slice(s.n)) {
+      if (e.kind === 'goal') crowd(e.side === 0 ? 'cheer' : 'boo');
+      else if (e.kind === 'yellow') whistle('short');
+      else if (e.kind === 'red' || e.kind === 'penalty') whistle('long');
+      else if (e.kind === 'kickoff') whistle('short');
+      else if (e.kind === 'ht') whistle('double');
+      else if (e.kind === 'ft') whistle('final');
+      // a penalty that doesn't go in: the home crowd groans at its own miss, cheers the away miss
+      else if (e.kind === 'miss') crowd(e.side === 0 ? 'ooh' : 'cheer');
+      else if (e.kind === 'save') crowd(e.side === 0 ? 'cheer' : 'ooh');
+    }
+    s.n = evs.length;
+    // shootout kicks: the sound comes as the ball arrives (in-match penalties sound through their events)
+    if (pk?.mode === 'shootout' && pk.kicks.length > s.kicks) {
+      const k = pk.kicks[pk.kicks.length - 1];
+      window.setTimeout(() => (k[4] === 0 ? crowd(k[0] === 0 ? 'cheer' : 'boo') : crowd(k[0] === 0 ? 'ooh' : 'cheer')), 1850);
+    }
+    s.kicks = pk?.kicks.length ?? 0;
+  });
 }
 
 function useMatchMaps(f: Fixture, state: GameState) {
@@ -174,7 +226,6 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
   const home = state.clubs[f.home];
   const away = state.clubs[f.away];
   const kit = useMemo(() => awayKit(home.colors, away.colors), [home.colors, away.colors]);
-  const [momH, momA] = useMemo(() => contrastPair(home.colors, kit), [home.colors, kit]);
   const { numbers, names, mineIds } = useMatchMaps(f, state);
   const comp = state.comps[f.comp];
   // tactical changes (the AI coach's and the managers') only show on the big view
@@ -201,7 +252,7 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
           <span className="sb-chip" style={{ background: kit[0], borderColor: kit[1] }} />
         </div>
         <div className="sb-clock">
-          {fr ? (fr.ended ? 'FIM' : fr.pk ? 'PÊNALTIS' : fr.paused ? 'PAUSA' : clock(fr.t, fr.half)) : '0\''}
+          {fr ? (fr.ended ? 'FIM' : fr.pk ? (fr.pk.mode === 'spot' ? 'PÊNALTI' : 'PÊNALTIS') : fr.paused ? 'PAUSA' : clock(fr.t, fr.half)) : '0\''}
           {fr?.pens && ` · pên. ${fr.pens[0]}-${fr.pens[1]}`}
           {fr?.pk && !fr.pens && ` ${fr.pk.score[0]}-${fr.pk.score[1]}`}
         </div>
@@ -211,7 +262,7 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
       ) : (
         <>
           <PitchCanvas fixtureId={f.id} homeColors={home.colors} awayColors={kit} numbers={numbers} names={names} big={big} mine={mineIds} />
-          <Momentum f={f} homeColor={momH} awayColor={momA} homeShort={home.short} awayShort={away.short} big={big} />
+          <Momentum f={f} homeColors={home.colors} awayColors={kit} homeShort={home.short} awayShort={away.short} big={big} />
         </>
       )}
       <div className="ticker">
@@ -238,7 +289,7 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
           {visible.slice(1).map((e, i) => (
             <div key={i} className={e.kind === 'goal' ? 'good' : e.kind === 'red' ? 'bad' : ''}>
               <span className="faint num">{Math.floor(e.t / 60) + 1}'</span>{' '}
-              {e.kind === 'goal' ? '⚽' : e.kind === 'yellow' ? '🟨' : e.kind === 'red' ? '🟥' : e.kind === 'sub' ? '🔁' : e.kind === 'injury' ? '🚑' : e.kind === 'tactic' ? '📋' : '·'}{' '}
+              {e.kind === 'goal' ? '⚽' : e.kind === 'yellow' ? '🟨' : e.kind === 'red' ? '🟥' : e.kind === 'sub' ? '🔁' : e.kind === 'injury' ? '🚑' : e.kind === 'tactic' ? '📋' : e.kind === 'penalty' ? '❗' : '·'}{' '}
               <span className={e.kind === 'tactic' ? 'info' : ''}>{e.text}</span>{' '}
               {e.kind !== 'ht' && e.kind !== 'ft' && e.kind !== 'pens' && e.kind !== 'tactic' && <span className="faint">({e.side === 0 ? home.short : away.short})</span>}
             </div>
@@ -255,8 +306,23 @@ const momentMinute = (t: number, half: 1 | 2) => (half === 1 ? Math.min(44, Math
 /**
  * Match momentum: who is pushing, minute by minute. Bars above the line are the home side's pressure,
  * below it the away side's (attacking-third possession, shots weighted by chance quality, corners, goals).
+ * Bars wear the same kit as the players' dots on the pitch: shirt colour filled, second colour as the outline.
  */
-function Momentum({ f, homeColor, awayColor, homeShort, awayShort, big }: { f: Fixture; homeColor: string; awayColor: string; homeShort: string; awayShort: string; big?: boolean }) {
+function Momentum({
+  f,
+  homeColors,
+  awayColors,
+  homeShort,
+  awayShort,
+  big,
+}: {
+  f: Fixture;
+  homeColors: [string, string];
+  awayColors: [string, string];
+  homeShort: string;
+  awayShort: string;
+  big?: boolean;
+}) {
   const client = useApp((s) => s.client)!;
   const d = client.details.get(f.id);
   const events = client.events.get(f.id) ?? [];
@@ -295,8 +361,16 @@ function Momentum({ f, homeColor, awayColor, homeShort, awayShort, big }: { f: F
         {big &&
           [15, 30, 60, 75].map((m) => <line key={m} x1={m * bw} x2={m * bw} y1={0} y2={H} stroke="rgba(255,255,255,0.07)" />)}
         <line x1={45 * bw} x2={45 * bw} y1={0} y2={H} stroke="rgba(255,255,255,0.3)" strokeDasharray="4 3" />
-        {hs.map((v, i) => (v > 0.05 ? <rect key={`h${i}`} x={i * bw + 0.6} y={mid - h(v)} width={bw - 1.2} height={h(v)} fill={homeColor} /> : null))}
-        {as.map((v, i) => (v > 0.05 ? <rect key={`a${i}`} x={i * bw + 0.6} y={mid} width={bw - 1.2} height={h(v)} fill={awayColor} /> : null))}
+        {hs.map((v, i) =>
+          v > 0.05 ? (
+            <rect key={`h${i}`} x={i * bw + 0.8} y={mid - h(v)} width={bw - 1.6} height={h(v)} fill={homeColors[0]} stroke={homeColors[1]} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+          ) : null,
+        )}
+        {as.map((v, i) =>
+          v > 0.05 ? (
+            <rect key={`a${i}`} x={i * bw + 0.8} y={mid} width={bw - 1.6} height={h(v)} fill={awayColors[0]} stroke={awayColors[1]} strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
+          ) : null,
+        )}
         <line x1={0} x2={W} y1={mid} y2={mid} stroke="rgba(255,255,255,0.35)" />
         <rect x={at * bw} y={0} width={bw} height={H} fill="rgba(255,255,255,0.18)" />
       </svg>
@@ -310,8 +384,12 @@ function Momentum({ f, homeColor, awayColor, homeShort, awayShort, big }: { f: F
       ))}
       {big && (
         <>
-          <span className="mm-team top">{homeShort}</span>
-          <span className="mm-team bottom">{awayShort}</span>
+          <span className="mm-team top" style={{ borderLeft: `8px solid ${homeColors[0]}`, outline: `1px solid ${homeColors[1]}` }}>
+            {homeShort}
+          </span>
+          <span className="mm-team bottom" style={{ borderLeft: `8px solid ${awayColors[0]}`, outline: `1px solid ${awayColors[1]}` }}>
+            {awayShort}
+          </span>
           <div className="mm-ticks">
             {['0', "15'", "30'", "45'", "60'", "75'", "90'"].map((t, i) => (
               <span key={t} style={{ left: `${(i * 15 * 100) / N}%` }}>
@@ -370,12 +448,13 @@ function StatsPanel({ f, state }: { f: Fixture; state: GameState }) {
         .slice(0, 3)
     : [];
   return (
-    <div className="panel stats-panel">
+    <div className="panel stats-panel wide">
       <div className="row small" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
         <b>{state.clubs[f.home].short}</b>
         <span className="faint">Estatísticas</span>
         <b>{state.clubs[f.away].short}</b>
       </div>
+      <div className="stats-grid">
       <Cmp k="Posse" a={fr.poss} b={100 - fr.poss} fmt={(v) => `${v}%`} />
       <Cmp k="Finalizações" a={fr.shots[0]} b={fr.shots[1]} />
       <Cmp k="No gol" a={fr.onT[0]} b={fr.onT[1]} />
@@ -389,6 +468,7 @@ function StatsPanel({ f, state }: { f: Fixture; state: GameState }) {
       <Cmp k="Escanteios" a={x.co[0]} b={x.co[1]} />
       <Cmp k="Faltas" a={x.fo[0]} b={x.fo[1]} />
       <Cmp k="Cartões" a={fr.cards[0] + fr.cards[2]} b={fr.cards[1] + fr.cards[3]} fmt={(v) => String(v)} />
+      </div>
       {tops.length > 0 && (
         <>
           <div className="small faint" style={{ marginTop: 8 }}>
@@ -436,6 +516,7 @@ function PlayerRows({
   state,
   ids,
   onDropRow,
+  accept = (src) => src.kind === 'player',
   drag,
   selected,
   onClick,
@@ -444,7 +525,10 @@ function PlayerRows({
   state: GameState;
   ids: number[];
   onDropRow?: (src: DragSrc, id: number) => void;
-  drag?: boolean;
+  /** what may be dropped on a row (default: bench players) */
+  accept?: (src: DragSrc) => boolean;
+  /** rows can be dragged: bench players as players, starters as their slot */
+  drag?: 'bench' | 'pitch';
   selected?: number | null;
   onClick?: (id: number) => void;
 }) {
@@ -454,20 +538,25 @@ function PlayerRows({
         {ids.map((id) => {
           const p = state.players[id];
           const off = d.off.includes(id);
+          const slot = d.onPitch.indexOf(id);
+          const src: DragSrc | null = drag === 'bench' ? { kind: 'player', pid: id, from: 'bench' } : drag === 'pitch' && slot >= 0 ? { kind: 'slot', slot } : null;
           return (
             <tr
               key={id}
-              className={`${onClick ? 'click' : ''} ${selected === id ? 'me' : ''}`}
+              className={`${onClick ? 'click' : ''} ${selected === id ? 'me' : ''} ${src && !off ? 'draggable' : ''}`}
               style={{ opacity: off ? 0.45 : 1 }}
               onClick={() => onClick?.(id)}
-              {...(drag && !off ? dragProps({ kind: 'player', pid: id, from: 'bench' }) : {})}
-              {...(onDropRow ? dropProps((src) => onDropRow(src, id), (src) => src.kind === 'player') : {})}
+              {...(src && !off ? dragProps(src) : {})}
+              {...(onDropRow && !off ? dropProps((s) => onDropRow(s, id), accept) : {})}
             >
               <td style={{ width: 38 }}>
                 <span className={`pos pos-${p?.pos}`}>{p?.pos}</span>
               </td>
               <td className="nowrap" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {p?.name ?? '?'} {d.yel.includes(id) && '🟨'}
+              </td>
+              <td className="center" style={{ width: 34 }} title="Força">
+                {p && <Str v={p.str} />}
               </td>
               <td style={{ width: 96 }}>
                 <Energy v={d.fit[id] ?? 0} w={40} />
@@ -549,7 +638,13 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
             ⏸ Pausar ({3 - d.pauses})
           </button>
         )}
-        <button className="btn ghost" disabled={ended} onClick={() => window.confirm('Simular o resto do jogo instantaneamente?') && act({ a: 'quick' })}>
+        <button
+          className="btn ghost"
+          disabled={ended}
+          onClick={async () => {
+            if (await ask({ title: 'Simular o resto do jogo?', text: 'A partida termina na hora, com a IA cuidando das decisões que faltam.', ok: 'Simular' })) act({ a: 'quick' });
+          }}
+        >
           ⏩ Simular
         </button>
         <span className="grow" />
@@ -559,8 +654,8 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
       </div>
       {fr.paused && !pausedByMe && <div className="small warn">Pausado pelo adversário. Você também pode mexer no time agora.</div>}
       <div className="small muted">
-        Arraste um reserva sobre um titular para substituir. Arraste uma camisa sobre outra para trocar de lugar, ou para um círculo vazio para mudar
-        a posição. Vale na hora, sem precisar pausar.
+        Arraste um reserva sobre um titular (ou um titular sobre um reserva) para substituir. Arraste uma camisa sobre outra para trocar de lugar,
+        ou para um círculo vazio para mudar a posição. Vale na hora, sem precisar pausar.
       </div>
       <TacticsBoard
         tactics={d.tactics}
@@ -578,6 +673,7 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
         state={state}
         ids={d.onPitch.filter((x): x is number => x != null)}
         onDropRow={(src, id) => src.kind === 'player' && sub(id, src.pid)}
+        drag={subsLeft && !ended ? 'pitch' : undefined}
         selected={out}
         onClick={(id) => setOut(out === id ? null : id)}
       />
@@ -585,7 +681,21 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
       {bench.length === 0 ? (
         <div className="small faint">Sem reservas.</div>
       ) : (
-        <PlayerRows d={d} state={state} ids={bench} drag={subsLeft && !ended} selected={inn} onClick={(id) => setInn(inn === id ? null : id)} />
+        <PlayerRows
+          d={d}
+          state={state}
+          ids={bench}
+          drag={subsLeft && !ended ? 'bench' : undefined}
+          // a starter (from this list or the pitch) dropped on a reserve: that reserve comes on for him
+          onDropRow={(src, id) => {
+            if (src.kind !== 'slot') return;
+            const outId = d.onPitch[src.slot];
+            if (outId != null) sub(outId, id);
+          }}
+          accept={(src) => src.kind === 'slot' && subsLeft && !ended}
+          selected={inn}
+          onClick={(id) => setInn(inn === id ? null : id)}
+        />
       )}
       <button className="btn primary" disabled={ended || out == null || inn == null || !subsLeft} onClick={() => sub(out!, inn!)}>
         {out != null && inn != null ? `Sai ${lastName(name(out))}, entra ${lastName(name(inn))}` : 'Ou clique em quem sai e em quem entra'}

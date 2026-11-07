@@ -71,6 +71,12 @@ export interface Player {
   auction: { min: number; season: number; date: number } | null;
   /** on loan from `from` until the absolute date `until` (season*100+date) */
   loan: { from: number; until: number } | null;
+  /** pre-contract: joins this club for free when his contract ends */
+  pre?: { club: number; wage: number; years: number } | null;
+  /** youth team (base): not in the first-team squad until promoted */
+  junior?: boolean;
+  /** youth-match stats this season: games, goals, assists, rating×10 sum */
+  ys?: [number, number, number, number];
   s: SeasonStats;
   c: { apps: number; goals: number };
   num: number;
@@ -163,11 +169,17 @@ export interface Club {
   tactics: Tactics;
   lineup: Lineup;
   autoLineup: boolean;
+  /** renew every expiring contract automatically at the end of the season (human clubs) */
+  autoRenewAll?: boolean;
+  /** players whose contracts are renewed automatically */
+  autoRenew?: number[];
   travel: TravelMode | 'auto';
   managerId: string | null;
   upForSelection: boolean;
   custom: boolean;
-  board: { conf: number; goal: Objective };
+  board: { conf: number; goal: Objective; warned?: number };
+  /** the fans' mood, 0-100 (60 = neutral); affects crowds and the board */
+  fans?: number;
   /** cached best-XI strength, refreshed at season start and after transfers */
   power: number;
   ledger: Ledger;
@@ -353,6 +365,27 @@ export type NewsKind =
   | 'finance'
   | 'award';
 
+/** How an auction ended. */
+export interface AuctionResult {
+  pid: number;
+  name: string;
+  pos: Pos;
+  str: number;
+  age: number;
+  from: number;
+  /** winning club, or null when nobody met the minimum (or the window closed) */
+  to: number | null;
+  amount: number | null;
+  min: number;
+  /** number of bids at or above the minimum */
+  bids: number;
+  /** what human-managed clubs bid: club id -> amount */
+  human: Record<number, number>;
+  season: number;
+  date: number;
+  cancelled?: boolean;
+}
+
 export interface News {
   id: number;
   season: number;
@@ -402,6 +435,8 @@ export interface GameState {
   bids: Record<number, Bid>;
   /** sealed auction bids: player id -> club id -> amount */
   auctionBids: Record<number, Record<number, number>>;
+  /** finished auctions, newest last (kept short) */
+  auctionLog?: AuctionResult[];
   /** this month's numbers of top-division players, for the monthly awards: [games, rating×10, goals, assists] */
   monthly?: { month: number; players: Record<number, [number, number, number, number]> };
   news: News[];
