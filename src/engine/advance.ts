@@ -7,10 +7,12 @@ import { aiInvest, dailyFinances, gateOf } from './economy';
 import { MatchSim, type MatchResult, type MatchSetup } from './match/core';
 import type { MatchdayPlan } from './matchday';
 import { Rng } from './rng';
-import { endSeason } from './season';
+import { endSeason, ensureKeepers } from './season';
 import { aiTransfers, expireBids, returnLoans } from './transfers';
-import type { GameState } from './types';
+import type { Fixture, GameState } from './types';
 import { addNews, squadIndex } from './util';
+import { isDerby, recordHeadToHead } from './rivals';
+import { recordCareer } from './review';
 
 export function simulateSetup(setup: MatchSetup): MatchResult {
   return new MatchSim(setup).runToEnd();
@@ -46,6 +48,9 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
     home.balance += gate.revenue;
     home.ledger.tickets += gate.revenue;
     applyFixtureToTables(state, f);
+    recordHeadToHead(state, f);
+    recordCareer(state, f);
+    if (isDerby(state, f.home, f.away) && (home.managerId || state.clubs[f.away].managerId)) derbyNews(state, f);
 
     // suspensions already being served in this competition
     for (const p of [...(idx.get(f.home) ?? []), ...(idx.get(f.away) ?? [])]) {
@@ -99,6 +104,21 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
   return played;
 }
 
+/** The story of a derby involving a human-managed club, told to everyone. */
+function derbyNews(state: GameState, f: Fixture) {
+  const home = state.clubs[f.home];
+  const away = state.clubs[f.away];
+  const hg = f.hg ?? 0;
+  const ag = f.ag ?? 0;
+  const score = `${home.short} ${hg} x ${ag} ${away.short}`;
+  if (hg === ag) addNews(state, 'info', `Clássico empatado: ${score}. Ninguém sai com a festa.`, [home.id, away.id]);
+  else {
+    const [w, l] = hg > ag ? [home, away] : [away, home];
+    const big = Math.abs(hg - ag) >= 3;
+    addNews(state, 'info', big ? `Goleada no clássico: ${score}! A torcida do ${w.name} vai lembrar desse por anos.` : `O ${w.name} vence o clássico contra o ${l.name}: ${score}.`, [w.id, l.id]);
+  }
+}
+
 /**
  * Finish the current date: apply results, progress competitions, daily updates, AI market,
  * then move to the next date (or the next season).
@@ -122,6 +142,10 @@ export function finishDate(state: GameState, results: MatchResult[], present: Se
   aiInvest(state, rng);
   expireBids(state);
   returnLoans(state);
+  // an AI club that sold or lost its last keeper finds one before its next match
+  const keepers = new Map<number, number>();
+  for (const p of Object.values(state.players)) if (p.clubId != null && p.pos === 'GOL' && !p.junior) keepers.set(p.clubId, (keepers.get(p.clubId) ?? 0) + 1);
+  for (const c of Object.values(state.clubs)) if (!c.managerId && (c.league || c.contOnly) && !keepers.get(c.id)) ensureKeepers(state, rng, c);
   state.meta.date++;
   if (state.meta.date >= state.calendar.length) endSeason(state, rng, present);
   state.meta.rng = rng.state();

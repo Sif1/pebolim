@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Club, GameState, Player } from '../engine/types';
 import { age, dateLabel, formatMoney, playerValue, roundMoney } from '../engine/util';
 import { command, useMe } from '../store';
-import { ClubBadge, Empty, Flag, Modal, MoneyField, PosTag, Stars, Str, useSort } from './common';
+import { ClubBadge, Empty, Flag, MoneyField, PosTag, Stars, Str, useSort } from './common';
 import { PlayerModal, Traits } from './PlayerModal';
 
 /** Players up for auction right now (own ones included, marked). */
@@ -122,50 +122,6 @@ export function AuctionList() {
       </div>
       {open != null && <PlayerModal pid={open} onClose={() => setOpen(null)} />}
     </>
-  );
-}
-
-/** After each match day: if other clubs have players up for auction, show them once. */
-export function AuctionPopup() {
-  const { state, club, manager } = useMe();
-  const [show, setShow] = useState(false);
-  const key = state ? `${state.meta.season}-${state.meta.date}` : '';
-  const count = state && club ? openAuctions(state).filter((p) => p.clubId !== club.id).length : 0;
-  useEffect(() => {
-    if (!manager || !count) return;
-    const storeKey = `pebolim.auctionsSeen.${manager.id}`;
-    let seen = '';
-    try {
-      seen = localStorage.getItem(storeKey) ?? '';
-    } catch {
-      /* private mode */
-    }
-    if (seen === key) return;
-    setShow(true);
-    try {
-      localStorage.setItem(storeKey, key);
-    } catch {
-      /* ignore */
-    }
-  }, [key, count, manager]);
-  if (!show || !count) return null;
-  return (
-    <Modal onClose={() => setShow(false)} wide>
-      <div className="row">
-        <h2 className="grow" style={{ margin: 0 }}>
-          Leilões abertos ({count})
-        </h2>
-        <button className="btn ghost" onClick={() => setShow(false)}>
-          Fechar
-        </button>
-      </div>
-      <div className="small muted" style={{ margin: '6px 0 10px' }}>
-        Estes jogadores vão para quem der o maior lance até o início da próxima rodada. Você também os encontra em Mercado → Leilões.
-      </div>
-      <div className="panel tight scroll" style={{ maxHeight: '60vh' }}>
-        <AuctionList />
-      </div>
-    </Modal>
   );
 }
 

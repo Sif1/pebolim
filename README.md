@@ -1,30 +1,63 @@
 # Pebolim Manager
 
-A browser football-manager game for playing with friends. One player hosts from their browser; friends join with a 6-letter room code (peer-to-peer, no server). The game is in Portuguese (BR) or English: switch with the PT / EN buttons on the home screen or at the bottom of the menu (each player picks their own language). The home screen also lists what's new in each version.
+A browser football-manager game for playing with friends. One player hosts from their browser; friends join with a 6-letter room code (peer-to-peer, no server). Play it at **https://sif1.github.io/pebolim/**.
 
+The game is in Portuguese (BR) or English: switch with the PT / EN buttons on the home screen or at the bottom of the menu (each player picks their own language). The home screen lists what's new in each version.
+
+## Features
+
+**The world**
 - Brazil Série A, B and C, Copa do Brasil and 10 state championships
 - Big 5 European leagues (two divisions each) with their domestic cups
 - Argentina and Uruguay (two divisions each)
-- Libertadores, Sul-Americana, Champions League and Europa League
-- Live 2D match day: every human match on screen at once, each with its own clock; you pause and change only your own match
-  - Championship Manager-style highlights: the pitch comes alive a few seconds before each chance and plays it at about real speed, then sits idle with the clock and commentary running; short matches show only the shots that matter most (goals always)
-  - Live stats beside the pitch (possession, shots, xG, clear-cut chances, passes, tackles, saves) and a rating for every player next to their energy
-  - Drag a substitute onto a player to bring him on, or drag players to new positions mid-match
-- AI coaches that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics, with every change shown in the match feed
-- Line-ups on a drawn pitch: drag players between the field, bench and reserves, and drag them to any of 25 positions (the role follows the area of the pitch)
-- Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
+- Libertadores, Sul-Americana, Champions League and Europa League, with continental-only clubs from the rest of South America and Europe
+- Real clubs and players, with crests; monthly awards in every country (player, young player and manager of the month), plus hat-tricks, goal milestones and streaks in the news
+
+**Match day**
+- Every human match on screen at once, each with its own clock; you pause and change only your own match
+- Championship Manager-style highlights: the 2D pitch comes alive a few seconds before each chance and plays it at about real speed, then sits idle while the clock runs; short matches show only the shots that matter most (goals always)
+- Live commentary under the pitch, the old CM way: one line at a time narrates the move on screen (the pass, the run, the cross, the shot and how it ends) on the colours of the team on the ball. A pressure bar tilts toward whoever is on top, a goal flashes the line and the scoreboard in the scorer's colours, and half-time and full time get a summary (score, possession, shots, xG, who was better)
+- Derbies (clássicos): the famous rivalries (Fla-Flu, Gre-Nal, Boca v River, Real v Barça…) and the big clubs of each city. They are marked on the scoreboard, have their own commentary lines, fill the stadium, and count double for the fans and more for the board
+- Momentum graph (minute by minute, in the teams' kits), live stats (possession, shots, xG, clear-cut chances, passes, tackles, saves) and a rating for every player next to his energy and strength
+- Drag a substitute onto a player (or a starter onto the bench) to make a change, or drag players to new positions mid-match
 - Penalty shootouts you play: pick your five takers, then choose the corner for each kick and the side your keeper dives, with a pixel-art run-up and shot. Penalties during a match work the same way: pick the taker, then the corner
-- Match sounds (Web Audio, no files): whistles for cards, penalties, half-time and full time; the crowd cheers a home goal and boos an away goal. Mute with the 🔊 button on match day
-- Opponent scouting report on the dashboard: their likely shape and style, form, key players, absentees, energy and tips
-- Youth team (Elenco → Base): rename your juniors and follow their age, potential stars and youth-match stats; their força shows only after promotion
-- Mid-season board meetings, written warnings before a sacking, and a fan mood that fills or empties the stadium
-- Pre-contracts: sign a player in the last six months of his contract for free, to join when it ends
-- Transfer market with search filters (position, age, força, potential, trait, nationality with flags, for sale / for loan / in auction), sortable columns, bids between humans and the AI
-  - Put your players up for sale at your price, offer them on loan for 6 or 12 months (the borrower pays the wages), or auction them: sealed bids from every manager and the AI, decided at the next round. The AI lists, loans and auctions its surplus players too, and buys listed players when the price is fair
+- Match sounds (Web Audio, no files): whistles for cards, penalties, half-time and full time; a crowd murmur that swells with the pressure and roars at the chances; the crowd cheers a home goal and boos an away goal. Mute with the 🔊 button
+- Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
+
+**Your club**
+- Dashboard: next match with travel cost (and the head-to-head record, marked when it's a derby), an opponent scouting report (likely shape and style, form, key players, absentees, tips), the next fixtures, your part of the league table, the board and the fans
+- A season review when the season ends: final position and objective, record, cup runs, biggest win, player of the season, top scorer, best signing, and the league's team of the season on a pitch. The manager screen keeps a trophy room and career numbers (matches, points won, goals, biggest win and heaviest defeat, derbies)
+- Squad with summary chips (best-14 strength, average age, injured, suspended, tired, expiring contracts) and a youth team (Elenco → Base): rename your juniors and follow their age, potential stars and youth-match stats; their força shows only after promotion
+- Line-ups on a drawn pitch: drag players between the field, bench and reserves, and to any of 25 positions (the role follows the area of the pitch)
+- AI coaches that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics
+- Contracts with automatic renewal (like Brasfoot's) that respects the wage budget, finances in US$, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions and player development
 - Players have potential (0–5 stars: how far and how fast they grow, how slowly they decline) and traits (finalização, cabeceio, drible, passe…) that matter in the match engine
-- Contracts, finances in US$ with a wage-budget gauge, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions, player development, youth intake, board firing and job offers
-- Monthly awards in every country (player, young player and manager of the month), plus hat-tricks, goal milestones and streaks in the news
-- Saves are small `.pebolim` files (about 450 KB) that anyone in the session can download
+
+**The market**
+- Brasfoot-style search (position, age, força, potential, trait, nationality with flags, for sale / for loan / in auction / free / expiring, "within my budget"), sortable columns, bids between humans and the AI with expiry dates
+- Put players up for sale at your price, offer them on loan for 6 or 12 months, or auction them: sealed bids from every manager and the AI, decided at the next round, with a history of past auctions. The AI lists, loans and auctions its surplus players too, and big AI clubs sometimes put a star up for sale
+- Pre-contracts: sign a player in the last six months of his contract for free, to join when it ends
+- A "vs. squad" column (força against your best in that position) and, on the player card, a side-by-side comparison with your starter
+- Players have standards: a star refuses a club far below his level and asks for more from one a little below it; veterans happily go home. The player card warns you before you bid
+- Transfer deadline day: the last round of each window is busier (twice the AI deals, stars put up for sale), late bids arrive that can only be answered that round, and the news rounds up the day's deals
+
+**Board and fans**
+- A season objective from the club's standing, board confidence that moves with every result, mid-season board meetings and written warnings before a sacking
+- A manager in his first season at the club, or one who won a trophy with it in the last three seasons, takes half the blame for a missed objective
+- Fan mood that fills or empties the stadium, lifted by wins and big signings, hurt by defeats and by selling stars (and twice as much by a derby)
+- The board pays half of the training-centre works when it trusts the manager (a quarter when it's unsure)
+- Sacked managers stay in the game and keep receiving job offers, mostly from the country they last worked in
+- If the squad is short at the end of a season, the board only tops it up to 18 players with free agents at the club's level and within the wage budget, else local youngsters, and always keeps two goalkeepers
+
+**The interface**
+- A notification bell lists what needs your attention (bids to answer, the window closing, line-up problems, auctions worth a look, the board, a derby coming up), each a click from its screen; no pop-ups
+- Keyboard shortcuts: Space continues the round (or gets you ready; pauses your match on match day), 1 to 9 open the menu screens, N the notifications, ? the list
+- Tooltips explain força and potential stars wherever they appear
+- Works on phones: the menu becomes a strip at the top and match day fits in one column
+
+**Multiplayer and saves**
+- Peer-to-peer rooms for up to 8 managers, host-authoritative with input checks
+- Saves are small `.pebolim` files (about 450 KB) that anyone in the session can download; every browser also autosaves
 
 ## Run it
 
@@ -90,7 +123,7 @@ If a friend can't connect (some mobile or corporate networks block direct WebRTC
 npm test
 ```
 
-Engine tests: fixtures, a full season, knockouts, commands, patch replication and the save round-trip.
+Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review and the training-centre share; plus the translation layer.
 
 ```bash
 npm run sim -- 2
@@ -126,10 +159,15 @@ The manager ladder: real squads of similar strength managed by a poor, a passive
 npx tsx tools/finsim.ts 3
 npx tsx tools/marketsim.ts
 npx tsx tools/pacing.ts 5
-npx tsx tools/career.ts 4
 ```
 
-Economy and match-day checks: three seasons of club balances per league (who is in the red, wages against income, where the money comes from); one season of the transfer market (AI listings, loans, auctions, and whether a human's fairly priced player sells); how live matches of a given length spend their time (highlights shown, their speed, the idle clock); and a career from the managers' side (four human clubs over several seasons: results, board patience, money, squad strength, bids, market opportunities, news, and how the world's champions and player strength evolve).
+Economy and match-day checks: three seasons of club balances per league (who is in the red, wages against income, where the money comes from); one season of the transfer market (AI listings, loans, auctions, and whether a human's fairly priced player sells); and how live matches of a given length spend their time (highlights shown, their speed, the idle clock).
+
+```bash
+npx tsx tools/career.ts 5 run-1 --mix --active
+```
+
+A career from the managers' side: four human clubs over several seasons, with the results, board patience, money, squad strength, bids, market opportunities, how much needs the manager's attention each round, the news, and how the world's champions and player strength evolve. `--mix` draws the four clubs from the seed (a Brazilian top-6 side, a Série A side, a Série B/C side and a European side); `--active` makes the managers play the market (free agents, listed players, auctions, pre-contracts), run the youth team, invest in the training centre and take clearly bigger jobs. Every round the whole state is checked for broken rules (players at missing clubs, expired contracts, loans without a club, clubs without a goalkeeper, impossible tables…), printed as `BUG` lines. Run ten seeds side by side to cover a lot of ground.
 
 ```bash
 npx tsx tools/i18n-extract.ts

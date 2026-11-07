@@ -2,6 +2,7 @@ import type { Rng } from './rng';
 import type { Club, Fixture, GameState, Manager } from './types';
 import { absDate, addNews, clamp, sortTable } from './util';
 import { roughIncome } from './economy';
+import { isDerby } from './rivals';
 
 const OFFER_DATES = 5;
 /** rounds a new manager is safe from the sack */
@@ -11,7 +12,9 @@ const GRACE_DATES = 20;
 export function boardAfterMatch(state: GameState, f: Fixture) {
   const comp = state.comps[f.comp];
   if (!comp || f.hg == null || f.ag == null) return;
-  const weight = comp.cfg.kind === 'league' ? 1 : comp.cfg.scope === 'state' ? 0.4 : 0.7;
+  // a derby counts for more, with the board and even more with the fans
+  const derby = isDerby(state, f.home, f.away);
+  const weight = (comp.cfg.kind === 'league' ? 1 : comp.cfg.scope === 'state' ? 0.4 : 0.7) * (derby ? 1.5 : 1);
   for (const side of [0, 1] as const) {
     const club = state.clubs[side === 0 ? f.home : f.away];
     const opp = state.clubs[side === 0 ? f.away : f.home];
@@ -21,16 +24,17 @@ export function boardAfterMatch(state: GameState, f: Fixture) {
     const diff = club.power - opp.power + (side === 0 ? 3 : -3);
     const expected = clamp(1.35 + diff / 9, 0.35, 2.5);
     club.board.conf = clamp(club.board.conf + (pts - expected) * 2.4 * weight, 0, 100);
-    fansAfterMatch(state, club, opp, pts, gf - ga, side === 0);
+    fansAfterMatch(state, club, opp, pts, gf - ga, side === 0, derby);
   }
 }
 
-/** The fans' mood after a match: results above all, more so at home and against bigger clubs. */
-function fansAfterMatch(state: GameState, club: Club, opp: Club, pts: number, gd: number, home: boolean) {
+/** The fans' mood after a match: results above all, more so at home, against bigger clubs, and in a derby. */
+function fansAfterMatch(state: GameState, club: Club, opp: Club, pts: number, gd: number, home: boolean, derby = false) {
   const before = club.fans ?? 60;
   let d = pts === 3 ? 2.5 + (opp.power > club.power + 2 ? 1.5 : 0) : pts === 1 ? 0 : -2.5 - (home ? 1 : 0);
   if (gd <= -3) d -= 2;
   if (gd >= 3) d += 1;
+  if (derby) d = d * 2 + (pts === 3 ? 2 : pts === 0 ? -2 : 0);
   const fans = clamp(before + d, 0, 100);
   club.fans = fans;
   if (!club.managerId) return;
@@ -107,7 +111,10 @@ export function boardChecks(state: GameState, rng: Rng, present: Set<string>) {
       const near = free.filter((c) => c.rep <= m.rep + 8);
       const cands = near.length >= 3 ? near : [...free].sort((a, b) => a.rep - b.rep).slice(0, 12);
       if (cands.length) {
-        const c = rng.weighted(cands, (x) => Math.pow(x.rep, 2));
+        // mostly from the country he last worked in
+        const last = [...m.history].reverse().find((h) => state.clubs[h.clubId])?.clubId;
+        const home = last != null ? state.clubs[last].country : null;
+        const c = rng.weighted(cands, (x) => Math.pow(x.rep, 2) * (x.country === home ? 5 : 1));
         giveOffer(state, m, c);
       }
     }

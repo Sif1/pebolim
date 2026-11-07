@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { preContractBlock } from '../engine/commands';
-import { askingPrice, auctionCanClose, wageDemand, windowOpen } from '../engine/transfers';
+import { askingPrice, auctionCanClose, refusesClub, statureGap, wageDemand, windowOpen } from '../engine/transfers';
 import type { Club, GameState, Player } from '../engine/types';
 import { absDateLabel, age, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from '../engine/util';
 import { command, useMe } from '../store';
@@ -160,6 +160,7 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
         {p.c.goals} gols
       </div>
 
+      {club && !mine && !p.junior && <Compare p={p} club={club} state={state} />}
       {club && !mine && (p.auction ? <AuctionBid p={p} club={club} state={state} /> : <Offer key={p.id} p={p} club={club} state={state} onDone={onClose} />)}
       {mine && <Listing key={p.id} p={p} club={club} state={state} />}
       <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
@@ -170,6 +171,71 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
     </Modal>
   );
 }
+
+/**
+ * The player next to your man at the same position (your starter there, else your best): who is better,
+ * and would he play?
+ */
+function Compare({ p, club, state }: { p: Player; club: Club; state: GameState }) {
+  const season = state.meta.season;
+  const same = squadOf(state, club.id).filter((x) => x.pos === p.pos && !x.junior);
+  if (!same.length)
+    return (
+      <div className="panel compare" style={{ marginTop: 14 }}>
+        <h3>Comparação com o seu elenco</h3>
+        <div className="good small">Você não tem nenhum jogador nessa posição: ele chegaria como titular.</div>
+      </div>
+    );
+  const xi = new Set(club.lineup.xi.filter((x): x is number => x != null));
+  const mine = [...same].sort((a, b) => Number(xi.has(b.id)) - Number(xi.has(a.id)) || b.str - a.str)[0];
+  const d = Math.round(p.str) - Math.round(mine.str);
+  const verdict =
+    d >= 2
+      ? { cls: 'good', text: `Seria titular: ${d} pontos de força acima de ${mine.name}.` }
+      : d >= -1
+        ? { cls: 'warn', text: `Disputaria posição com ${mine.name}.` }
+        : { cls: 'bad', text: `Seria reserva: ${-d} pontos de força abaixo de ${mine.name}.` };
+  const rt = (x: Player) => (x.s.apps ? (x.s.rt / x.s.apps / 10).toFixed(1) : '—');
+  const rows: { k: string; a: ReactNode; b: ReactNode; better?: 0 | 1 | null }[] = [
+    { k: 'Força', a: <Str v={p.str} />, b: <Str v={mine.str} />, better: cmp(p.str, mine.str) },
+    { k: 'Idade', a: age(p, season), b: age(mine, season), better: cmp(age(mine, season), age(p, season)) },
+    { k: 'Potencial', a: <Stars n={p.stars} />, b: <Stars n={mine.stars} />, better: cmp(p.stars, mine.stars) },
+    { k: 'Salário', a: formatMoney(p.clubId != null ? wageDemand(state, p, club) : expectedWage(p, season, club.rep)), b: formatMoney(mine.wage), better: null },
+    { k: 'Temporada', a: `${p.s.apps} j · ${p.s.goals} g · nota ${rt(p)}`, b: `${mine.s.apps} j · ${mine.s.goals} g · nota ${rt(mine)}`, better: null },
+    { k: 'Características', a: <Traits traits={p.traits} small />, b: <Traits traits={mine.traits} small />, better: null },
+  ];
+  return (
+    <div className="panel compare" style={{ marginTop: 14 }}>
+      <h3>Comparação com o seu elenco</h3>
+      <table className="t compare-t">
+        <thead>
+          <tr>
+            <th />
+            <th>{p.name}</th>
+            <th>
+              {mine.name} <span className="faint small">{xi.has(mine.id) ? '(titular)' : '(seu melhor)'}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.k}>
+              <td className="muted small">{r.k}</td>
+              <td className={r.better === 0 ? 'better' : ''}>{r.a}</td>
+              <td className={r.better === 1 ? 'better' : ''}>{r.b}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className={`small ${verdict.cls}`} style={{ marginTop: 6 }}>
+        {verdict.text}
+      </div>
+    </div>
+  );
+}
+
+/** Which side is better: 0 = the first, 1 = the second, null = about the same. */
+const cmp = (a: number, b: number): 0 | 1 | null => (a > b + 0.5 ? 0 : b > a + 0.5 ? 1 : null);
 
 /** Buy or borrow another club's player (or sign a free agent). */
 function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameState; onDone: () => void }) {
@@ -194,6 +260,11 @@ function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameS
       {owner && !winOpen && <div className="warn small">A janela de transferências está fechada. Só jogadores livres podem ser contratados agora.</div>}
       {p.loan && <div className="warn small">Jogador emprestado: não pode ser negociado agora.</div>}
       {p.pre && <div className="warn small">Já assinou pré-contrato com o {state.clubs[p.pre.club]?.name}: chega lá em {season + 1}.</div>}
+      {refusesClub(state, p, club) ? (
+        <div className="bad small">{`${p.name} não quer jogar no ${club.name}: ele espera um clube maior.`}</div>
+      ) : statureGap(state, p, club) > 0 ? (
+        <div className="warn small">{`O ${club.name} está abaixo do que ele espera: ele só vem por um salário mais alto.`}</div>
+      ) : null}
       {preOk && (
         <div className="small good">Contrato até {season}: dá para assinar um pré-contrato. Ele chega de graça em {season + 1}, mesmo com a janela fechada.</div>
       )}

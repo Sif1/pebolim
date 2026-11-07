@@ -2,6 +2,7 @@ import { dateLabel } from '../../engine/util';
 import { command, useMe } from '../../store';
 import { ask } from '../Confirm';
 import { Bar, ClubBadge, ClubName, compLabel, Empty } from '../common';
+import { CareerRecordPanel, TrophyCabinet } from './Review';
 
 export function Treinador() {
   const { state, manager, club } = useMe();
@@ -50,15 +51,14 @@ export function Treinador() {
         })}
         {club && offers.length > 0 && <div className="small warn">Aceitar uma proposta deixa o {club.name} disponível para outro treinador.</div>}
       </div>
+      <div className="panel">
+        <h3>Sala de troféus</h3>
+        <TrophyCabinet m={manager} state={state} />
+      </div>
       <div className="grid2" style={{ alignItems: 'start' }}>
         <div className="panel">
-          <h3>Títulos</h3>
-          {manager.trophies.length === 0 && <Empty>Nenhum título ainda.</Empty>}
-          {manager.trophies.map((t, i) => (
-            <div key={i}>
-              🏆 {t.season} · {state.config.find((c) => c.id === t.comp)?.name ?? t.comp} ({state.clubs[t.clubId]?.name})
-            </div>
-          ))}
+          <h3>Números da carreira</h3>
+          <CareerRecordPanel m={manager} state={state} />
         </div>
         <div className="panel">
           <h3>Carreira</h3>

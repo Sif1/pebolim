@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { isDerby } from '../../engine/rivals';
 import { gateOf, usableCapacity } from '../../engine/economy';
 import { MAX_SUBS } from '../../engine/match/core';
 import { FORMATION_LIST, shapeLabel } from '../../engine/match/formations';
@@ -12,6 +13,7 @@ import { MARKING_LABEL, MENTALITY_LABEL, STYLE_LABEL } from '../screens/Escalaca
 import { dragProps, dropProps, moveSlotTo, TacticsBoard, type BoardToken, type DragSrc, type DropTarget } from '../TacticsBoard';
 import { ask } from '../Confirm';
 import { crowd, setSoundOn, soundOn, whistle } from '../sound';
+import { LiveCommentary } from './Commentary';
 import { PitchCanvas } from './PitchCanvas';
 import { ShootoutView } from './Shootout';
 
@@ -60,8 +62,8 @@ export function MatchDay() {
     : null;
 
   return (
-    <div className="content" style={{ height: '100vh' }}>
-      <div className="row" style={{ marginBottom: focused ? 4 : 12 }}>
+    <div className="content md-page" style={{ height: '100vh' }}>
+      <div className="row md-top" style={{ marginBottom: focused ? 4 : 12 }}>
         <h1 className="grow" style={{ margin: 0 }}>
           Dia de jogo
           {focused && (
@@ -75,7 +77,7 @@ export function MatchDay() {
         <button className="btn sm ghost" title={sound ? 'Som ligado (apito, torcida)' : 'Som desligado'} onClick={() => setSound(!sound)}>
           {sound ? '🔊 Som' : '🔇 Mudo'}
         </button>
-        <label className="row small muted" style={{ gap: 6 }} title={host ? 'Vale para todas as partidas, na hora' : 'Só o anfitrião muda'}>
+        <label className="row small muted md-length" style={{ gap: 6 }} title={host ? 'Vale para todas as partidas, na hora' : 'Só o anfitrião muda'}>
           Duração
           {host ? (
             <select value={minutes} onChange={(e) => client.setMatchMinutes(Number(e.target.value))}>
@@ -89,12 +91,12 @@ export function MatchDay() {
             <b>{minutes} min</b>
           )}
         </label>
-        <span className="muted">
+        <span className="muted md-done">
           {md.done.length}/{md.live.length} partidas encerradas
         </span>
         {md.allDone ? (
           host ? (
-            <button className="btn primary lg" onClick={() => client.hostAction('continue')}>
+            <button className="btn primary lg" data-shortcut="space" title="Atalho: Espaço" onClick={() => client.hostAction('continue')}>
               Ver resultados ▶
             </button>
           ) : (
@@ -125,7 +127,7 @@ export function MatchDay() {
       {focused && (
         <div className="match-focus" style={{ marginBottom: 14 }}>
           <div className="col" style={{ gap: 12, minWidth: 0 }}>
-            <MatchView f={focused} state={state} big />
+            <MatchView key={focused.id} f={focused} state={state} big crowdNoise={sound} />
             <StatsPanel f={focused} state={state} />
           </div>
           {mine && focused.id === mine.id ? (
@@ -218,7 +220,7 @@ function useMatchMaps(f: Fixture, state: GameState) {
 }
 
 /** Scoreboard, pitch and commentary for one live match. */
-function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: boolean }) {
+function MatchView({ f, state, big, crowdNoise }: { f: Fixture; state: GameState; big?: boolean; crowdNoise?: boolean }) {
   const client = useApp((s) => s.client)!;
   const myClub = useMe().club?.id;
   const fr: LiveFrame | undefined = client.frames.get(f.id)?.cur;
@@ -227,15 +229,27 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
   const away = state.clubs[f.away];
   const kit = useMemo(() => awayKit(home.colors, away.colors), [home.colors, away.colors]);
   const { numbers, names, mineIds } = useMatchMaps(f, state);
+  const derby = isDerby(state, f.home, f.away);
+  // a goal flashes the scoreboard in the scorer's colours for a few seconds (goals already there don't)
+  const goalSeen = useRef<{ n: number; side: 0 | 1; at: number } | null>(null);
+  const goals = events.filter((e) => e.kind === 'goal');
+  if (!goalSeen.current) goalSeen.current = { n: goals.length, side: 0, at: 0 };
+  else if (goals.length > goalSeen.current.n) goalSeen.current = { n: goals.length, side: goals[goals.length - 1].side, at: performance.now() };
+  const g = goalSeen.current;
+  const sbFlash = g.at && performance.now() - g.at < 3600 ? g : null;
+  const flashKit = sbFlash ? (sbFlash.side === 0 ? home.colors : kit) : null;
   const comp = state.comps[f.comp];
   // tactical changes (the AI coach's and the managers') only show on the big view
   const visible = events.filter((e) => big || e.kind !== 'tactic').slice(-(big ? 10 : 2)).reverse();
   const manager = (c: Club) => (c.managerId ? state.managers[c.managerId]?.name : null);
-  const last = visible[0];
 
   return (
     <div className={`md-card ${mineIds ? 'mine' : ''} ${big ? 'big' : ''}`}>
-      <div className="scoreboard">
+      <div
+        key={sbFlash ? `g${sbFlash.at}` : 'sb'}
+        className={`scoreboard ${sbFlash ? 'sb-flash' : ''}`}
+        style={flashKit ? ({ '--f1': flashKit[0], '--f2': flashKit[1] } as CSSProperties) : undefined}
+      >
         <div className="sb-team">
           <span className="sb-chip" style={{ background: home.colors[0], borderColor: home.colors[1] }} />
           <span className="sb-name">{big ? home.name : home.short}</span>
@@ -252,6 +266,7 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
           <span className="sb-chip" style={{ background: kit[0], borderColor: kit[1] }} />
         </div>
         <div className="sb-clock">
+          {derby && <span className="sb-derby" title="Clássico: o resultado vale o dobro para a torcida e mais para a diretoria">CLÁSSICO · </span>}
           {fr ? (fr.ended ? 'FIM' : fr.pk ? (fr.pk.mode === 'spot' ? 'PÊNALTI' : 'PÊNALTIS') : fr.paused ? 'PAUSA' : clock(fr.t, fr.half)) : '0\''}
           {fr?.pens && ` · pên. ${fr.pens[0]}-${fr.pens[1]}`}
           {fr?.pk && !fr.pens && ` ${fr.pk.score[0]}-${fr.pk.score[1]}`}
@@ -265,18 +280,25 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
           <Momentum f={f} homeColors={home.colors} awayColors={kit} homeShort={home.short} awayShort={away.short} big={big} />
         </>
       )}
-      <div className="ticker">
-        {last ? (
-          <span className={last.kind === 'goal' ? 'good' : last.kind === 'red' ? 'bad' : ''}>
-            <span className="faint num">{Math.floor(last.t / 60) + 1}'</span> {last.text}
-          </span>
-        ) : (
+      {fr ? (
+        <LiveCommentary
+          fixtureId={f.id}
+          teams={[home.name, away.name]}
+          shorts={[home.short, away.short]}
+          colors={[home.colors, kit]}
+          names={names}
+          compact={!big}
+          derby={derby}
+          crowdNoise={crowdNoise}
+        />
+      ) : (
+        <div className="ticker">
           <span className="faint">
             {comp?.cfg.short}
             {f.stage != null && comp ? ` · ${comp.stages[f.stage]?.name}` : ''}
           </span>
-        )}
-      </div>
+        </div>
+      )}
       {!big && fr && (
         <div className="md-stats">
           <StatRow k="Posse" a={`${fr.poss}%`} b={`${100 - fr.poss}%`} />
@@ -286,7 +308,7 @@ function MatchView({ f, state, big }: { f: Fixture; state: GameState; big?: bool
       )}
       {big && (
         <div className="md-events">
-          {visible.slice(1).map((e, i) => (
+          {visible.map((e, i) => (
             <div key={i} className={e.kind === 'goal' ? 'good' : e.kind === 'red' ? 'bad' : ''}>
               <span className="faint num">{Math.floor(e.t / 60) + 1}'</span>{' '}
               {e.kind === 'goal' ? '⚽' : e.kind === 'yellow' ? '🟨' : e.kind === 'red' ? '🟥' : e.kind === 'sub' ? '🔁' : e.kind === 'injury' ? '🚑' : e.kind === 'tactic' ? '📋' : e.kind === 'penalty' ? '❗' : '·'}{' '}
@@ -630,11 +652,11 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
     <div className="panel col match-control">
       <div className="row">
         {fr.paused ? (
-          <button className="btn primary" disabled={!pausedByMe || ended} onClick={() => act({ a: 'resume' })}>
+          <button className="btn primary" data-shortcut="space" title="Atalho: Espaço" disabled={!pausedByMe || ended} onClick={() => act({ a: 'resume' })}>
             ▶ Retomar
           </button>
         ) : (
-          <button className="btn" disabled={ended || d.pauses >= 3} onClick={() => act({ a: 'pause' })}>
+          <button className="btn" data-shortcut="space" title="Atalho: Espaço" disabled={ended || d.pauses >= 3} onClick={() => act({ a: 'pause' })}>
             ⏸ Pausar ({3 - d.pauses})
           </button>
         )}

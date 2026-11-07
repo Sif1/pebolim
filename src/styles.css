@@ -2028,3 +2028,566 @@ svg.portrait {
   font-size: 13px;
   color: var(--text);
 }
+
+/* ---------- live commentary (Championship Manager style) ---------- */
+.cm-live {
+  border-top: 1px solid #000;
+  background: #08111d;
+}
+.cm-press {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 4px;
+}
+.cm-live.compact .cm-press {
+  padding: 0;
+}
+.cm-team {
+  font: 700 12px var(--cond);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-width: 34px;
+}
+.cm-team:last-child {
+  text-align: right;
+}
+.cm-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: #13233a;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.cm-live.compact .cm-track {
+  height: 4px;
+  border-radius: 0;
+}
+.cm-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transition: width 0.9s ease;
+}
+.cm-mid {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.cm-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 40px;
+  padding: 9px 14px;
+  font: 700 18px var(--cond);
+  letter-spacing: 0.02em;
+  transition: background-color 0.35s ease, color 0.35s ease;
+  overflow: hidden;
+}
+.cm-live.compact .cm-line {
+  min-height: 26px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.cm-line .cm-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cm-line .cm-min {
+  opacity: 0.75;
+  font-size: 0.8em;
+  flex: none;
+}
+.cm-line.chance .cm-text {
+  text-transform: uppercase;
+}
+.cm-line.goal .cm-text,
+.cm-line.card .cm-text {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cm-line .cm-goal {
+  flex: none;
+  font-size: 1.35em;
+  font-style: italic;
+  letter-spacing: 0.08em;
+}
+/* goals: the line flashes in the scorer's colours */
+.cm-line.flash {
+  animation: cm-flash 0.5s steps(1, end) 8;
+}
+@keyframes cm-flash {
+  0% {
+    background: var(--f1);
+    color: var(--t1);
+  }
+  50% {
+    background: var(--f2);
+    color: var(--t2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-line.flash {
+    animation: none;
+  }
+  .cm-fill {
+    transition: none;
+  }
+}
+
+/* ---------- squad summary chips ---------- */
+.squad-chips {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid #000;
+  border-radius: 999px;
+  background: #102038;
+  font-size: 12px;
+  color: var(--muted);
+}
+.chip b {
+  color: var(--text);
+}
+.chip.bad {
+  border-color: var(--bad);
+}
+.chip.bad b {
+  color: var(--bad);
+}
+.chip.warn {
+  border-color: var(--warn);
+}
+.chip.warn b {
+  color: var(--warn);
+}
+
+/* ---------- commentary: summaries may take two lines ---------- */
+.cm-line.info .cm-text {
+  white-space: normal;
+}
+
+/* ---------- notification centre (the bell) ---------- */
+.inbox {
+  position: relative;
+}
+.inbox-btn {
+  position: relative;
+  font-size: 15px;
+}
+.inbox-btn .count {
+  margin-left: 4px;
+}
+.inbox-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.inbox-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 41;
+  width: min(380px, calc(100vw - 24px));
+  max-height: 70vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #172c49, #10213a);
+  border: 1px solid #000;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), inset 1px 1px 0 var(--edge-hi);
+  padding: 6px;
+}
+.inbox-head {
+  font: 700 15px var(--cond);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  padding: 4px 6px 6px;
+}
+.inbox-empty {
+  padding: 8px 6px 10px;
+  font-size: 13px;
+}
+.inbox-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 8px 8px;
+  margin-bottom: 4px;
+  border: 1px solid #000;
+  border-left: 4px solid var(--info);
+  border-radius: 2px;
+  background: #0f1d31;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.inbox-item:hover {
+  background: var(--row-hover);
+}
+.inbox-item.bad {
+  border-left-color: var(--bad);
+}
+.inbox-item.warn {
+  border-left-color: var(--warn);
+}
+.inbox-item.good {
+  border-left-color: var(--good);
+}
+.inbox-icon {
+  width: 22px;
+  text-align: center;
+  flex: none;
+}
+
+/* shortcuts */
+.nav-keys {
+  opacity: 0.75;
+  font-size: 13px !important;
+}
+kbd {
+  display: inline-block;
+  min-width: 26px;
+  padding: 1px 7px;
+  border: 1px solid #000;
+  border-bottom-width: 3px;
+  border-radius: 4px;
+  background: #22395a;
+  font: 700 13px var(--cond);
+  text-align: center;
+}
+
+/* ---------- deadline day ---------- */
+.pill.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    filter: brightness(1.45);
+  }
+}
+.deadline-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-color: var(--bad) !important;
+  background: linear-gradient(90deg, #4a1212, #1a2c47 70%) !important;
+}
+.deadline-clock {
+  font-size: 30px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* ---------- derbies ---------- */
+.panel.derby {
+  border-color: var(--bad);
+  box-shadow: 0 0 0 1px #6b1717, inset 0 0 40px rgba(239, 68, 68, 0.12);
+}
+.sb-derby {
+  color: #fca5a5;
+}
+
+/* scoreboard: a goal flashes it in the scorer's colours */
+.scoreboard.sb-flash {
+  animation: sb-flash 0.45s steps(1, end) 8;
+}
+@keyframes sb-flash {
+  0% {
+    background: var(--f1);
+  }
+  50% {
+    background: var(--f2);
+  }
+}
+
+/* ---------- market: comparison with your squad ---------- */
+table.compare-t td,
+table.compare-t th {
+  padding: 4px 8px;
+}
+table.compare-t td.better {
+  background: rgba(62, 207, 90, 0.12);
+  box-shadow: inset 3px 0 0 var(--good);
+}
+
+/* ---------- season review ---------- */
+.review {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 2px solid #000;
+}
+.review-goal {
+  padding: 8px 12px;
+  border: 1px solid #000;
+  border-radius: 2px;
+  font: 700 16px var(--cond);
+  text-transform: uppercase;
+  text-align: center;
+}
+.review-goal.met {
+  background: #14532d;
+  color: #bbf7d0;
+}
+.review-goal.missed {
+  background: #6b1717;
+  color: #fecaca;
+}
+.review-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 12px 16px 4px;
+}
+.review-cups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+}
+.review-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  padding: 8px 16px 16px;
+}
+.review-card {
+  background: #0f1d31;
+  border: 1px solid #000;
+  border-radius: 2px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* team of the season on a pitch */
+.tos-pitch {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 8px;
+  border: 2px solid #0b3d17;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0 36px, transparent 36px 72px),
+    linear-gradient(#2a7a35, #23692d);
+  max-width: 620px;
+  margin: 0 auto;
+}
+.tos-row {
+  display: flex;
+  justify-content: space-evenly;
+  gap: 6px;
+}
+.tos-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 92px;
+  text-align: center;
+}
+.tos-shirt {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid;
+  display: grid;
+  place-items: center;
+  font: 700 14px var(--cond);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+.tos-name {
+  margin-top: 3px;
+  font: 700 14px var(--cond);
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.tos-club {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* trophy cabinet */
+.cabinet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  background: linear-gradient(180deg, #2b1d10, #1c130a);
+  border: 1px solid #000;
+  border-radius: 2px;
+  box-shadow: inset 0 -6px 0 #3d2a16;
+}
+.trophy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-bottom: 4px solid #4a3319;
+}
+.trophy-icon {
+  font-size: 34px;
+  filter: drop-shadow(0 0 6px var(--tc));
+}
+.trophy-count {
+  font: 700 16px var(--cond);
+  color: var(--gold);
+  min-height: 18px;
+}
+.trophy-name {
+  font: 700 14px var(--cond);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill.pulse,
+  .deadline-clock,
+  .scoreboard.sb-flash {
+    animation: none;
+  }
+}
+
+/* ---------- phones ---------- */
+@media (max-width: 800px) {
+  /* the menu becomes a strip that scrolls sideways under the top bar */
+  .shell {
+    grid-template-rows: auto auto 1fr;
+  }
+  .sidebar {
+    display: flex !important;
+    grid-column: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px;
+    padding: 6px;
+    border-right: none;
+    border-bottom: 2px solid #000;
+  }
+  .sidebar button {
+    width: auto;
+    flex: none;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .sidebar .nav-divider,
+  .sidebar .nav-keys {
+    display: none;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .online-players {
+    display: none;
+  }
+  .content {
+    padding: 10px 10px 60px;
+  }
+  /* the bell's list takes the width of the screen */
+  .inbox-panel {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: 96px;
+    width: auto;
+  }
+}
+@media (max-width: 700px) {
+  /* match day: one column, the pitch full width, controls under it */
+  .md-page {
+    padding: 8px 6px 40px;
+  }
+  .md-top {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .md-top h1 {
+    font-size: 20px;
+    flex-basis: 100%;
+  }
+  .md-top .md-comp,
+  .md-top .md-date {
+    display: block;
+    margin-left: 0;
+    font-size: 13px;
+  }
+  .md-length,
+  .md-done {
+    font-size: 12px;
+  }
+  .md-venue {
+    font-size: 12px;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .match-focus {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .md-card.big .sb-name {
+    font-size: 14px;
+  }
+  .md-card.big .sb-mgr {
+    display: none;
+  }
+  .md-card.big .sb-score {
+    font-size: 22px;
+  }
+  .cm-line {
+    font-size: 15px;
+    min-height: 34px;
+    padding: 7px 10px;
+  }
+  .cm-line .cm-text {
+    white-space: normal;
+  }
+  .md-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .match-control .row {
+    flex-wrap: wrap;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .review-head {
+    flex-wrap: wrap;
+  }
+  .tos-player {
+    width: 70px;
+  }
+  .tos-shirt {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+}

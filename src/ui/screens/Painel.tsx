@@ -8,6 +8,8 @@ import { aiPreMatchTactics } from '../../engine/matchday';
 import { Bar, ClubBadge, ClubName, compLabel, Empty, FormDots, PosTag, Str } from '../common';
 import { Traits } from '../PlayerModal';
 import { nextFixture } from '../Shell';
+import { headToHead, isDerby } from '../../engine/rivals';
+import { deadlineDay } from '../../engine/transfers';
 
 export function visibleNews(state: GameState, managerId: string | null, clubId: number | null): News[] {
   return state.news.filter((n) => n.to == null || n.to === managerId || (clubId != null && n.to == null && n.clubs.includes(clubId)));
@@ -30,6 +32,21 @@ export function Painel() {
         <div className="panel">
           <h2>Você está sem clube</h2>
           <p className="muted">Propostas de emprego chegam ao longo das rodadas. Fique de olho aqui e na tela do treinador.</p>
+        </div>
+      )}
+      {club && deadlineDay(state) && (
+        <div className="panel deadline-banner">
+          <span className="deadline-clock">⏰</span>
+          <div className="grow">
+            <b>Último dia da janela de transferências!</b>
+            <div className="small">Depois desta rodada, só jogadores livres. Propostas de última hora só valem hoje.</div>
+          </div>
+          <button className="btn primary" onClick={() => setScreen('mercado', 'propostas')}>
+            Ver propostas
+          </button>
+          <button className="btn" onClick={() => setScreen('mercado', 'buscar')}>
+            Ir ao mercado
+          </button>
         </div>
       )}
       {offers.length > 0 && (
@@ -97,6 +114,12 @@ export function Painel() {
         </div>
       )}
       {club && <ScoutReport />}
+      {club && (
+        <div className="grid2">
+          <Upcoming />
+          <TableSnippet />
+        </div>
+      )}
       {club && <ClubSummary />}
       <div className="panel">
         <div className="row">
@@ -126,12 +149,17 @@ function NextMatch() {
   const f = nextFixture(state, club.id);
   if (!f) return <div className="panel muted">Sem jogos marcados nesta temporada.</div>;
   const home = f.home === club.id;
-  const opp = state.clubs[home ? f.away : f.home];
   const km = distanceKm(state.clubs[f.home], state.clubs[f.away]);
   const mode = travelModeFor(club, km);
+  const opp = state.clubs[home ? f.away : f.home];
+  const derby = isDerby(state, f.home, f.away);
+  const [w, d, l, gf, ga] = headToHead(state, club.id, opp.id);
   return (
-    <div className="panel col">
-      <h3>{f.date === state.meta.date ? 'Jogo de hoje' : 'Próximo jogo'}</h3>
+    <div className={`panel col ${derby ? 'derby' : ''}`}>
+      <h3>
+        {f.date === state.meta.date ? 'Jogo de hoje' : 'Próximo jogo'}
+        {derby && <span className="pill bad" style={{ marginLeft: 8 }}>🔥 clássico</span>}
+      </h3>
       <div className="fixture-card">
         <div className="fc-team">
           <ClubBadge club={state.clubs[f.home]} size={58} />
@@ -152,14 +180,105 @@ function NextMatch() {
           <span>{state.clubs[f.away].name}</span>
         </div>
       </div>
-      <div className="small muted">
-        Adversário: <ClubName id={opp.id} state={state} badge={false} /> · força <Str v={opp.power} /> (a sua: <Str v={club.power} />)
-      </div>
+      {derby && <div className="small warn">É clássico: a vitória vale o dobro para a torcida, e a derrota dói o dobro. A diretoria também cobra mais.</div>}
+      {w + d + l > 0 && (
+        <div className="small muted">
+          {`Retrospecto contra o ${opp.name}: ${w}V ${d}E ${l}D · gols ${gf} x ${ga}`}
+        </div>
+      )}
       {!home && (
         <div className="small muted">
           Viagem: {Math.round(km)} km de {TRAVEL_LABEL[mode]} · custo ~{formatMoney(travelCost(mode, km))} · desgaste −{travelFatigue(mode, km).toFixed(0)} de condição
         </div>
       )}
+    </div>
+  );
+}
+
+/** The next few matches after the one above: date, competition, home or away, opponent and his strength. */
+function Upcoming() {
+  const { state, club } = useMe();
+  if (!state || !club) return null;
+  const next = nextFixture(state, club.id);
+  const list = Object.values(state.fixtures)
+    .filter((f) => (f.home === club.id || f.away === club.id) && f.hg == null && f.date >= state.meta.date && f.id !== next?.id)
+    .sort((a, b) => a.date - b.date)
+    .slice(0, 6);
+  return (
+    <div className="panel col">
+      <h3>Próximos jogos</h3>
+      {list.length === 0 && <Empty>Nada marcado depois deste jogo.</Empty>}
+      <table className="t">
+        <tbody>
+          {list.map((f) => {
+            const home = f.home === club.id;
+            const opp = state.clubs[home ? f.away : f.home];
+            return (
+              <tr key={f.id}>
+                <td className="faint num nowrap">{dateLabel(state, f.date).slice(0, 5)}</td>
+                <td className="small muted nowrap">{compLabel(state, f.comp)}</td>
+                <td>
+                  <span className={`pill ${home ? 'good' : 'info'}`}>{home ? 'casa' : 'fora'}</span>
+                </td>
+                <td className="grow">{opp ? <ClubName id={opp.id} state={state} /> : '—'}</td>
+                <td>{opp && <Str v={opp.power} />}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** The club's league table around its own position. */
+function TableSnippet() {
+  const { state, club } = useMe();
+  const setScreen = useApp((s) => s.setScreen);
+  if (!state || !club || !club.league) return null;
+  const league = state.comps[club.league];
+  if (!league) return null;
+  const order = sortTable(league.table, state.clubs);
+  const at = order.indexOf(club.id);
+  const from = Math.max(0, Math.min(order.length - 7, at - 3));
+  const rows = order.slice(from, from + 7);
+  return (
+    <div className="panel col">
+      <div className="row">
+        <h3 className="grow">{league.cfg.name}</h3>
+        <button className="btn sm ghost" onClick={() => setScreen('competicoes')}>
+          Tabela completa
+        </button>
+      </div>
+      <table className="t">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Clube</th>
+            <th className="right">J</th>
+            <th className="right">SG</th>
+            <th className="right">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((cid) => {
+            const r = league.table[cid];
+            return (
+              <tr key={cid} className={cid === club.id ? 'me' : ''}>
+                <td className="num">{order.indexOf(cid) + 1}</td>
+                <td>
+                  <ClubName id={cid} state={state} />
+                </td>
+                <td className="right num">{r?.p ?? 0}</td>
+                <td className="right num">{(r?.gf ?? 0) - (r?.ga ?? 0)}</td>
+                <td className="right num">
+                  <b>{r?.pts ?? 0}</b>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

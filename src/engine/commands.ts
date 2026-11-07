@@ -1,11 +1,11 @@
 import { squadStrength } from './ai/lineup';
 import { takeJob } from './board';
-import { calibrateIncome, clubComps, roughIncome, seatCost, sectorBounds, sectorRefs, stadiumBuildDates, TC_BUILD, tcUpgradeCost } from './economy';
+import { calibrateIncome, clubComps, roughIncome, seatCost, sectorBounds, sectorRefs, stadiumBuildDates, TC_BUILD, tcBoardShare, tcClubCost, tcUpgradeCost } from './economy';
 import { assignNumbers, fillerLevel, fillSquad } from './generator';
 import { ensureYouthTeam, promote as promoteJunior, release as releaseJunior } from './youth';
 import { FORMATIONS, slotsFor, validShape } from './match/formations';
 import { Rng } from './rng';
-import { auctionCanClose, executeTransfer, resolveAiBid, unlist, wageDemand, windowOpen } from './transfers';
+import { auctionCanClose, executeTransfer, refusesClub, resolveAiBid, unlist, wageDemand, windowOpen } from './transfers';
 import type { Bid, GameState, Lineup, Manager, Player, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
 import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from './util';
 
@@ -136,13 +136,17 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
     case 'upgradeTC': {
       if (club.tc.building > 0) return fail('Já existe uma obra em andamento no CT.');
       if (club.tc.level >= 5) return fail('O CT já está no nível máximo.');
-      const cost = tcUpgradeCost(club);
+      // the board pays part of the works when it trusts the manager
+      const cost = tcClubCost(club);
+      const share = tcBoardShare(club);
       if (club.balance < cost) return fail(`Saldo insuficiente (custa ${formatMoney(cost)}).`);
       club.balance -= cost;
       club.ledger.works += cost;
       club.tc.building = TC_BUILD[club.tc.level + 1];
       club.tc.total = club.tc.building;
-      return ok(`Obra iniciada: CT nível ${club.tc.level + 1} em ${club.tc.building} rodadas.`);
+      return ok(
+        `Obra iniciada: CT nível ${club.tc.level + 1} em ${club.tc.building} rodadas.${share > 0 ? ` A diretoria pagou ${Math.round(share * 100)}% (${formatMoney(tcUpgradeCost(club) - cost)}).` : ''}`,
+      );
     }
     case 'expandStadium': {
       if (club.stadiumWork) return fail('O estádio já está em obras.');
@@ -197,6 +201,8 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
         return ok('Lance retirado.');
       }
       const amount = roundMoney(cmd.amount);
+      const refuses = refusesClub(state, p, club);
+      if (refuses) return fail(refuses);
       if (amount < p.auction.min) return fail(`O lance mínimo é ${formatMoney(p.auction.min)}.`);
       if (amount > club.balance) return fail('Saldo insuficiente.');
       bids[club.id] = amount;
@@ -240,6 +246,8 @@ function dispatch(state: GameState, m: Manager, cmd: Command, rng: Rng): CmdResu
       const why = preContractBlock(state, p);
       if (why) return fail(why);
       if (p.pre) return fail(`${p.name} já assinou pré-contrato com o ${state.clubs[p.pre.club]?.name}.`);
+      const refuses = refusesClub(state, p, club);
+      if (refuses) return fail(refuses);
       const demand = wageDemand(state, p, club);
       if (cmd.wage < demand * rng.range(0.9, 1)) return fail(`${p.name} recusou. Pede cerca de ${formatMoney(demand)}/mês para assinar.`);
       const years = clamp(Math.round(cmd.years), 1, 5);
@@ -385,7 +393,15 @@ function closeBid(state: GameState, b: Bid, rng: Rng, checkPlayer: boolean): Cmd
   }
   if (p.clubId != null && !windowOpen(state)) return fail('A janela de transferências está fechada.');
   if (buyer.balance < b.fee) return fail('O comprador não tem saldo suficiente.');
+  const seller = b.seller != null ? state.clubs[b.seller] : null;
+  if (seller?.managerId && squadOf(state, seller.id).length <= 16) return fail(`O ${seller.name} precisa de pelo menos 16 jogadores: não dá para vender agora.`);
   if (checkPlayer) {
+    const refuses = refusesClub(state, p, buyer);
+    if (refuses) {
+      b.status = 'recusada';
+      b.msg = refuses;
+      return fail(refuses);
+    }
     const demand = wageDemand(state, p, buyer);
     if (b.wage < demand * rng.range(0.88, 1)) {
       b.status = 'recusada';

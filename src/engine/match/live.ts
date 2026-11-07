@@ -1,5 +1,5 @@
 import type { Tactics } from '../types';
-import { matchRating, MatchSim, PITCH_H, PITCH_W, type MatchEvent, type MatchResult, type MatchSetup } from './core';
+import { matchRating, MatchSim, PITCH_H, PITCH_W, type ActionKind, type MatchEvent, type MatchResult, type MatchSetup } from './core';
 import { aiDive, aiShot, autoShootout, kickOutcome, Shootout, type PkDir, type PkOutcome, type PkTaker } from './shootout';
 
 /** Real-time length of each shootout step, in ms. */
@@ -73,6 +73,20 @@ interface Snap {
   mark: 0 | 1;
 }
 
+/**
+ * What the ball is doing right now, for the live commentary: action kind, side, actor and target ids (0 = none),
+ * an id that changes with every new action, how far up the pitch it goes for that side (0-100), and how a shot ends.
+ */
+export interface LiveAction {
+  k: ActionKind;
+  s: 0 | 1;
+  a: number;
+  g: number;
+  id: number;
+  u: number;
+  r?: 'goal' | 'save' | 'wide' | 'block';
+}
+
 /** Snapshot of a live match sent to every client ~5 times per second. */
 export interface LiveFrame {
   f: number;
@@ -95,6 +109,8 @@ export interface LiveFrame {
   x: { pas: [number, number]; pf: [number, number]; tk: [number, number]; bc: [number, number]; xg: [number, number]; co: [number, number]; fo: [number, number]; sv: [number, number] };
   /** player on the ball (0 = none) */
   car: number;
+  /** the action in progress (live commentary) */
+  ac?: LiveAction;
   paused: boolean;
   pausedBy: 0 | 1 | null;
   ended: boolean;
@@ -710,6 +726,17 @@ export class LiveMatch {
         sv: pair('saves'),
       },
       car: (act && act.kind !== 'celebrate' ? (act.target ?? act.actor) : sim.carrier) ?? 0,
+      ac: act
+        ? {
+            k: act.kind,
+            s: act.side,
+            a: act.actor ?? 0,
+            g: act.target ?? 0,
+            id: Math.round(act.t0 * 10),
+            u: Math.round(Math.max(sim.progress(act.side, act.from.x), sim.progress(act.side, act.to.x)) * 100),
+            ...(act.res ? { r: act.res } : {}),
+          }
+        : undefined,
     };
   }
 

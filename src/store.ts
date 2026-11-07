@@ -37,6 +37,12 @@ interface AppState {
   status: 'idle' | 'connecting' | 'online' | 'closed';
   error: string | null;
   online: boolean;
+  /** the notification centre is open */
+  inboxOpen: boolean;
+  setInboxOpen(open: boolean): void;
+  /** the list of keyboard shortcuts is open */
+  keysOpen: boolean;
+  setKeysOpen(open: boolean): void;
   setScreen(s: Screen, tab?: string): void;
   openClub(id: number): void;
   notify(text: string, level?: Notice['level']): void;
@@ -61,6 +67,10 @@ export const useApp = create<AppState>((set, get) => ({
   status: 'idle',
   error: null,
   online: false,
+  inboxOpen: false,
+  setInboxOpen: (inboxOpen) => set({ inboxOpen }),
+  keysOpen: false,
+  setKeysOpen: (keysOpen) => set({ keysOpen }),
   setScreen: (screen, tab) => set({ screen, tabs: tab ? { ...get().tabs, [screen]: tab } : get().tabs }),
   openClub: (id) => set({ screen: 'clube', viewClub: id }),
   notify: (text, level = 'info') => {

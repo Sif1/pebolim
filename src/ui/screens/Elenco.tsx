@@ -109,12 +109,40 @@ export function Elenco() {
   if (!state || !club) return null;
   const squad = squadOf(state, club.id);
   const wages = squad.reduce((a, p) => a + p.wage, 0);
+  const season = state.meta.season;
+  const best = [...squad].sort((a, b) => b.str - a.str).slice(0, 14);
+  const avgStr = best.reduce((a, p) => a + p.str, 0) / Math.max(1, best.length);
+  const avgAge = squad.reduce((a, p) => a + age(p, season), 0) / Math.max(1, squad.length);
+  const injured = squad.filter((p) => p.injury > 0).length;
+  const banned = squad.filter((p) => Object.values(p.ban ?? {}).some((x) => x > 0)).length;
+  const ending = squad.filter((p) => p.contractEnd <= season && !p.loan).length;
+  const tired = squad.filter((p) => p.fitness < 75).length;
   return (
     <div className="col">
       <div className="row">
         <h1 className="grow">Elenco ({squad.length})</h1>
         <span className="muted">
           Folha salarial: <b>{formatMoney(wages)}</b>/mês
+        </span>
+      </div>
+      <div className="row squad-chips">
+        <span className="chip">
+          Força dos 14 melhores <Str v={avgStr} />
+        </span>
+        <span className="chip">
+          Idade média <b>{avgAge.toFixed(1)}</b>
+        </span>
+        <span className={`chip ${injured ? 'bad' : ''}`}>
+          Lesionados <b>{injured}</b>
+        </span>
+        <span className={`chip ${banned ? 'warn' : ''}`}>
+          Suspensos <b>{banned}</b>
+        </span>
+        <span className={`chip ${tired ? 'warn' : ''}`}>
+          Cansados (&lt;75%) <b>{tired}</b>
+        </span>
+        <span className={`chip ${ending ? 'warn' : ''}`}>
+          Contratos até {season} <b>{ending}</b>
         </span>
       </div>
       <div className="panel tight">

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { windowOpen } from '../../engine/transfers';
+import { wageBudget } from '../../engine/economy';
+import { refusesClub, wageDemand, windowOpen } from '../../engine/transfers';
 import { POSITIONS, TRAITS, type Player, type Pos, type Trait } from '../../engine/types';
-import { age, formatMoney, playerValue } from '../../engine/util';
+import { age, formatMoney, playerValue, squadOf } from '../../engine/util';
 import { useMe } from '../../store';
 import { ClubBadge, COUNTRY_NAME, Flag, MoneyField, PosTag, Stars, Str, useSort } from '../common';
 import { MarketPills, PlayerModal, Traits, traitLabel } from '../PlayerModal';
@@ -20,6 +21,8 @@ interface Filters {
   status: 'todos' | 'livres' | 'fim' | 'venda' | 'emprestimo' | 'leilao' | 'negociaveis';
   trait: Trait | '';
   stars: number;
+  /** only players the club can afford: price within the cash, wage within the room left in the wage budget */
+  reach: boolean;
 }
 
 const DEFAULT: Filters = {
@@ -35,6 +38,7 @@ const DEFAULT: Filters = {
   status: 'todos',
   trait: '',
   stars: 0,
+  reach: false,
 };
 
 /** Brasfoot-style player search. Runs entirely on this player's replica: nobody else sees it. */
@@ -64,6 +68,7 @@ export function Mercado() {
     if (!state || !club) return [];
     const q = f.q.trim().toLowerCase();
     const out: Player[] = [];
+    const wageRoom = (wageBudget(state, club) - squadOf(state, club.id).reduce((a, p) => a + p.wage, 0) * 12) / 12;
     for (const id in state.players) {
       const p = state.players[id];
       // own players and other clubs' youth teams are not on the market
@@ -87,12 +92,24 @@ export function Mercado() {
       if (f.trait && !p.traits.includes(f.trait)) continue;
       if (f.stars && p.stars < f.stars) continue;
       if (f.maxValue > 0 && playerValue(p, season) > f.maxValue) continue;
+      if (f.reach) {
+        const price = p.clubId == null ? 0 : (p.auction?.min ?? p.salePrice ?? playerValue(p, season));
+        if (price > club.balance || wageDemand(state, p, club) > wageRoom || refusesClub(state, p, club)) continue;
+      }
       out.push(p);
     }
     return out;
   }, [state, club, f, season]);
 
+  // my best força at each position: what a signing has to beat
+  const myBest = useMemo(() => {
+    const m: Partial<Record<Pos, number>> = {};
+    if (state && club) for (const p of squadOf(state, club.id)) if (!p.junior) m[p.pos] = Math.max(m[p.pos] ?? 0, p.str);
+    return m;
+  }, [state, club]);
+  const vs = (p: Player) => (myBest[p.pos] != null ? Math.round(p.str) - Math.round(myBest[p.pos]!) : 99);
   const { sorted, th } = useSort(results, { key: 'str', dir: -1 }, {
+    vs,
     name: (p) => p.name,
     pos: (p) => p.pos,
     age: (p) => age(p, season),
@@ -185,6 +202,10 @@ export function Mercado() {
             Valor máx.
             <MoneyField value={f.maxValue} allowZero={false} placeholder="sem limite" width={110} onChange={(v) => set({ maxValue: v })} />
           </label>
+          <label className="row small" title="Preço dentro do caixa e salário dentro da folga do orçamento salarial">
+            <input type="checkbox" checked={f.reach} onChange={(e) => set({ reach: e.target.checked })} />
+            Ao meu alcance
+          </label>
           <button className="btn sm ghost" onClick={() => set(DEFAULT)}>
             Limpar filtros
           </button>
@@ -203,6 +224,7 @@ export function Mercado() {
               {th('age', 'Idade', 'center')}
               {th('str', 'Força', 'center')}
               {th('pot', 'Pot.', 'center')}
+              {th('vs', 'vs. elenco', 'center')}
               {th('nat', 'Nac.')}
               {th('club', 'Clube')}
               {th('con', 'Contrato', 'center')}
@@ -231,6 +253,17 @@ export function Mercado() {
                     <Str v={p.str} />
                   </td>
                   <td className="center"><Stars n={p.stars} /></td>
+                  <td className="center num small">
+                    {(() => {
+                      const d = vs(p);
+                      if (d === 99) return <span className="good" title="Você não tem ninguém nessa posição">novo</span>;
+                      return (
+                        <span className={d > 0 ? 'good' : d < 0 ? 'bad' : 'muted'} title={`Seu melhor ${p.pos}: força ${Math.round(myBest[p.pos]!)}`}>
+                          {d > 0 ? `+${d}` : d === 0 ? '=' : d}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td>
                     <Flag nat={p.nat} />
                   </td>

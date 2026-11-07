@@ -10,7 +10,7 @@ const APP = 'pebolim-manager';
 
 const PLAYER_KEYS: (keyof Player)[] = [
   'id', 'name', 'nat', 'pos', 'birth', 'str', 'stars', 'pot', 'traits', 'clubId', 'wage', 'contractEnd',
-  'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle', 'pre', 'junior', 'ys',
+  'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle', 'pre', 'junior', 'ys', 'joined',
 ];
 const FIXTURE_KEYS: (keyof Fixture)[] = [
   'id', 'comp', 'date', 'home', 'away', 'hg', 'ag', 'pens', 'stage', 'tie', 'leg', 'group', 'round', 'goals', 'att', 'reds',

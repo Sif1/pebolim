@@ -82,6 +82,8 @@ export interface Player {
   num: number;
   /** seasons spent without a club (free agents retire after a while) */
   idle: number;
+  /** season he joined his current club (signings only; for the season review's best signing) */
+  joined?: number;
 }
 
 export type Formation = '4-4-2' | '4-3-3' | '4-2-3-1' | '3-5-2' | '5-3-2' | '4-5-1' | '3-4-3';
@@ -317,6 +319,29 @@ export interface JobOffer {
   until: number;
 }
 
+/** A score worth remembering in a career: the biggest win or defeat. */
+export interface CareerScore {
+  gf: number;
+  ga: number;
+  opp: number;
+  club: number;
+  season: number;
+}
+
+/** A manager's numbers over the whole career, every competition. */
+export interface CareerRecord {
+  p: number;
+  w: number;
+  d: number;
+  l: number;
+  gf: number;
+  ga: number;
+  bigWin?: CareerScore;
+  bigLoss?: CareerScore;
+  /** derbies: won, drawn, lost */
+  derbies?: [number, number, number];
+}
+
 export interface Manager {
   id: string;
   name: string;
@@ -327,6 +352,45 @@ export interface Manager {
   history: { season: number; clubId: number; note: string }[];
   offers: JobOffer[];
   trophies: { season: number; comp: string; clubId: number }[];
+  rec?: CareerRecord;
+}
+
+/** A player in a season review: his numbers at the end of the season. */
+export interface ReviewPlayer {
+  pid: number;
+  name: string;
+  pos: Pos;
+  clubId: number | null;
+  apps: number;
+  goals: number;
+  ast: number;
+  /** average match rating ×10 */
+  rt: number;
+}
+
+/** A human manager's season in review, written at the end of the season. */
+export interface SeasonReview {
+  season: number;
+  manager: string;
+  clubId: number;
+  league: string | null;
+  /** final league position (null without a league) and number of clubs */
+  pos: number | null;
+  of: number;
+  goal: Objective;
+  met: boolean;
+  /** cups: how far the club went */
+  cups: { comp: string; reached: string }[];
+  /** every competition: won, drawn, lost, scored, conceded */
+  record: [number, number, number, number, number];
+  biggestWin: { opp: number; gf: number; ga: number } | null;
+  best: ReviewPlayer | null;
+  scorer: ReviewPlayer | null;
+  signing: ReviewPlayer | null;
+  /** team of the season of the club's league (4-3-3) */
+  team: ReviewPlayer[];
+  fans: number;
+  conf: number;
 }
 
 export type BidStatus = 'pendente' | 'aceita' | 'recusada' | 'contraproposta' | 'expirada' | 'cancelada';
@@ -347,6 +411,8 @@ export interface Bid {
   date: number;
   season: number;
   msg: string;
+  /** a deadline-day bid: it can only be answered on the day it arrives */
+  late?: boolean;
 }
 
 export type NewsKind =
@@ -441,6 +507,11 @@ export interface GameState {
   monthly?: { month: number; players: Record<number, [number, number, number, number]> };
   news: News[];
   history: SeasonHistory[];
+  /** head-to-head records (derbies and matches of human-managed clubs), "lo-hi" club ids ->
+   *  [lower id's wins, draws, higher id's wins, lower id's goals, higher id's goals] */
+  h2h?: Record<string, [number, number, number, number, number]>;
+  /** end-of-season reviews of the human managers, newest last */
+  reviews?: SeasonReview[];
   /** last season's final league order and cup winners, used for qualification */
   prev: { ranks: Record<string, number[]>; winners: Record<string, number> };
   config: CompConfig[];

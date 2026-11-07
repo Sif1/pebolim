@@ -6,6 +6,7 @@ import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { MatchDay } from './match/MatchDay';
 import { Shell } from './Shell';
+import { ShortcutsHelp, useShortcuts } from './Inbox';
 
 export function App() {
   const client = useApp((s) => s.client);
@@ -15,6 +16,7 @@ export function App() {
   const error = useApp((s) => s.error);
   const md = useApp((s) => s.md);
   const { club } = useMe();
+  useShortcuts();
   const c1 = club?.colors[0];
   const c2 = club?.colors[1];
 
@@ -57,6 +59,7 @@ export function App() {
       {body}
       <Notices />
       <ConfirmHost />
+      {client && state && <ShortcutsHelp />}
     </>
   );
 }

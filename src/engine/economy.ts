@@ -2,6 +2,7 @@ import { Rng as RngImpl, type Rng } from './rng';
 import type { Club, Competition, Fixture, GameState, SectorPrices, TravelMode } from './types';
 import { addNews, clamp, distanceKm, squadIndex } from './util';
 import { defaultTicket } from './world';
+import { isDerby } from './rivals';
 
 // ---------- travel ----------
 
@@ -147,7 +148,8 @@ export function attendance(state: GameState, f: Fixture, rng: Rng): Gate {
   const home = state.clubs[f.home];
   const away = state.clubs[f.away];
   const comp = state.comps[f.comp];
-  const big = isBigStage(state, f);
+  // a derby fills the stadium like a final
+  const big = isBigStage(state, f) || isDerby(state, f.home, f.away);
   const interest = matchInterest(home, away.rep, comp, big);
   return gateFor(home, interest, pricesFor(home, f.comp), big || comp?.cfg.scope === 'continental', rng.range(0.9, 1.1));
 }
@@ -213,6 +215,16 @@ export function tcUpgradeCost(club: Club): number {
   const lvl = club.tc.level + 1;
   if (lvl > 5) return Infinity;
   return TC_COST[lvl] * (club.continent === 'EU' ? 2 : 1);
+}
+
+/** Share of a training-centre works the board pays for itself: half when it trusts the manager, a quarter when unsure. */
+export function tcBoardShare(club: Club): number {
+  return club.board.conf >= 60 ? 0.5 : club.board.conf >= 40 ? 0.25 : 0;
+}
+
+/** What the club itself pays for the next training-centre level, after the board's share. */
+export function tcClubCost(club: Club): number {
+  return Math.round(tcUpgradeCost(club) * (1 - tcBoardShare(club)));
 }
 
 export function seatCost(club: Club): number {

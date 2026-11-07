@@ -1,8 +1,10 @@
 import { applyPatches, enablePatches, produceWithPatches, setAutoFreeze } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { finishDate, simulateBackground } from '../src/engine/advance';
-import { createCustomClub, createManager, runCommand } from '../src/engine/commands';
-import { clubComps, sectorRefs } from '../src/engine/economy';
+import { createCustomClub, createManager, PRE_CONTRACT_FROM, runCommand } from '../src/engine/commands';
+import { clubComps, sectorRefs, tcClubCost, tcUpgradeCost } from '../src/engine/economy';
+import { headToHead, isDerby, recordHeadToHead, rivalsOf } from '../src/engine/rivals';
+import { recordCareer } from '../src/engine/review';
 import { presetCells, slotsFor } from '../src/engine/match/formations';
 import { aiPlan, type Situation } from '../src/engine/ai/tactics';
 import { aiPreMatchTactics } from '../src/engine/matchday';
@@ -14,12 +16,24 @@ import { prepareMatchday } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
 import { gzip, loadFromBytes, packState, saveToBytes } from '../src/engine/save';
 import type { GameState } from '../src/engine/types';
-import { datePlusMonths, resolveAuctions, returnLoans } from '../src/engine/transfers';
+import {
+  aiTransfers,
+  bidDeadline,
+  datePlusMonths,
+  deadlineDay,
+  expireBids,
+  refusesClub,
+  resolveAuctions,
+  returnLoans,
+  STATURE_MAX_GAP,
+  statureGap,
+  wageDemand,
+} from '../src/engine/transfers';
 import { autoLineup, lineupIssues } from '../src/engine/ai/lineup';
 import { autoShootout, Shootout } from '../src/engine/match/shootout';
 import { kk, parseMoney, sortTable, squadOf } from '../src/engine/util';
-import { endSeason, seasonVerdict } from '../src/engine/season';
-import { boardChecks, fireManager } from '../src/engine/board';
+import { endSeason, ensureKeepers, seasonVerdict } from '../src/engine/season';
+import { boardAfterMatch, boardChecks, fireManager } from '../src/engine/board';
 import { juniorsOf, youthMatches } from '../src/engine/youth';
 import { createWorld } from '../src/engine/world';
 import { synthSetup } from './helpers';
@@ -739,6 +753,81 @@ describe('live highlights', () => {
   });
 });
 
+describe('live commentary', () => {
+  it('sends the action on screen with every frame, shots with how they end', () => {
+    const m = new LiveMatch(synthSetup(74, 68, 21), [false, false]);
+    const kinds = new Set<string>();
+    const ends = new Set<string>();
+    let goals = 0;
+    while (!m.ended) {
+      m.tick(100, 5700 / 300);
+      const fr = m.frame();
+      if (fr.ac) {
+        kinds.add(fr.ac.k);
+        if (fr.ac.r) ends.add(fr.ac.r);
+        expect(fr.ac.u).toBeGreaterThanOrEqual(0);
+        expect(fr.ac.u).toBeLessThanOrEqual(100);
+      }
+      goals = fr.sc[0] + fr.sc[1];
+    }
+    for (const k of ['pass', 'shot', 'goalkick']) expect(kinds.has(k)).toBe(true);
+    expect(ends.size).toBeGreaterThan(1);
+    if (goals > 0) expect(ends.has('goal')).toBe(true);
+  });
+});
+
+describe('season-end housekeeping', () => {
+  it('brings a loaned player whose contract ends back to his club before deciding on it', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const [a, b] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const p = squadOf(s, a.id)[0];
+    p.clubId = b.id;
+    p.loan = { from: a.id, until: (s.meta.season + 1) * 100 + 30 };
+    p.contractEnd = s.meta.season;
+    endSeason(s, rng, new Set());
+    expect(p.loan).toBeNull();
+    expect(p.clubId === null || p.clubId === a.id).toBe(true);
+    if (p.clubId != null) expect(p.contractEnd).toBeGreaterThanOrEqual(s.meta.season);
+    // nobody starts the new season with an expired contract
+    expect(Object.values(s.players).filter((x) => x.clubId != null && !x.junior && x.contractEnd < s.meta.season)).toHaveLength(0);
+  });
+
+  it('always leaves every club with two goalkeepers', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA2')!;
+    for (const p of squadOf(s, club.id)) if (p.pos === 'GOL') p.clubId = null;
+    for (const p of Object.values(s.players)) if (p.clubId == null && p.pos === 'GOL') delete s.players[p.id];
+    ensureKeepers(s, rng, club);
+    expect(squadOf(s, club.id).filter((p) => p.pos === 'GOL').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('settles a youth team left behind at a club the manager has left', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    expect(juniorsOf(s, club.id).length).toBeGreaterThan(0);
+    fireManager(s, m, 'teste');
+    endSeason(s, rng, new Set());
+    expect(juniorsOf(s, club.id)).toHaveLength(0);
+  });
+
+  it('gives a manager who won a trophy at the club half the blame', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    m.since -= 300;
+    s.history.push({ season: s.meta.season - 1, champions: { BRA1: club.id }, topScorers: {} });
+    club.board.goal = 'titulo';
+    club.board.conf = 45;
+    seasonVerdict(s, club, 12, 20, new Set([m.id]));
+    expect(m.clubId).toBe(club.id);
+  });
+});
+
 describe('live match pacing', () => {
   it('slows key moments down and still lasts about the chosen length', () => {
     for (const minutes of [2, 5]) {
@@ -803,6 +892,8 @@ describe('save', () => {
   it('round-trips and stays small', async () => {
     const s = world();
     playDates(s, 3);
+    Object.values(s.players)[10].joined = s.meta.season;
+    s.h2h = { '1-2': [1, 0, 2, 3, 4] };
     const bytes = await saveToBytes(s);
     expect(bytes.length).toBeLessThan(600 * 1024);
     const back = await loadFromBytes(bytes);
@@ -811,11 +902,162 @@ describe('save', () => {
     const p = Object.values(s.players)[10];
     expect(back.players[p.id].name).toBe(p.name);
     expect(back.players[p.id].s).toEqual(p.s);
+    expect(back.players[p.id].joined).toBe(s.meta.season);
+    expect(back.h2h).toEqual(s.h2h);
     const f = Object.values(s.fixtures).find((x) => x.hg != null)!;
     expect(back.fixtures[f.id].hg).toBe(f.hg);
   });
 
   it('rejects files that are not saves', async () => {
     await expect(loadFromBytes(new Uint8Array([1, 2, 3]))).rejects.toThrow();
+  });
+});
+
+describe('derbies and career records', () => {
+  it('makes the big clubs of a city rivals and keeps the head-to-head and career records', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const [a, b, c] = Object.values(s.clubs).filter((x) => x.league === 'BRA1');
+    b.city = a.city;
+    expect(isDerby(s, a.id, b.id)).toBe(true);
+    expect(isDerby(s, a.id, c.id)).toBe(false);
+    expect(rivalsOf(s, a.id).map((x) => x.id)).toContain(b.id);
+    const m = createManager(s, rng, 'A', a.id);
+    const base = Object.values(s.fixtures).find((f) => f.comp === 'BRA1')!;
+    const fx = { ...base, home: a.id, away: b.id, hg: 3, ag: 1 };
+    recordHeadToHead(s, fx);
+    recordCareer(s, fx);
+    expect(headToHead(s, a.id, b.id)).toEqual([1, 0, 0, 3, 1]);
+    expect(headToHead(s, b.id, a.id)).toEqual([0, 0, 1, 1, 3]);
+    expect(m.rec).toMatchObject({ p: 1, w: 1, gf: 3, ga: 1, derbies: [1, 0, 0] });
+    expect(m.rec?.bigWin).toMatchObject({ gf: 3, ga: 1, opp: b.id });
+  });
+
+  it('a derby moves the fans more than an ordinary match', () => {
+    const s = world();
+    const [a, b, c] = Object.values(s.clubs).filter((x) => x.league === 'BRA1');
+    b.city = a.city;
+    const base = Object.values(s.fixtures).find((f) => f.comp === 'BRA1')!;
+    a.fans = 60;
+    boardAfterMatch(s, { ...base, home: a.id, away: c.id, hg: 0, ag: 2 });
+    const ordinary = 60 - a.fans!;
+    a.fans = 60;
+    boardAfterMatch(s, { ...base, home: a.id, away: b.id, hg: 0, ag: 2 });
+    const derby = 60 - a.fans!;
+    expect(derby).toBeGreaterThan(ordinary * 1.8);
+  });
+});
+
+describe('player stature', () => {
+  it('a star refuses a much smaller club, and a veteran comes home', () => {
+    const s = world();
+    const season = s.meta.season;
+    const eng = Object.values(s.clubs)
+      .filter((x) => x.league === 'ENG1')
+      .sort((x, y) => y.rep - x.rep);
+    const small = Object.values(s.clubs)
+      .filter((x) => x.league === 'BRA2')
+      .sort((x, y) => x.rep - y.rep)[0];
+    const star = squadOf(s, eng[0].id)[0];
+    star.str = 88;
+    star.birth = season - 26;
+    star.nat = 'ENG';
+    expect(refusesClub(s, star, small)).toBeTruthy();
+    expect(statureGap(s, star, eng[0])).toBe(0);
+    // a 34-year-old Brazilian, from a mid-table English club to a big club back home: no problem
+    const vet = squadOf(s, eng[5].id)[1];
+    vet.str = 76;
+    vet.birth = season - 34;
+    vet.nat = 'BRA';
+    const bra = Object.values(s.clubs)
+      .filter((x) => x.league === 'BRA1')
+      .sort((x, y) => y.rep - x.rep)[3];
+    expect(statureGap(s, vet, bra)).toBe(0);
+    // a club a little below his standing: he comes, for a higher wage
+    const mid = Object.values(s.clubs).find((x) => statureGap(s, star, x) > 2 && statureGap(s, star, x) <= STATURE_MAX_GAP);
+    if (mid) {
+      const plain = wageDemand(s, star, mid) / (1 + 0.05 * statureGap(s, star, mid));
+      expect(wageDemand(s, star, mid)).toBeGreaterThan(plain);
+    }
+  });
+
+  it('a pre-contract with a club far below the player is refused', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const small = Object.values(s.clubs)
+      .filter((x) => x.league === 'BRA3')
+      .sort((x, y) => x.rep - y.rep)[0];
+    const m = createManager(s, rng, 'A', small.id);
+    const big = Object.values(s.clubs)
+      .filter((x) => x.league === 'ESP1')
+      .sort((x, y) => y.rep - x.rep)[0];
+    const star = squadOf(s, big.id)[0];
+    star.str = 86;
+    star.birth = s.meta.season - 27;
+    star.contractEnd = s.meta.season;
+    s.meta.date = PRE_CONTRACT_FROM;
+    const r = runCommand(s, m.id, { c: 'preContract', pid: star.id, wage: star.wage * 5, years: 3 });
+    expect(r.ok).toBe(false);
+    expect(r.msg).toMatch(/clube maior/);
+  });
+});
+
+describe('transfer deadline day', () => {
+  it('sends late bids on the eve, which can only be answered on deadline day', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const d = s.calendar.findIndex((_, i) => deadlineDay(s, i));
+    expect(d).toBeGreaterThan(0);
+    const club = Object.values(s.clubs)
+      .filter((x) => x.league === 'BRA1')
+      .sort((x, y) => y.rep - x.rep)[0];
+    createManager(s, rng, 'A', club.id);
+    s.meta.date = d - 1;
+    for (let i = 0; i < 6; i++) aiTransfers(s, Rng.fromSeed(`eve${i}`));
+    const late = Object.values(s.bids).filter((b) => b.seller === club.id);
+    expect(late.length).toBeGreaterThan(0);
+    for (const b of late) {
+      expect(b.late).toBe(true);
+      expect(b.date).toBe(d);
+      expect(bidDeadline(b)).toBe(d);
+    }
+    // deadline day ends: they expire with the window
+    s.meta.date = d;
+    expireBids(s);
+    expect(late.every((b) => b.status === 'expirada')).toBe(true);
+  });
+});
+
+describe('season review and training centre', () => {
+  it('writes a review of each human manager season, with a team of the season', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((x) => x.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    playDates(s, 12);
+    endSeason(s, new Rng(s.meta.rng), new Set([m.id]));
+    const r = s.reviews?.find((x) => x.manager === m.id);
+    expect(r).toBeTruthy();
+    expect(r!.clubId).toBe(club.id);
+    expect(r!.pos).toBeGreaterThan(0);
+    expect(r!.record[0] + r!.record[1] + r!.record[2]).toBeGreaterThan(0);
+    expect(r!.team).toHaveLength(11);
+    expect(r!.team.filter((p) => p.pos === 'GOL')).toHaveLength(1);
+  });
+
+  it('the board pays part of the training-centre works when it trusts the manager', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((x) => x.league === 'BRA1' && x.tc.level < 5)!;
+    const m = createManager(s, rng, 'A', club.id);
+    club.board.conf = 70;
+    expect(tcClubCost(club)).toBe(Math.round(tcUpgradeCost(club) * 0.5));
+    club.board.conf = 20;
+    expect(tcClubCost(club)).toBe(tcUpgradeCost(club));
+    club.board.conf = 70;
+    club.balance = tcUpgradeCost(club);
+    const before = club.balance;
+    expect(runCommand(s, m.id, { c: 'upgradeTC' }).ok).toBe(true);
+    expect(before - club.balance).toBe(Math.round(before * 0.5));
   });
 });

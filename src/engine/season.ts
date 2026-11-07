@@ -1,12 +1,14 @@
 import { ceilingFor, starsFor } from './potential';
 import { fireManager } from './board';
 import { homeGameCounts, wageBudget } from './economy';
-import { youthSeasonEnd } from './youth';
+import { juniorsOf, promote, release, youthSeasonEnd } from './youth';
+import { objectiveDelta, seasonReviews } from './review';
+import { statureGap, STATURE_MAX_GAP } from './transfers';
 import { foreignShareFor, startSeason } from './world';
-import { assignNumbers, fillerLevel, fillSquad, generatePlayer } from './generator';
+import { assignNumbers, fillerLevel, fillSquad, generatePlayer, SQUAD_SHAPE } from './generator';
 import type { Rng } from './rng';
-import type { Club, GameState, Player, SeasonHistory } from './types';
-import { absDate, addNews, age, clamp, expectedWage, formatMoney, roundMoney, sortTable, squadIndex } from './util';
+import type { Club, GameState, Player, Pos, SeasonHistory } from './types';
+import { absDate, addNews, age, clamp, expectedWage, formatMoney, roundMoney, sortTable, squadIndex, squadOf } from './util';
 
 /** Run end-of-season processing and start the next season. */
 export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
@@ -38,6 +40,8 @@ export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
     }
   }
   state.history.push(hist);
+  // the human managers' season in review, before anyone moves
+  seasonReviews(state, ranks);
   state.prev = {
     ranks,
     winners: Object.fromEntries(Object.values(state.comps).filter((c) => c.cfg.kind !== 'league' && c.champion != null).map((c) => [c.id, c.champion!])),
@@ -76,22 +80,20 @@ export function endSeason(state: GameState, rng: Rng, present: Set<string>) {
 }
 
 export function seasonVerdict(state: GameState, club: Club, pos: number, n: number, present: Set<string>) {
-  const goal = club.board.goal;
-  let delta = 0;
-  if (goal === 'titulo') delta = pos === 1 ? 25 : pos <= 4 ? 0 : pos <= 8 ? -15 : -35;
-  else if (goal === 'continental') delta = pos <= Math.round(n * 0.3) ? 15 : pos <= n / 2 ? -5 : -25;
-  else if (goal === 'meio') delta = pos <= n - 4 ? 8 : -30;
-  else if (goal === 'rebaixamento') delta = pos <= n - 4 ? 15 : -20;
-  else if (goal === 'acesso') delta = pos <= 4 ? 25 : pos <= 8 ? -5 : -25;
+  let delta = objectiveDelta(club.board.goal, pos, n);
   const m = club.managerId ? state.managers[club.managerId] : null;
-  // a manager in his first season at the club gets the benefit of the doubt: half the blame for a missed objective
+  // the benefit of the doubt, half the blame for a missed objective: a manager in his first season at the club,
+  // or one who won a trophy with it this season or in the two before
   const firstSeason = !!m && Math.floor(m.since / 100) >= state.meta.season;
-  if (firstSeason && delta < 0) delta /= 2;
+  const trophy =
+    !!m &&
+    state.history.some((h) => h.season >= state.meta.season - 2 && h.season >= Math.floor(m.since / 100) && Object.values(h.champions).includes(club.id));
+  if ((firstSeason || trophy) && delta < 0) delta /= 2;
   club.board.conf = clamp(club.board.conf + delta, 0, 100);
   if (m) {
     m.rep = clamp(m.rep + delta / 6, 5, 100);
     if (club.board.conf < 20 && present.has(m.id)) fireManager(state, m, 'objetivo da temporada não cumprido');
-    else if (firstSeason && delta < 0 && present.has(m.id))
+    else if ((firstSeason || trophy) && delta < 0 && present.has(m.id))
       addNews(state, 'board', `A diretoria do ${club.name} mantém você no cargo apesar do objetivo não cumprido, mas espera muito mais na próxima temporada.`, [club.id], m.id);
   }
 }
@@ -151,12 +153,18 @@ function contractsAndLoans(state: GameState, rng: Rng) {
     return r;
   };
   for (const p of Object.values(state.players)) {
-    if (p.loan && p.loan.until < absDate(next, 0)) {
+    // a loan that ends now, or a loaned player whose contract ends: back to his club, which then decides on
+    // his contract below (before, he came back with an expired contract, or was let go with a loan still open)
+    if (p.loan && (p.loan.until < absDate(next, 0) || p.contractEnd < next)) {
       const back = state.clubs[p.loan.from];
+      const was = p.clubId != null ? state.clubs[p.clubId] : null;
+      if (was) {
+        was.lineup.xi = was.lineup.xi.map((x) => (x === p.id ? null : x));
+        was.lineup.bench = was.lineup.bench.filter((x) => x !== p.id);
+      }
       p.loan = null;
       p.clubId = back ? back.id : null;
       p.num = 0;
-      continue;
     }
     if (p.clubId == null) {
       p.idle++;
@@ -251,6 +259,7 @@ function joinOnPreContract(state: GameState, p: Player, next: number) {
   p.pre = null;
   p.num = 0;
   p.idle = 0;
+  p.joined = next;
   addNews(state, 'transfer', `${p.name} chega ao ${to.name} de graça, com o pré-contrato assinado${from ? ` (deixa o ${from.name})` : ''}.`, [to.id, ...(from ? [from.id] : [])]);
 }
 
@@ -286,6 +295,11 @@ function youthIntake(state: GameState, rng: Rng) {
       youthSeasonEnd(state, rng, c);
       continue;
     }
+    // a youth team left behind by a manager who moved on: the promising ones move up, the rest leave
+    for (const j of juniorsOf(state, c.id)) {
+      if (age(j, nextSeason) >= 18 && j.stars >= 2) promote(state, j);
+      else release(state, j);
+    }
     const n = c.league ? rng.int(2, 4) : rng.int(0, 2);
     const level = fillerLevel(c);
     for (let i = 0; i < n; i++) {
@@ -317,8 +331,12 @@ function maintainSquads(state: GameState, rng: Rng) {
     .sort((a, b) => b.str - a.str);
   for (const c of Object.values(state.clubs)) {
     let squad = idx.get(c.id) ?? [];
+    // line-ups only name players still at the club
+    c.lineup.xi = c.lineup.xi.map((id) => (id != null && state.players[id]?.clubId === c.id && !state.players[id].junior ? id : null));
+    c.lineup.bench = c.lineup.bench.filter((id) => state.players[id]?.clubId === c.id && !state.players[id].junior);
     if (!c.managerId && squad.length > 32) {
-      const out = [...squad].sort((a, b) => a.str - b.str).slice(0, squad.length - 30);
+      // loaned-in players are not the club's to let go
+      const out = [...squad].filter((p) => !p.loan).sort((a, b) => a.str - b.str).slice(0, squad.length - 30);
       for (const p of out) {
         p.clubId = null;
         p.idle = 0;
@@ -331,13 +349,14 @@ function maintainSquads(state: GameState, rng: Rng) {
     const human = !!c.managerId;
     const min = human ? 18 : c.league ? 22 : 20;
     if (squad.length < min) {
-      const cap = human ? fillerLevel(c) + 2 : c.power + 6;
+      // AI clubs fill gaps with free agents near their own level (stars only go where they want to play)
+      const cap = human ? fillerLevel(c) + 2 : c.power + 2;
       let room = human ? wageBudget(state, c) - squad.reduce((a, p) => a + p.wage, 0) * 12 : Infinity;
       const signed: string[] = [];
       for (const p of free) {
         if (squad.length >= min) break;
         if (p.clubId != null) continue;
-        if (p.str > cap) continue;
+        if (p.str > cap || statureGap(state, p, c) > STATURE_MAX_GAP) continue;
         const wage = expectedWage(p, state.meta.season + 1, c.rep);
         if (wage * 12 > room) continue;
         room -= wage * 12;
@@ -345,11 +364,21 @@ function maintainSquads(state: GameState, rng: Rng) {
         p.wage = wage;
         p.contractEnd = state.meta.season + 1 + rng.int(0, 2);
         p.idle = 0;
+        p.joined = state.meta.season + 1;
         squad.push(p);
         signed.push(p.name);
       }
       const short = min - squad.length;
-      if (short > 0) fillSquad(state, rng, c.id, squad, fillerLevel(c) - 2, foreignShareFor(c), min);
+      if (short > 0 && human) {
+        // local youngsters, a level below the first team, where the squad is thinnest
+        for (let i = 0; i < short; i++) {
+          const count = (pos: Pos) => squad.filter((p) => p.pos === pos).length;
+          const pos = (Object.keys(SQUAD_SHAPE) as Pos[]).sort((a, b) => count(a) / SQUAD_SHAPE[a] - count(b) / SQUAD_SHAPE[b])[0];
+          const p = generatePlayer(state, rng, { pos, str: fillerLevel(c) - 8 + rng.normal(0, 3), nat: c.country, ageY: rng.int(18, 21), clubId: c.id, clubRep: c.rep });
+          state.players[p.id] = p;
+          squad.push(p);
+        }
+      } else if (short > 0) fillSquad(state, rng, c.id, squad, aiFillerLevel(c), foreignShareFor(c), min);
       if (human)
         addNews(
           state,
@@ -359,8 +388,60 @@ function maintainSquads(state: GameState, rng: Rng) {
           c.managerId,
         );
     }
+    if (c.league || c.contOnly) ensureKeepers(state, rng, c, free);
+  }
+  // players generated at the season end (fillers, keepers) count their contract from the new season
+  for (const p of Object.values(state.players)) {
+    if (p.clubId != null && !p.junior && !p.loan && p.contractEnd <= state.meta.season) p.contractEnd = state.meta.season + 1 + rng.int(0, 2);
   }
   for (const squad of squadIndex(state).values()) assignNumbers(squad);
+}
+
+/**
+ * Level of the players an AI club brings in to fill its squad: a little below its own level, but the big European
+ * clubs (whose stars no free agent replaces) find good ones, so their leagues keep their level over the years.
+ */
+function aiFillerLevel(c: Club): number {
+  const lvl = fillerLevel(c) - 2;
+  return c.continent === 'EU' && c.rep >= 80 ? Math.max(lvl, c.power - 6) : lvl;
+}
+
+/**
+ * Every club needs two goalkeepers. Contracts ending or a sale can leave a club without one: free-agent keepers
+ * at the club's level sign (within the wage room for a human club), else young local keepers come up.
+ */
+export function ensureKeepers(state: GameState, rng: Rng, c: Club, free?: Player[]) {
+  const squad = squadOf(state, c.id);
+  let have = squad.filter((p) => p.pos === 'GOL').length;
+  if (have >= 2) return;
+  const human = !!c.managerId;
+  let room = human ? wageBudget(state, c) - squad.reduce((a, p) => a + p.wage, 0) * 12 : Infinity;
+  const cap = human ? fillerLevel(c) + 2 : c.power + 4;
+  const pool = (free ?? Object.values(state.players)).filter((p) => p.clubId == null && p.pos === 'GOL').sort((a, b) => b.str - a.str);
+  const signed: string[] = [];
+  for (const p of pool) {
+    if (have >= 2) break;
+    if (p.clubId != null || p.str > cap || statureGap(state, p, c) > STATURE_MAX_GAP) continue;
+    const wage = expectedWage(p, state.meta.season + 1, c.rep);
+    if (wage * 12 > room) continue;
+    room -= wage * 12;
+    p.clubId = c.id;
+    p.wage = wage;
+    p.contractEnd = state.meta.season + 1 + rng.int(0, 1);
+    p.idle = 0;
+    p.num = 0;
+    p.joined = state.meta.season;
+    have++;
+    signed.push(p.name);
+  }
+  while (have < 2) {
+    const p = generatePlayer(state, rng, { pos: 'GOL', str: fillerLevel(c) - 4 + rng.normal(0, 3), nat: c.country, ageY: rng.int(18, 21), clubId: c.id, clubRep: c.rep });
+    state.players[p.id] = p;
+    have++;
+    signed.push(p.name);
+  }
+  assignNumbers(squadOf(state, c.id));
+  if (human) addNews(state, 'board', `Sem goleiros suficientes, a diretoria do ${c.name} trouxe: ${signed.join(', ')}.`, [c.id], c.managerId);
 }
 
 function reputationDrift(state: GameState, ranks: Record<string, number[]>) {

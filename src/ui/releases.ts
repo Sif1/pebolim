@@ -10,6 +10,52 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.8.0',
+    date: '07/11/2026',
+    pt: [
+      'Clássicos (Fla-Flu, Gre-Nal, Boca x River, Real x Barça e os outros grandes de cada cidade): valem o dobro para a torcida e mais para a diretoria, enchem o estádio, têm narração própria e um retrospecto entre os dois clubes.',
+      'Retrospectiva no fim da temporada: campanha, objetivo, copas, craque, artilheiro, melhor contratação e a seleção do campeonato. Na tela do treinador, a sala de troféus e os números da carreira (maior vitória, pior derrota, clássicos).',
+      'Dia do fechamento da janela: a IA faz o dobro de negócios, chegam propostas de última hora que só valem naquela rodada, e o dia termina com o resumo dos negócios.',
+      'Narração: o barulho da torcida cresce com a pressão, o placar pisca nas cores de quem marcou, e há um resumo no intervalo e no fim do jogo.',
+      'Avisos no sino do topo em vez de janelas que pulam (propostas, fechamento da janela, escalação, leilões que interessam, diretoria, clássico chegando). Atalhos: Espaço continua (ou pausa o seu jogo), 1 a 9 abrem as telas, N os avisos, ? a lista.',
+      'Mercado: coluna "vs. elenco" e, na ficha do jogador, a comparação lado a lado com o seu titular da posição. Dicas explicam a força e as estrelas.',
+      'No celular: o menu vira uma faixa no topo e o dia de jogo fica em uma coluna.',
+      'Equilíbrio: craques recusam clubes muito menores e cobram mais de quem está um pouco abaixo; veteranos topam voltar para casa; a IA não contrata mais estrelas livres acima do seu nível, e as ligas europeias seguram o nível. A diretoria paga parte das obras do CT quando confia no treinador.',
+      'Correções: propostas da IA podiam chegar com a janela já fechada, sem como responder; dava para vender ou leiloar ficando com menos de 16 jogadores; clubes da IA vendiam mesmo com o elenco curto.',
+    ],
+    en: [
+      'Derbies (Fla-Flu, Gre-Nal, Boca v River, Real v Barça and the big clubs of each city): they count double for the fans and more for the board, fill the stadium, get their own commentary and a head-to-head record.',
+      'A season review at the end of each season: record, objective, cup runs, player of the season, top scorer, best signing and the league’s team of the season. On the manager screen, a trophy room and career numbers (biggest win, heaviest defeat, derbies).',
+      'Transfer deadline day: the AI does twice the business, late bids arrive that are only valid that round, and the day ends with a round-up of the deals.',
+      'Commentary: the crowd gets louder with the pressure, the scoreboard flashes in the scorer’s colours, and there is a summary at half-time and full time.',
+      'Notifications in the bell at the top instead of pop-ups (bids, the window closing, line-up problems, auctions worth a look, the board, a derby coming up). Shortcuts: Space continues (or pauses your match), 1 to 9 open the screens, N the notifications, ? the list.',
+      'Market: a "vs. squad" column and, on the player card, a side-by-side comparison with your starter in that position. Tooltips explain strength and stars.',
+      'On phones: the menu becomes a strip at the top and match day fits in one column.',
+      'Balance: stars refuse much smaller clubs and ask more from slightly smaller ones; veterans are happy to go home; the AI no longer signs free-agent stars above its level, so the European leagues keep their level. The board pays part of the training-centre works when it trusts the manager.',
+      'Fixes: AI bids could arrive after the window had closed, with no way to answer them; you could sell or auction yourself below 16 players; AI clubs sold even with a short squad.',
+    ],
+  },
+  {
+    version: '0.7.0',
+    date: '06/11/2026',
+    pt: [
+      'Narração ao vivo no estilo dos antigos Championship Manager: uma linha por vez conta o lance (passe, arrancada, cruzamento, chute e como termina) nas cores do time com a bola; a barra de pressão pende para quem está melhor e o gol pisca nas cores de quem marcou.',
+      'Painel com os próximos jogos e o seu pedaço da tabela; Elenco com resumo (força, idade, lesionados, suspensos, cansados, contratos vencendo); Mercado com o filtro "Ao meu alcance".',
+      'A janela de leilões só abre sozinha quando há alguém que reforça o seu time, e dá para desligar.',
+      'Jogando sozinho, "Continuar" não pergunta mais se todos estão prontos.',
+      'Diretoria: quem ganhou um título no clube nas últimas três temporadas leva só metade da culpa por um objetivo não cumprido; técnico desempregado recebe propostas principalmente do país onde trabalhava.',
+      'Correções: emprestados com contrato vencendo voltavam com contrato vencido; clubes podiam ficar sem goleiro; a base de um clube abandonado ficava parada para sempre; propostas em aberto por jogadores aposentados; reforços da diretoria vinham fortes demais.',
+    ],
+    en: [
+      'Live commentary the old Championship Manager way: one line at a time tells the move (pass, run, cross, shot and how it ends) on the colours of the team on the ball; the pressure bar tilts toward whoever is on top and a goal flashes in the scorer’s colours.',
+      'Dashboard with the next fixtures and your part of the table; Squad with a summary (strength, age, injured, suspended, tired, expiring contracts); Market with a "Within my budget" filter.',
+      'The auctions window only opens by itself when someone would strengthen your team, and it can be switched off.',
+      'Playing alone, "Continue" no longer asks whether everyone is ready.',
+      'Board: a manager who won a trophy at the club in the last three seasons takes only half the blame for a missed objective; unemployed managers get offers mostly from the country they worked in.',
+      'Fixes: loaned players whose contract ended came back with an expired contract; clubs could end up without a goalkeeper; an abandoned club’s youth team stayed there forever; open bids for retired players; the board’s emergency signings were too strong.',
+    ],
+  },
+  {
     version: '0.6.0',
     date: '06/11/2026',
     pt: [

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMe } from '../../store';
 import { ClubName, Empty } from '../common';
+import { SeasonReviewPanel } from './Review';
 
 export function Temporada() {
-  const { state, club } = useMe();
+  const { state, club, manager } = useMe();
   const [idx, setIdx] = useState<number | null>(null);
   if (!state) return null;
   if (!state.history.length) {
@@ -20,6 +21,7 @@ export function Temporada() {
   const order = state.config.map((c) => c.id);
   const champs = Object.entries(h.champions).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   const promo = state.news.filter((n) => (n.kind === 'promo' || n.kind === 'releg') && n.season === h.season);
+  const review = manager ? state.reviews?.find((r) => r.manager === manager.id && r.season === h.season) : undefined;
 
   return (
     <div className="col">
@@ -39,6 +41,7 @@ export function Temporada() {
           {club && <> Sua diretoria definiu um novo objetivo no painel.</>}
         </div>
       )}
+      {review && <SeasonReviewPanel r={review} state={state} />}
       <div className="grid2" style={{ alignItems: 'start' }}>
         <div className="panel">
           <h3>Campeões</h3>

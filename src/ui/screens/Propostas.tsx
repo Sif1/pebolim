@@ -83,6 +83,11 @@ export function Propostas() {
                     <td className="right small num">{formatMoney(b.wage)}/mês</td>
                     <td>
                       <span className={`pill ${cls}`}>{label}</span>
+                      {b.late && b.status === 'pendente' && (
+                        <span className="pill bad pulse" style={{ marginLeft: 4 }} title="Proposta do último dia da janela: só vale nesta rodada">
+                          ⏰ última hora
+                        </span>
+                      )}
                       {b.status === 'contraproposta' && b.counter != null && <div className="small warn">pede {formatMoney(b.counter)}</div>}
                       {b.msg && b.status !== 'pendente' && <div className="small faint">{b.msg}</div>}
                       {b.status === 'pendente' || b.status === 'contraproposta' ? (

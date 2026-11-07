@@ -24,6 +24,7 @@ export function setSoundOn(on: boolean) {
     /* private mode */
   }
   if (master) master.gain.value = on ? 0.55 : 0;
+  if (!on) stopCrowdBed();
 }
 
 function audio(): AudioContext | null {
@@ -139,4 +140,57 @@ export function crowd(kind: Crowd) {
   g.connect(out).connect(master);
   src.start(t0);
   src.stop(t0 + len + 0.05);
+}
+
+// ---- the crowd under the match: a murmur that swells with the pressure and roars at the chances
+let bed: { src: AudioBufferSourceNode; gain: GainNode; bp: BiquadFilterNode } | null = null;
+
+/** Set the crowd's background noise for the match on screen: 0 = silent, 1 = roaring. It glides to the new level. */
+export function crowdBed(level: number) {
+  const a = audio();
+  if (!a || !master || !noise) return;
+  if (!soundOn() || level <= 0) {
+    if (bed) bed.gain.gain.setTargetAtTime(0, a.currentTime, 0.4);
+    return;
+  }
+  if (!bed) {
+    const src = a.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+    // thousands of distant voices: noise with the hiss and the rumble taken out
+    const hp = a.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 220;
+    const bp = a.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 650;
+    bp.Q.value = 0.5;
+    const lp = a.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2600;
+    const g = a.createGain();
+    g.gain.value = 0;
+    src.connect(hp).connect(bp).connect(lp).connect(g).connect(master);
+    src.start();
+    bed = { src, gain: g, bp };
+  }
+  const v = Math.min(1, level);
+  bed.gain.gain.setTargetAtTime(0.04 + 0.32 * v, a.currentTime, 0.5);
+  // a roaring crowd sounds brighter
+  bed.bp.frequency.setTargetAtTime(550 + 650 * v, a.currentTime, 0.5);
+}
+
+/** Silence the crowd (leaving the match screen). */
+export function stopCrowdBed() {
+  if (!bed || !ctx) return;
+  const b = bed;
+  bed = null;
+  b.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
+  window.setTimeout(() => {
+    try {
+      b.src.stop();
+    } catch {
+      /* already stopped */
+    }
+  }, 1500);
 }

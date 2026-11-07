@@ -279,6 +279,26 @@ export const EN_ENGINE: Record<string, string> = {
   'Estádio {0}': '{0} Stadium',
   'Não foi possível carregar o banco de dados': 'Could not load the database',
 
+  // ---- derbies, deadline day, stature, season review (0.8.0)
+  'Clássico empatado: {0}. Ninguém sai com a festa.': 'Derby draw: {0}. Nobody gets to celebrate.',
+  'Goleada no clássico: {0}! A torcida do {1} vai lembrar desse por anos.': "A derby thrashing: {0}! {1}'s fans will remember this one for years.",
+  'O {0} vence o clássico contra o {1}: {2}.': '{0} win the derby against {1}: {2}.',
+  '{0} não quer jogar no {1}: ele espera um clube maior.': "{0} doesn't want to play for {1}: he expects a bigger club.",
+  'O {0} não negocia agora: o elenco está curto.': "{0} won't deal right now: their squad is short.",
+  'O {0} precisa de pelo menos 16 jogadores: não dá para vender agora.': '{0} need at least 16 players: you cannot sell right now.',
+  'A próxima rodada é o último dia da janela de transferências: a última chance de comprar, vender e emprestar. Espere propostas de última hora!':
+    'Next round is transfer deadline day: the last chance to buy, sell and loan. Expect late bids!',
+  'Fechamento da janela: {0} negócios no último dia. Destaques: {1}.': 'Deadline day: {0} deals on the last day. Highlights: {1}.',
+  'Fechamento da janela: {0} negócios no último dia.': 'Deadline day: {0} deals on the last day.',
+  'Fechamento da janela: 1 negócio no último dia.': 'Deadline day: 1 deal on the last day.',
+  'Proposta de última hora: o {0} oferece {1} por {2}. Só vale até o fechamento da janela!': 'Late bid: {0} offer {1} for {2}. Only valid until the window closes!',
+  'O leilão de {0} foi cancelado: o {1} tem só {2} jogadores.': 'The auction for {0} was cancelled: {1} only have {2} players.',
+  'Obra iniciada: CT nível {0} em {1} rodadas. A diretoria pagou {2}% ({3}).': 'Works started: training centre level {0} in {1} rounds. The board paid {2}% ({3}).',
+  Campeão: 'Champions',
+  'Vice-campeão': 'Runners-up',
+  'Fase de grupos': 'Group stage',
+  Eliminado: 'Knocked out',
+
   // ---- competitions
   Final: 'Final',
   Semifinal: 'Semi-final',

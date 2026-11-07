@@ -4,7 +4,9 @@ import { dateLabel, formatMoney } from '../engine/util';
 import { downloadSave, leaveGame, useApp, useMe, type Screen } from '../store';
 import { lineupIssues } from '../engine/ai/lineup';
 import { ask } from './Confirm';
-import { AuctionHistory, AuctionList, AuctionPopup, openAuctions } from './Auctions';
+import { AuctionHistory, AuctionList, openAuctions } from './Auctions';
+import { InboxButton } from './Inbox';
+import { deadlineDay } from '../engine/transfers';
 import { ClubBadge, compLabel, Modal } from './common';
 import { LangToggle } from './LangToggle';
 import { ClaimPanel } from './Lobby';
@@ -41,6 +43,9 @@ const NAV: ({ id: Screen; label: string; needsClub?: boolean } | null)[] = [
   { id: 'treinador', label: 'Treinador' },
   { id: 'opcoes', label: 'Opções' },
 ];
+
+/** Menu entries in the order of the number keys (see Inbox.tsx). */
+const KEYS: Screen[] = ['painel', 'elenco', 'escalacao', 'mercado', 'financas', 'competicoes', 'noticias', 'treinador', 'opcoes'];
 
 interface TabDef {
   id: string;
@@ -82,6 +87,7 @@ export function Shell() {
   const setScreen = useApp((s) => s.setScreen);
   const managerId = useApp((s) => s.managerId);
   const { state, manager, club } = useMe();
+  const setKeysOpen = useApp((s) => s.setKeysOpen);
   if (!state) return null;
   const pendingBids = club ? Object.values(state.bids).filter((b) => b.seller === club.id && b.status === 'pendente').length : 0;
   const counters = club ? Object.values(state.bids).filter((b) => b.buyer === club.id && b.status === 'contraproposta').length : 0;
@@ -189,8 +195,9 @@ export function Shell() {
           if (!it) return <div key={`d${i}`} className="nav-divider" />;
           if (it.needsClub && !club) return null;
           const count = it.id === 'mercado' ? pendingBids + counters : it.id === 'treinador' ? offers : 0;
+          const key = KEYS.indexOf(it.id) + 1;
           return (
-            <button key={it.id} className={screen === it.id ? 'active' : ''} onClick={() => setScreen(it.id)}>
+            <button key={it.id} data-screen={it.id} className={screen === it.id ? 'active' : ''} onClick={() => setScreen(it.id)} title={key ? `Atalho: ${key}` : undefined}>
               {it.label}
               {count > 0 && <span className="count">{count}</span>}
             </button>
@@ -198,9 +205,11 @@ export function Shell() {
         })}
         <div className="nav-divider" />
         <LangToggle compact />
+        <button className="nav-keys" title="Atalhos do teclado (?)" onClick={() => setKeysOpen(true)}>
+          ⌨ Atalhos
+        </button>
       </nav>
       <main className="content">{body}</main>
-      {club && <AuctionPopup />}
     </div>
   );
 }
@@ -250,8 +259,8 @@ function TopBar() {
   if (!state || !lobby) return null;
   const me = lobby.players.find((p) => p.clientId === client.clientId);
   const managers = lobby.players.filter((p) => p.connected && p.managerId);
-  const readyCount = managers.filter((p) => p.ready).length;
-  const allReady = readyCount === managers.length;
+  // clicking Continuar means the host is ready: only the others can keep the round waiting
+  const waiting = managers.filter((p) => !p.ready && p.clientId !== client.clientId);
   const nf = club ? nextFixture(state, club.id) : null;
   const opp = nf && club ? state.clubs[nf.home === club.id ? nf.away : nf.home] : null;
   const cal = state.calendar[state.meta.date];
@@ -286,7 +295,19 @@ function TopBar() {
           ) : (
             'Fim de temporada'
           )}
-          {cal?.window && state.meta.settings.windows && <span className="pill good" style={{ marginLeft: 6 }}>janela aberta</span>}
+          {cal?.window && state.meta.settings.windows && (
+            deadlineDay(state) ? (
+              <span className="pill bad pulse" style={{ marginLeft: 6 }} title="Último dia para comprar, vender e emprestar">
+                ⏰ último dia da janela
+              </span>
+            ) : deadlineDay(state, state.meta.date + 1) ? (
+              <span className="pill warn" style={{ marginLeft: 6 }} title="Depois da próxima rodada, só jogadores livres">
+                janela fecha na próxima rodada
+              </span>
+            ) : (
+              <span className="pill good" style={{ marginLeft: 6 }}>janela aberta</span>
+            )
+          )}
         </div>
         <div style={{ color: 'rgba(255,255,255,0.8)' }}>
           {nf && opp ? (
@@ -306,6 +327,7 @@ function TopBar() {
       </div>
       <PlayersOnline />
       <div className="row" style={{ gap: 6 }}>
+        <InboxButton />
         {issues.length > 0 && !me?.ready && (
           <button className="btn danger sm" title={issues.join('\n')} onClick={() => setScreen('escalacao')}>
             ⚠ Escalação
@@ -313,6 +335,7 @@ function TopBar() {
         )}
         <button
           className={`btn ${me?.ready ? '' : 'primary'}`}
+          data-shortcut={host ? undefined : 'space'}
           disabled={!me?.ready && issues.length > 0}
           title={!me?.ready && issues.length ? `Arrume a escalação antes: ${issues.join('; ')}` : undefined}
           onClick={() => client.ready(!me?.ready)}
@@ -320,7 +343,7 @@ function TopBar() {
           {me?.ready ? 'Cancelar pronto' : 'Pronto ✓'}
         </button>
         {host && (
-          <button className="btn primary lg" title="Jogar a próxima rodada" onClick={() => (allReady ? client.hostAction('matchday') : setConfirm(true))}>
+          <button className="btn primary lg" data-shortcut="space" title="Jogar a próxima rodada (atalho: Espaço)" onClick={() => (waiting.length === 0 ? client.hostAction('matchday') : setConfirm(true))}>
             Continuar ▶
           </button>
         )}
@@ -345,7 +368,7 @@ function TopBar() {
         <Modal onClose={() => setConfirm(false)}>
           <h2>Nem todos estão prontos</h2>
           <p className="muted">
-            Aguardando: {managers.filter((p) => !p.ready).map((p) => p.name).join(', ')}. Começar a rodada mesmo assim?
+            Aguardando: {waiting.map((p) => p.name).join(', ')}. Começar a rodada mesmo assim?
           </p>
           <div className="row">
             <button

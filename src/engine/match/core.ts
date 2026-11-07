@@ -131,6 +131,8 @@ export interface Action {
   t0: number;
   t1: number;
   lofted: boolean;
+  /** how a shot ends (known when it starts): for the live commentary */
+  res?: 'goal' | 'save' | 'wide' | 'block';
 }
 
 type SetPiece = 'kickoff' | 'goalkick' | 'throw' | 'corner' | 'freekick' | 'penalty' | null;
@@ -916,6 +918,7 @@ export class MatchSim {
       t0: this.t,
       t1: this.t + dur,
       lofted: opts.lofted ?? false,
+      res: eff.shot ? (eff.goal ? 'goal' : eff.shot.onTarget ? 'save' : eff.setPiece === 'corner' ? 'block' : 'wide') : undefined,
     };
     this.effects = eff;
   }

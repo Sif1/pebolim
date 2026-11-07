@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { Club, GameState, Pos } from '../engine/types';
 import { formatMoney, kk, parseMoney } from '../engine/util';
+import { STAR_CEILING } from '../engine/potential';
 
 export { kk, parseMoney };
 import { useApp } from '../store';
@@ -167,11 +168,30 @@ export function PosTag({ pos }: { pos: Pos }) {
   return <span className={`pos pos-${pos}`}>{pos}</span>;
 }
 
+/** What a força means, in words (for tooltips). */
+export function strLevel(v: number): string {
+  const r = Math.round(v);
+  return r >= 85
+    ? 'craque de nível mundial'
+    : r >= 78
+      ? 'nível de seleção, titular de time grande'
+      : r >= 70
+        ? 'titular de Série A'
+        : r >= 62
+          ? 'nível de Série B'
+          : r >= 54
+            ? 'nível de Série C'
+            : 'nível amador';
+}
+
+export const strTip = (v: number) =>
+  `Força ${Math.round(v)}: ${strLevel(v)}. A força (1 a 99) é o nível atual do jogador; em campo ela conta junto com a energia, a moral e as características.`;
+
 export function Str({ v }: { v: number }) {
   const r = Math.round(v);
   const color = r >= 85 ? '#a78bfa' : r >= 78 ? '#22c55e' : r >= 70 ? '#84cc16' : r >= 62 ? '#eab308' : r >= 54 ? '#f97316' : '#ef4444';
   return (
-    <span className="str" style={{ background: color + '22', color }}>
+    <span className="str" style={{ background: color + '22', color }} title={strTip(r)}>
       {r}
     </span>
   );
@@ -202,10 +222,13 @@ export function Bar({ v, max = 100, color }: { v: number; max?: number; color?: 
 }
 
 /** Potential as 0-5 stars. */
+export const starsTip = (k: number) =>
+  `Potencial: ${k} de 5 estrelas. Até onde ele pode chegar: força máxima por volta de ${STAR_CEILING[k]}. Mais estrelas também = cresce mais rápido quando jovem e cai mais devagar quando veterano.`;
+
 export function Stars({ n, title }: { n: number; title?: string }) {
   const k = Math.max(0, Math.min(5, Math.round(n ?? 0)));
   return (
-    <span className="stars" title={title ?? `Potencial: ${k} de 5 estrelas`}>
+    <span className="stars" title={title ?? starsTip(k)}>
       <span className="on">{'★'.repeat(k)}</span>
       <span className="off">{'★'.repeat(5 - k)}</span>
     </span>
@@ -258,6 +281,13 @@ export function Modal({ onClose, children, wide }: { onClose: () => void; childr
   );
 }
 
+/** Tooltips for the column headers that need explaining. */
+const HEADER_TIPS: Record<string, string> = {
+  str: 'Força: o nível atual do jogador, de 1 a 99 (85+ craque mundial, 70+ titular de Série A, 62+ Série B). Clique para ordenar.',
+  pot: 'Potencial, de 0 a 5 estrelas: até onde ele pode chegar e quão rápido cresce. Clique para ordenar.',
+  vs: 'Diferença de força para o seu melhor jogador da posição. Clique para ordenar.',
+};
+
 export function useSort<T>(rows: T[], initial: { key: string; dir: 1 | -1 }, getters: Record<string, (r: T) => number | string>) {
   const [sort, setSort] = useState(initial);
   const g = getters[sort.key];
@@ -274,7 +304,7 @@ export function useSort<T>(rows: T[], initial: { key: string; dir: 1 | -1 }, get
     return (
       <th
         className={`sortable ${cls}`}
-        title="Clique para ordenar"
+        title={HEADER_TIPS[key] ?? 'Clique para ordenar'}
         onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : -1 }))}
       >
         {cls.includes('right') && arrow}
