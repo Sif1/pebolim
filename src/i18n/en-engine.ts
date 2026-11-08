@@ -337,6 +337,10 @@ export const EN_ENGINE: Record<string, string> = {
   'GOL! {0} (pênalti)': 'GOAL! {0} (penalty)',
   'GOL! {0} (assist. {1})': 'GOAL! {0} (assist {1})',
   'GOL! {0}': 'GOAL! {0}',
+  'GOL! Gol contra de {0}': 'GOAL! Own goal by {0}',
+  'Gol contra de {0}': 'Own goal by {0}',
+  '{0} pega {1} jogos de suspensão pela expulsão: a comissão disciplinar viu agressão no lance.':
+    '{0} gets a {1}-match ban for the sending-off: the disciplinary panel saw violent conduct.',
   'Fim do primeiro tempo': 'Half-time',
   'Fim de jogo': 'Full time',
   'Início do segundo tempo': 'Second half under way',
@@ -404,4 +408,6 @@ export const EN_ENGINE: Record<string, string> = {
   '{0} é o novo técnico do {1}.': '{0} is the new {1} coach.',
   'Técnico da temporada {0}: {1}, {2}º lugar com o {3}.': 'Coach of the season {0}: {1}, {2}º with {3}.',
   'Cuidado com o gramado atualizado.': 'Pitch care updated.',
+  '{0} se lesionou e fica fora por {1} jogo(s). Aos {2} anos, a lesão deixa marcas: −{3} de força.':
+    '{0} is injured and out for {1} match(es). At {2}, the injury leaves its mark: −{3} strength.',
 };

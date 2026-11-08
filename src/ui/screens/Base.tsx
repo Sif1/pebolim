@@ -4,7 +4,7 @@ import type { Player } from '../../engine/types';
 import { age, formatMoney } from '../../engine/util';
 import { command, useMe } from '../../store';
 import { ask } from '../Confirm';
-import { Empty, Flag, PosTag, Rating, Stars, useSort } from '../common';
+import { Empty, Flag, PosTag, PotStars, Rating, seenStars, useSort } from '../common';
 import { Portrait } from '../Portrait';
 import { Traits } from '../PlayerModal';
 
@@ -19,10 +19,10 @@ export function Base() {
   const youth = state && club ? juniorsOf(state, club.id) : [];
   const avg = (p: Player) => (p.ys && p.ys[0] ? p.ys[3] / p.ys[0] / 10 : null);
   const { sorted, th } = useSort(youth, { key: 'pot', dir: -1 }, {
-    pos: (p) => POS_ORDER[p.pos] * 10 - p.stars,
+    pos: (p) => POS_ORDER[p.pos] * 10 - seenStars(state, club?.id ?? null, p),
     name: (p) => p.name,
     age: (p) => age(p, season),
-    pot: (p) => p.stars * 100 - age(p, season),
+    pot: (p) => seenStars(state, club?.id ?? null, p) * 100 - age(p, season),
     apps: (p) => p.ys?.[0] ?? 0,
     goals: (p) => p.ys?.[1] ?? 0,
     ast: (p) => p.ys?.[2] ?? 0,
@@ -115,7 +115,7 @@ export function Base() {
                   </td>
                   <td className="center num">{age(p, season)}</td>
                   <td className="center">
-                    <Stars n={p.stars} />
+                    <PotStars p={p} />
                   </td>
                   <td className="center faint" title="Só aparece depois de promovido">
                     ?

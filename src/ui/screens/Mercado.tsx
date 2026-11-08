@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { wageBudget } from '../../engine/economy';
 import { refusesClub, wageDemand, windowOpen } from '../../engine/transfers';
 import { POSITIONS, TRAITS, type Player, type Pos, type Trait } from '../../engine/types';
-import { age, formatMoney, playerValue, squadOf } from '../../engine/util';
+import { age, formatMoney, marketValue, squadOf } from '../../engine/util';
 import { useMe } from '../../store';
-import { ClubBadge, COUNTRY_NAME, Flag, MoneyField, PosTag, Stars, Str, useSort } from '../common';
+import { ClubBadge, COUNTRY_NAME, Flag, MoneyField, PosTag, PotStars, seenStars, Str, useSort } from '../common';
 import { MarketPills, PlayerModal, Traits, traitLabel } from '../PlayerModal';
 
 
@@ -90,10 +90,10 @@ export function Mercado() {
       if (f.status === 'leilao' && !p.auction) continue;
       if (f.status === 'negociaveis' && p.salePrice == null && !p.loanListed && !p.auction) continue;
       if (f.trait && !p.traits.includes(f.trait)) continue;
-      if (f.stars && p.stars < f.stars) continue;
-      if (f.maxValue > 0 && playerValue(p, season) > f.maxValue) continue;
+      if (f.stars && seenStars(state, club?.id ?? null, p) < f.stars) continue;
+      if (f.maxValue > 0 && marketValue(p, state) > f.maxValue) continue;
       if (f.reach) {
-        const price = p.clubId == null ? 0 : (p.auction?.min ?? p.salePrice ?? playerValue(p, season));
+        const price = p.clubId == null ? 0 : (p.auction?.min ?? p.salePrice ?? marketValue(p, state));
         if (price > club.balance || wageDemand(state, p, club) > wageRoom || refusesClub(state, p, club)) continue;
       }
       out.push(p);
@@ -114,10 +114,10 @@ export function Mercado() {
     pos: (p) => p.pos,
     age: (p) => age(p, season),
     str: (p) => p.str,
-    pot: (p) => p.stars * 100 + p.pot,
+    pot: (p) => seenStars(state, club?.id ?? null, p) * 100 + p.str,
     nat: (p) => COUNTRY_NAME[p.nat] ?? p.nat,
-    ask: (p) => p.auction?.min ?? p.salePrice ?? playerValue(p, season),
-    val: (p) => playerValue(p, season),
+    ask: (p) => p.auction?.min ?? p.salePrice ?? marketValue(p, state!),
+    val: (p) => marketValue(p, state!),
     wage: (p) => p.wage,
     club: (p) => (p.clubId != null ? state!.clubs[p.clubId].name : ''),
     con: (p) => p.contractEnd,
@@ -252,7 +252,7 @@ export function Mercado() {
                   <td className="center">
                     <Str v={p.str} />
                   </td>
-                  <td className="center"><Stars n={p.stars} /></td>
+                  <td className="center"><PotStars p={p} /></td>
                   <td className="center num small">
                     {(() => {
                       const d = vs(p);
@@ -280,7 +280,7 @@ export function Mercado() {
                   </td>
                   <td className={`center num ${p.clubId != null && p.contractEnd <= season ? 'warn' : ''}`}>{p.clubId != null ? p.contractEnd : '—'}</td>
                   <td className="right small num">{formatMoney(p.wage)}</td>
-                  <td className="right small num">{formatMoney(playerValue(p, season))}</td>
+                  <td className="right small num">{formatMoney(marketValue(p, state))}</td>
                   <td className="right small num">
                     {p.auction ? (
                       <span className="warn" title="Lance mínimo do leilão">

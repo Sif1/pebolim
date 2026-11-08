@@ -1,7 +1,7 @@
 import { DATES_PER_SEASON, TC_DEV, TC_INJ, TC_REC } from './economy';
-import { declineMult, growthMult } from './potential';
+import { declineMult, growthMult, scoutRound } from './potential';
 import type { Rng } from './rng';
-import type { GameState } from './types';
+import type { Club, GameState, Player } from './types';
 import { age } from './util';
 
 /**
@@ -19,6 +19,22 @@ function yearlyDelta(a: number): number {
   if (a <= 32) return -1.5;
   if (a <= 34) return -3;
   return -5;
+}
+
+/** Years longer a player's career lasts before retirement: three for a keeper, one for a great player (força 80+). */
+export function careerBonus(p: { pos: string; str: number }): number {
+  return (p.pos === 'GOL' ? 3 : 0) + (p.str >= 80 ? 1 : 0);
+}
+
+/**
+ * A player well above his club's level grows more slowly there (the training, the team-mates and the games are
+ * not at his level): full growth up to 4 points above the club's best-XI strength, then less, down to 35% at 12
+ * above. A promising player at a small club wants to move up, and the club has a reason to sell.
+ */
+export function clubGrowthFactor(p: Pick<Player, 'str' | 'junior'>, club: Pick<Club, 'power'>): number {
+  if (p.junior) return 1;
+  const over = p.str - club.power - 4;
+  return over <= 0 ? 1 : Math.max(0.35, 1 - over / 12);
 }
 
 /** How much of the normal growth a young player keeps at this força: all of it up to 80, less and less above. */
@@ -47,8 +63,10 @@ export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number
     p.morale += (60 - p.morale) * 0.03;
     // development
     if (!club) continue;
+    scoutRound(p, season, lvl);
     const a = age(p, season);
-    let d = yearlyDelta(a);
+    // keepers peak later: their decline starts two years after everyone else's
+    let d = yearlyDelta(p.pos === 'GOL' && a >= 30 ? a - 2 : a);
     if (d > 0) {
       // growth: training centre, focus, playing time and potential stars (faster, and up to a higher ceiling)
       // youth-team players play youth matches every week
@@ -58,6 +76,7 @@ export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number
       // each point is harder (×0.6 at 85, ×0.25 at 89), so even the best prospects peak in their mid-twenties
       d *= Math.min(1, Math.max(0.1, (p.pot - p.str) / 6));
       d *= ELITE_GROWTH(p.str);
+      d *= clubGrowthFactor(p, club);
     } else if (d < 0) {
       // decline after 30: more stars, slower decline
       d *= declineMult(p.stars ?? 2);

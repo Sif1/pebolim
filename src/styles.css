@@ -2614,3 +2614,10 @@ table.compare-t td.better {
     overflow-x: auto;
   }
 }
+
+/* ---- 0.11.0: potential as a scout's estimate */
+.pot-est .faint {
+  margin-left: 2px;
+  font-weight: 700;
+  cursor: help;
+}

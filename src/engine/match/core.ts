@@ -23,6 +23,8 @@ export interface MPlayerInit {
   flank?: Side;
   /** fatigue multiplier (older players tire faster) */
   tire: number;
+  /** age in years (older players get injured more often, and for longer) */
+  age?: number;
 }
 
 export interface MPlayer extends RatedPlayer {
@@ -30,8 +32,11 @@ export interface MPlayer extends RatedPlayer {
   num: number;
   side: 0 | 1;
   tire: number;
+  age?: number;
   yellow: number;
   red: boolean;
+  /** sent off for a second yellow (a one-match ban) */
+  red2?: boolean;
   injured: boolean;
   injDates: number;
   goals: number;
@@ -146,7 +151,7 @@ interface Effects {
   carrier: number | null;
   ball: Vec;
   setPiece: SetPiece;
-  goal?: { side: 0 | 1; pid: number; ast: number | null; pen?: boolean };
+  goal?: { side: 0 | 1; pid: number; ast: number | null; pen?: boolean; og?: boolean };
   events?: MatchEvent[];
   /** xg: chance quality; big: clear-cut chance; gk: keeper who saved it */
   shot?: { side: 0 | 1; onTarget: boolean; pid: number; xg: number; big: boolean; gk?: number | null };
@@ -180,7 +185,7 @@ export interface MatchResult {
   ag: number;
   pens: [number, number] | null;
   goals: GoalEvent[];
-  players: Record<number, { side: 0 | 1; mins: number; goals: number; ast: number; yel: number; red: boolean; inj: number; fitness: number; rt: number }>;
+  players: Record<number, { side: 0 | 1; mins: number; goals: number; ast: number; yel: number; red: boolean; red2?: boolean; inj: number; fitness: number; rt: number }>;
   stats: [SideStats, SideStats];
 }
 
@@ -222,7 +227,7 @@ export const STYLE_TUNE = {
   boxShot: 0.095,
   edgeShot: 0.02,
   /** scales every open-play and set-piece chance quality (penalties excluded); the main goals-per-match knob */
-  xgScale: 1.22,
+  xgScale: 1.32,
   // ---- matchups ----
   /** contra-ataque against a side in postura ofensiva: one more break action and this much easier on breaks */
   counterSpace: 0.03,
@@ -279,7 +284,30 @@ export const STYLE_TUNE = {
   crossBase: 0.18,
   crossSlope: 0.5,
   crossFocus: 0.04,
+  /** keepers barely run: they lose this share of an outfield player's energy */
+  gkDrain: 0.25,
+  /**
+   * easing off in a rout: with a lead of three or more, every chance (crosses and set pieces included) is this
+   * much less likely to go in for each goal of lead beyond two
+   */
+  routBrake: 0.72,
+  /** a goal from a cross or in the box is an own goal this often (a long shot rarely) */
+  ogBox: 0.04,
+  ogLong: 0.01,
+  /** cards: more likely as the match goes on (×0.75 at kick-off to ×1.25 at the end), and the away side a little more */
+  cardLate: 0.5,
+  cardAway: 0.08,
 };
+
+/** Injury risk by age: the same up to 30, then 6% more for every year. */
+export function injuryAgeRisk(age: number | undefined): number {
+  return 1 + 0.06 * Math.max(0, (age ?? 27) - 30);
+}
+
+/** Injury length: 5% longer for every year past 29, and 30% longer for a player who was already tired (below 60%). */
+export function injuryLength(age: number | undefined, fitness: number): number {
+  return (1 + 0.05 * Math.max(0, (age ?? 27) - 29)) * (fitness < 60 ? 1.3 : 1);
+}
 
 /** Minutes at which the AI coach reviews posture, style, pressing and formation. */
 export const AI_REVIEW_AT = [15, 30, 45, 60, 75, 85];
@@ -658,14 +686,16 @@ export class MatchSim {
   private onMinute(minute: number) {
     for (const side of [0, 1] as const) {
       const s = this.sides[side];
-      for (const pid of s.onPitch) {
+      for (let i = 0; i < s.onPitch.length; i++) {
+        const pid = s.onPitch[i];
         if (pid == null) continue;
         const p = s.players.get(pid)!;
         let rate = STYLE_TUNE.drain * p.tire * this.pfx.drain;
+        if (s.slots[i].pos === 'GOL') rate *= STYLE_TUNE.gkDrain;
         if (s.tactics.marking === 'pressao') rate *= 1.25;
         if (s.tactics.style === 'contra') rate *= 0.95;
         p.fitness = Math.max(10, p.fitness - rate);
-        const injP = 0.00011 * (p.fitness < 55 ? 1.8 : 1);
+        const injP = 0.00011 * (p.fitness < 55 ? 1.8 : 1) * injuryAgeRisk(p.age);
         if (this.rng.chance(injP)) this.injure(side, p);
       }
       if (s.ai && !this.ended) this.aiDecisions(side, minute);
@@ -676,7 +706,8 @@ export class MatchSim {
   private injure(side: 0 | 1, p: MPlayer) {
     p.injured = true;
     const r = this.rng.next();
-    p.injDates = r < 0.55 ? this.rng.int(1, 3) : r < 0.88 ? this.rng.int(4, 9) : this.rng.int(10, 30);
+    const base = r < 0.55 ? this.rng.int(1, 3) : r < 0.88 ? this.rng.int(4, 9) : this.rng.int(10, 30);
+    p.injDates = Math.max(1, Math.round(base * injuryLength(p.age, p.fitness)));
     this.events.push({ t: this.t, kind: 'injury', side, pid: p.id, text: `${p.name} se machucou` });
     // always try an automatic substitution so the side is not left a man down
     const s = this.sides[side];
@@ -1011,8 +1042,11 @@ export class MatchSim {
       const g = e.goal;
       this.score[g.side]++;
       const scorer = this.player(g.pid)!;
-      scorer.goals++;
-      scorer.rt += g.pen ? 0.6 : 1;
+      if (g.og) scorer.rt -= 0.5;
+      else {
+        scorer.goals++;
+        scorer.rt += g.pen ? 0.6 : 1;
+      }
       if (g.ast != null) {
         const ap = this.player(g.ast);
         if (ap) {
@@ -1029,14 +1063,14 @@ export class MatchSim {
           else this.rate(pid, pos === 'GOL' ? -0.3 : pos === 'ZAG' || pos === 'LAT' ? -0.15 : -0.04);
         });
       }
-      this.goals.push({ min: Math.min(this.minute(), this.half === 1 ? 45 : 90), side: g.side, pid: g.pid, ast: g.ast, pen: g.pen });
+      this.goals.push({ min: Math.min(this.minute(), this.half === 1 ? 45 : 90), side: g.side, pid: g.pid, ast: g.ast, pen: g.pen, ...(g.og ? { og: true } : {}) });
       const astName = g.ast != null ? ` (assist. ${this.player(g.ast)?.name})` : '';
       this.events.push({
         t: this.t,
         kind: 'goal',
         side: g.side,
         pid: g.pid,
-        text: `GOL! ${scorer.name}${g.pen ? ' (pênalti)' : ''}${astName}`,
+        text: g.og ? `GOL! Gol contra de ${scorer.name}` : `GOL! ${scorer.name}${g.pen ? ' (pênalti)' : ''}${astName}`,
       });
       // a goal adds stoppage time
       if (this.half === 1) this.added[0] = Math.min(this.added[0] + 30, 360);
@@ -1196,6 +1230,14 @@ export class MatchSim {
     const d = this.pickDefender(o, 0.92);
     const to = { x: this.toX(s, this.rng.range(0.7, 0.85)), y: this.clampY(this.rng.range(15, 53)) };
     this.start('corner', this.rng.range(18, 26), to, { poss: o, carrier: d, ball: to, setPiece: null, lastPasser: null }, { target: d, lofted: true });
+  }
+
+  /** Who puts it into his own net: mostly centre-backs and full-backs. */
+  private ownGoalBy(side: 0 | 1): number | null {
+    const ps = this.playersOnPitch(side);
+    if (!ps.length) return null;
+    const w: Record<Pos, number> = { ZAG: 4, LAT: 2, VOL: 1.5, MEI: 0.5, ATA: 0.3, GOL: 0.3 };
+    return this.rng.weighted(ps, (p) => w[p.pos]).id;
   }
 
   private headerTaker(side: 0 | 1): number | null {
@@ -1404,8 +1446,11 @@ export class MatchSim {
     const s = this.sides[side];
     const p = s.players.get(pid)!;
     const pressing = s.tactics.marking === 'pressao';
-    const yP = (pressing ? 0.21 : 0.17) * (p.traits.includes('marcacao') ? 0.85 : 1) * (p.yellow > 0 ? 0.3 : 1);
-    if (this.rng.chance(0.003)) return this.sendOff(side, p, evs, 'Cartão vermelho direto');
+    // referees book more as the match goes on, and the away side a little more (on average it adds up the same)
+    const when = 1 - STYLE_TUNE.cardLate / 2 + STYLE_TUNE.cardLate * Math.min(1, this.minute() / 90);
+    const away = this.setup.homeAdv > 1 ? (side === 1 ? 1 + STYLE_TUNE.cardAway : 1 - STYLE_TUNE.cardAway) : 1;
+    const yP = (pressing ? 0.21 : 0.17) * (p.traits.includes('marcacao') ? 0.85 : 1) * (p.yellow > 0 ? 0.3 : 1) * when * away;
+    if (this.rng.chance(0.003 * when * away)) return this.sendOff(side, p, evs, 'Cartão vermelho direto');
     if (this.rng.chance(yP)) {
       p.yellow++;
       p.rt -= 0.3;
@@ -1418,6 +1463,7 @@ export class MatchSim {
   private sendOff(side: 0 | 1, p: MPlayer, evs: MatchEvent[], why: string) {
     const s = this.sides[side];
     p.red = true;
+    if (why === 'Segundo amarelo') p.red2 = true;
     p.rt -= 1.2;
     this.stats[side].red++;
     const slot = s.onPitch.indexOf(p.id);
@@ -1455,7 +1501,12 @@ export class MatchSim {
       ((type === 'penalty' || type === 'freekick') && sh.traits.includes('cobrancas') ? 1.12 : 1);
     const gkEff = D.ratings.gk;
     // chance quality (expected goals) depends only on the situation; shooter vs keeper and attack vs defence scale it
-    const { q, big } = this.chanceQuality(type, AI_COACH.matchups && D.tactics.mentality === 'defensiva', D.tactics.mentality === 'ofensiva');
+    const cq = this.chanceQuality(type, AI_COACH.matchups && D.tactics.mentality === 'defensiva', D.tactics.mentality === 'ofensiva');
+    const big = cq.big;
+    let q = cq.q;
+    // three or more goals up, a side eases off: its chances get worse (not penalties)
+    const lead = this.score[s] - this.score[o];
+    if (lead >= 3 && type !== 'penalty') q *= Math.pow(STYLE_TUNE.routBrake, lead - 2);
     let f = Math.pow(shEff / Math.max(20, gkEff), STYLE_TUNE.finishExp);
     if (type === 'box' || type === 'header') f *= Math.pow(A.ratings.att / Math.max(20, D.ratings.def), STYLE_TUNE.attDefExp);
     if (s === 0) f *= Math.pow(this.setup.homeAdv, STYLE_TUNE.homeShotExp);
@@ -1478,6 +1529,22 @@ export class MatchSim {
     }
     if (forced != null ? forced === 0 : this.rng.chance(pGoal)) {
       const to = { x: goalX + (this.dir(s) > 0 ? 1.5 : -1.5), y: goalY };
+      // now and then a defender gets the last touch: an own goal (from crosses and in the box, rarely from distance)
+      const ogP = type === 'header' || type === 'box' ? STYLE_TUNE.ogBox : type === 'long' ? STYLE_TUNE.ogLong : 0;
+      const ogBy = ogP && this.rng.chance(ogP) ? this.ownGoalBy(o) : null;
+      if (ogBy != null) {
+        this.start(kind, dur, to, {
+          poss: o,
+          carrier: null,
+          ball: to,
+          setPiece: null,
+          goal: { side: s, pid: ogBy, ast: null, og: true },
+          shot: { ...shotInfo, onTarget: true },
+          lastPasser: null,
+        }, { actor: shooterId, lofted: type === 'header' });
+        this.pendingKickoff = o;
+        return;
+      }
       this.start(kind, dur, to, {
         poss: o,
         carrier: null,
@@ -1600,6 +1667,7 @@ export class MatchSim {
           ast: p.ast,
           yel: p.yellow >= 2 ? 0 : p.yellow,
           red: p.red,
+          ...(p.red2 ? { red2: true } : {}),
           inj: p.injured ? p.injDates : 0,
           // much of the tiredness is just "match legs": only part of it is still there at the next round
           fitness: Math.round(Math.min(p.fit0, p.fit0 - (p.fit0 - p.fitness) * STYLE_TUNE.fatiguePersist)),

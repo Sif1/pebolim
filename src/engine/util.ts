@@ -21,6 +21,21 @@ export function playerValue(p: Player, season: number): number {
   return roundMoney(Math.max(10_000, v));
 }
 
+/**
+ * How much of his value a club can ask for a player, by the time left on his contract: all of it with a season
+ * and a half or more to go, falling to half as the contract runs out (he could leave for free soon).
+ */
+export function contractFactor(p: Pick<Player, 'contractEnd' | 'clubId'>, season: number, date: number, datesPerSeason: number): number {
+  if (p.clubId == null || p.contractEnd < season) return 1;
+  const left = p.contractEnd - season + Math.max(0, datesPerSeason - date) / Math.max(1, datesPerSeason);
+  return 0.5 + 0.5 * Math.min(1, left / 1.5);
+}
+
+/** A player's transfer value today: his value × the contract factor (wages follow playerValue, not this). */
+export function marketValue(p: Player, state: Pick<GameState, 'meta' | 'calendar'>): number {
+  return roundMoney(Math.max(10_000, playerValue(p, state.meta.season) * contractFactor(p, state.meta.season, state.meta.date, state.calendar.length || 78)));
+}
+
 /** Monthly wage a player expects at a club of the given reputation. */
 export function expectedWage(p: Player, season: number, clubRep = 60): number {
   const v = playerValue(p, season);

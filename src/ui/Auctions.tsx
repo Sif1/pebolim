@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { Club, GameState, Player } from '../engine/types';
-import { age, dateLabel, formatMoney, playerValue, roundMoney } from '../engine/util';
+import { age, dateLabel, formatMoney, marketValue, roundMoney } from '../engine/util';
 import { command, useMe } from '../store';
-import { ClubBadge, Empty, Flag, MoneyField, PosTag, Stars, Str, useSort } from './common';
+import { ClubBadge, Empty, Flag, MoneyField, PosTag, PotStars, seenStars, Str, useSort } from './common';
 import { PlayerModal, Traits } from './PlayerModal';
 
 /** Players up for auction right now (own ones included, marked). */
@@ -54,9 +54,9 @@ export function AuctionList() {
     pos: (p) => p.pos,
     age: (p) => age(p, season),
     str: (p) => p.str,
-    pot: (p) => p.stars * 100 + p.pot,
+    pot: (p) => seenStars(state, club?.id ?? null, p) * 100 + p.str,
     min: (p) => p.auction!.min,
-    val: (p) => playerValue(p, season),
+    val: (p) => marketValue(p, state!),
     mine: (p) => (club ? (state!.auctionBids[p.id]?.[club.id] ?? 0) : 0),
   });
   if (!state || !club) return null;
@@ -99,7 +99,7 @@ export function AuctionList() {
                   <Str v={p.str} />
                 </td>
                 <td className="center">
-                  <Stars n={p.stars} />
+                  <PotStars p={p} />
                 </td>
                 <td>
                   <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
@@ -107,7 +107,7 @@ export function AuctionList() {
                     <span className="small nowrap">{pc.name}</span>
                   </span>
                 </td>
-                <td className="right small num">{formatMoney(playerValue(p, season))}</td>
+                <td className="right small num">{formatMoney(marketValue(p, state))}</td>
                 <td className="right num warn">{formatMoney(p.auction!.min)}</td>
                 <td className="right num">{mine != null ? <b className="good">{formatMoney(mine)}</b> : <span className="faint">—</span>}</td>
                 <td className="right">{own ? <span className="pill">seu jogador</span> : <QuickBid p={p} club={club} state={state} />}</td>

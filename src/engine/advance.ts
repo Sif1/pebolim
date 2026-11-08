@@ -12,7 +12,7 @@ import { Rng } from './rng';
 import { endSeason, ensureKeepers } from './season';
 import { aiTransfers, expireBids, returnLoans } from './transfers';
 import type { Fixture, GameState } from './types';
-import { addNews, squadIndex } from './util';
+import { addNews, age, squadIndex } from './util';
 import { isDerby, recordHeadToHead } from './rivals';
 import { recordCareer } from './review';
 
@@ -27,9 +27,13 @@ export function simulateBackground(plan: MatchdayPlan): Record<number, MatchResu
   return out;
 }
 
-function banLength(rng: Rng): number {
+/**
+ * Matches banned for a straight red: usually one or two, now and then three, rarely four or five (violent conduct).
+ * A second yellow is always one match.
+ */
+export function banLength(rng: Rng): number {
   const r = rng.next();
-  return r < 0.7 ? 1 : r < 0.95 ? 2 : 3;
+  return r < 0.55 ? 1 : r < 0.82 ? 2 : r < 0.94 ? 3 : r < 0.98 ? 4 : 5;
 }
 
 /** Write match results into the state (tables, players, money, board). */
@@ -73,11 +77,27 @@ export function applyResults(state: GameState, results: MatchResult[], rng: Rng)
       if (st.inj > 0) {
         p.injury = Math.max(p.injury, st.inj);
         const c = p.clubId != null ? state.clubs[p.clubId] : null;
-        if (c?.managerId) addNews(state, 'injury', `${p.name} se lesionou e fica fora por ${st.inj} jogo(s).`, [c.id], c.managerId);
+        // a long injury at 35 or more takes something away for good
+        const loss = age(p, state.meta.season) >= 35 && st.inj >= 6 ? Math.round(rng.range(1, 3)) : 0;
+        if (loss) p.str = Math.max(25, p.str - loss);
+        if (c?.managerId)
+          addNews(
+            state,
+            'injury',
+            loss
+              ? `${p.name} se lesionou e fica fora por ${st.inj} jogo(s). Aos ${age(p, state.meta.season)} anos, a lesão deixa marcas: −${loss} de força.`
+              : `${p.name} se lesionou e fica fora por ${st.inj} jogo(s).`,
+            [c.id],
+            c.managerId,
+          );
       }
       if (st.red) {
         p.s.red++;
-        p.ban[f.comp] = banLength(rng);
+        const n = st.red2 ? 1 : banLength(rng);
+        p.ban[f.comp] = n;
+        const club = p.clubId != null ? state.clubs[p.clubId] : null;
+        if (n >= 3 && club?.managerId)
+          addNews(state, 'info', `${p.name} pega ${n} jogos de suspensão pela expulsão: a comissão disciplinar viu agressão no lance.`, [club.id], club.managerId);
       } else if (st.yel > 0) {
         p.s.yel += st.yel;
         p.yel[f.comp] = (p.yel[f.comp] ?? 0) + st.yel;

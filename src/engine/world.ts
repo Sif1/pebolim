@@ -5,7 +5,7 @@ import type { Database } from './db';
 import { assignFlanks, assignNumbers, balanceFullBacks, fillerLevel, fillSquad, randomFlank, randomTraits } from './generator';
 import { resetSeasonRank, setupCoaches } from './coaches';
 import { initialPitch } from './pitch';
-import { ceilingFor, starsFor, tierOf } from './potential';
+import { ceilingFor, potErrFor, starsFor, tierOf } from './potential';
 import { defaultNamePools } from './names';
 import { Rng } from './rng';
 import { SAVE_FORMAT_VERSION, type Club, type GameState, type Objective, type Player, type Settings } from './types';
@@ -146,6 +146,8 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
     p.pot = Math.max(p.str, ceilingFor(p.stars));
     p.wage = expectedWage(p, season, club?.rep ?? 50);
     if (dp.side) p.flank = dp.side;
+    const err = potErrFor(ageY, rng);
+    if (err) p.potErr = err;
     state.players[p.id] = p;
   }
   // the database rarely says which flank a player prefers: full-backs alternate right and left, the rest at random

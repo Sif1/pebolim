@@ -800,4 +800,22 @@ export const EN_UI: Record<string, string> = {
   'Mostrar mais ({0})': 'Show more ({0})',
   'Ranking de técnicos: {0}º de {1} · {2} pontos · títulos {3} · prêmios {4}': 'Coaching ranking: {0}º of {1} · {2} points · titles {3} · awards {4}',
   'Ver ranking': 'See the ranking',
+
+  // ---- 0.11.0: contracts, growth, scouting
+  '/mês': '/month',
+  '(contra)': '(own goal)',
+  'Deve vir com time misto e poupar {0} (no banco): a chance de surpreender é agora.':
+    'Will likely field a weakened side and rest {0} (on the bench): this is the chance for an upset.',
+  'até {0}': 'up to {0}',
+  'até ~{0}': 'up to ~{0}',
+  'contrato acabando: {0}% do valor': 'contract running out: {0}% of the value',
+  'Com o contrato acabando, o clube não consegue pedir o valor cheio: no fim da temporada ele pode sair de graça':
+    "With his contract running out, the club can't ask the full value: at the end of the season he can leave for free",
+  'Acima do nível do clube: evolui mais devagar': "Above the club's level: develops more slowly",
+  'Num clube bem abaixo do nível dele, o treino e os jogos não puxam: ele evolui mais devagar (até um terço do normal)':
+    "At a club well below his level, the training and the matches don't push him: he develops more slowly (down to a third of normal)",
+  'Estimativa do olheiro: pode ser uma estrela a mais ou a menos. Conhecimento {0}%: fica exata com o tempo no clube (mais rápido com um CT melhor).':
+    "The scout's estimate: it may be a star more or less. Known {0}%: it becomes exact with time at the club (faster with a better training centre).",
+  'Estimativa do olheiro: pode ser uma estrela a mais ou a menos. Só fica exata com o tempo no seu clube (ou quando ele passar dos 23 anos).':
+    "The scout's estimate: it may be a star more or less. It only becomes exact with time at your club (or once he is past 23).",
 };

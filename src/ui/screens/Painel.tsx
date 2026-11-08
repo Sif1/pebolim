@@ -4,7 +4,7 @@ import { dateLabel, distanceKm, formatMoney, sortTable, squadOf } from '../../en
 import { OBJECTIVE_LABEL } from '../../engine/world';
 import { command, useApp, useMe } from '../../store';
 import { fansLabel } from '../../engine/board';
-import { aiPreMatchTactics } from '../../engine/matchday';
+import { aiPreMatchTactics, cupRotation } from '../../engine/matchday';
 import { Bar, ClubBadge, ClubName, compLabel, Empty, FormDots, PosTag, Str } from '../common';
 import { Traits } from '../PlayerModal';
 import { nextFixture } from '../Shell';
@@ -329,8 +329,9 @@ function ScoutReport() {
   const theirs = squadOf(state, opp.id);
   const human = opp.managerId ? state.managers[opp.managerId] : null;
   // the AI decides its plan before kick-off from the same information: this is what it will do
-  const plan = human ? opp.tactics : aiPreMatchTactics(state, f, opp, theirs, club, mine, true);
-  const avail = theirs.filter((p) => p.injury === 0 && !((p.ban[f.comp] ?? 0) > 0));
+  const rested = human ? [] : cupRotation(state, f, opp, theirs, club);
+  const plan = human ? opp.tactics : aiPreMatchTactics(state, f, opp, rested.length ? theirs.filter((p) => !rested.includes(p)) : theirs, club, mine, true);
+  const avail = theirs.filter((p) => p.injury === 0 && !((p.ban[f.comp] ?? 0) > 0) && !rested.includes(p));
   const key = [...avail].sort((a, b) => b.str - a.str).slice(0, 3);
   const out = [...theirs]
     .sort((a, b) => b.str - a.str)
@@ -347,6 +348,7 @@ function ScoutReport() {
   if (plan.mentality === 'defensiva') tips.push('Vai se fechar atrás: chances claras serão raras, tenha paciência.');
   if (plan.mentality === 'ofensiva') tips.push('Vem para cima: o contra-ataque pode render.');
   if (energy && energy < 85) tips.push(`Chega cansado (energia média ${energy}%): acelerar no segundo tempo pode decidir.`);
+  if (rested.length) tips.push(`Deve vir com time misto e poupar ${rested.map((p) => p.name).join(', ')} (no banco): a chance de surpreender é agora.`);
   if (plan.focus === 'lados') tips.push('Ataca pelas pontas: laterais fortes (e no lado certo) e zagueiros que cabeceiam seguram.');
   if (plan.focus === 'meio') tips.push('Ataca pelo meio: volantes e zagueiros fortes fecham o caminho.');
   const venue = state.clubs[f.home];

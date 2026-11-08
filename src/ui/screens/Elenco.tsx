@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { Player } from '../../engine/types';
-import { age, formatMoney, playerValue, squadOf } from '../../engine/util';
+import { age, formatMoney, marketValue, squadOf } from '../../engine/util';
 import { useMe } from '../../store';
-import { Bar, compLabel, Energy, Flag, PosTag, Rating, Stars, Str, useSort } from '../common';
+import { Bar, compLabel, Energy, Flag, PosTag, PotStars, Rating, seenStars, Str, useSort } from '../common';
 import { MarketPills, PlayerModal, Traits } from '../PlayerModal';
 
 const POS_ORDER = { GOL: 0, LAT: 1, ZAG: 2, VOL: 3, MEI: 4, ATA: 5 };
@@ -15,12 +15,12 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
     pos: (p) => POS_ORDER[p.pos] * 100 - p.str,
     age: (p) => age(p, season),
     str: (p) => p.str,
-    pot: (p) => p.stars * 100 + p.pot,
+    pot: (p) => seenStars(state, club?.id ?? null, p) * 100 + p.str,
     fit: (p) => p.fitness,
     mor: (p) => p.morale,
     con: (p) => p.contractEnd,
     wage: (p) => p.wage,
-    val: (p) => playerValue(p, season),
+    val: (p) => marketValue(p, state!),
     g: (p) => p.s.goals,
     apps: (p) => p.s.apps,
     rt: (p) => avgRating(p) ?? 0,
@@ -70,7 +70,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
                 <td className="center">
                   <Str v={p.str} />
                 </td>
-                <td className="center"><Stars n={p.stars} /></td>
+                <td className="center"><PotStars p={p} /></td>
                 <td style={{ width: 70 }}>
                   <Energy v={p.fitness} />
                 </td>
@@ -93,7 +93,7 @@ export function SquadTable({ players, onOpen, season, showValue = true }: { play
                 </td>
                 <td className={`center num ${p.contractEnd <= season ? 'warn' : ''}`}>{p.contractEnd}</td>
                 <td className="right small num">{formatMoney(p.wage)}</td>
-                {showValue && <td className="right small num">{formatMoney(playerValue(p, season))}</td>}
+                {showValue && <td className="right small num">{formatMoney(marketValue(p, state))}</td>}
               </tr>
             );
           })}

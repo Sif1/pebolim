@@ -14,7 +14,7 @@ const APP = 'pebolim-manager';
 const PLAYER_KEYS: (keyof Player)[] = [
   'id', 'name', 'nat', 'pos', 'birth', 'str', 'stars', 'pot', 'traits', 'clubId', 'wage', 'contractEnd',
   'fitness', 'morale', 'injury', 'ban', 'yel', 'salePrice', 'loanListed', 'auction', 'loan', 's', 'c', 'num', 'idle', 'pre', 'junior', 'ys', 'joined',
-  'flank',
+  'flank', 'potErr', 'scouted', 'scoutClub',
 ];
 const FIXTURE_KEYS: (keyof Fixture)[] = [
   'id', 'comp', 'date', 'home', 'away', 'hg', 'ag', 'pens', 'stage', 'tie', 'leg', 'group', 'round', 'goals', 'att', 'reds',
@@ -47,7 +47,7 @@ export function packState(state: GameState): unknown {
   const fixtures: Packed = {
     k: FIXTURE_KEYS as string[],
     rows: Object.values(state.fixtures).map((f) =>
-      FIXTURE_KEYS.map((k) => (k === 'goals' ? f.goals.map((g) => [g.min, g.side, g.pid, g.ast, g.pen ? 1 : 0]) : (f[k] ?? null))),
+      FIXTURE_KEYS.map((k) => (k === 'goals' ? f.goals.map((g) => [g.min, g.side, g.pid, g.ast, g.pen ? 1 : g.og ? 2 : 0]) : (f[k] ?? null))),
     ),
   };
   return { ...state, players, fixtures };
@@ -70,7 +70,7 @@ export function unpackState(obj: any): GameState {
   for (const row of obj.fixtures.rows as unknown[][]) {
     const f: any = {};
     fk.forEach((k, i) => (f[k] = row[i]));
-    f.goals = (f.goals as number[][]).map((g) => ({ min: g[0], side: g[1], pid: g[2], ast: g[3], ...(g[4] ? { pen: true } : {}) }));
+    f.goals = (f.goals as number[][]).map((g) => ({ min: g[0], side: g[1], pid: g[2], ast: g[3], ...(g[4] === 1 ? { pen: true } : g[4] === 2 ? { og: true } : {}) }));
     if (f.reds == null) delete f.reds;
     fixtures[f.id] = f as Fixture;
   }

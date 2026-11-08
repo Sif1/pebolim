@@ -1,5 +1,6 @@
-import { ceilingFor, starsFor } from './potential';
+import { ceilingFor, potentialSeen, starsFor } from './potential';
 import { coachRng, fireManager } from './board';
+import { careerBonus } from './development';
 import { aiCoachOf, sackCoach } from './coaches';
 import { seasonCoachAwards } from './awards';
 import { homeGameCounts, wageBudget } from './economy';
@@ -284,8 +285,10 @@ function joinOnPreContract(state: GameState, p: Player, next: number) {
 function retirements(state: GameState, rng: Rng) {
   for (const p of Object.values(state.players)) {
     const a = age(p, state.meta.season);
+    // keepers and great players play on for longer
+    const ra = a - careerBonus(p);
     let pr = 0;
-    if (a >= 33) pr = (a - 32) * 0.12 + (p.str < 55 ? 0.2 : 0);
+    if (ra >= 33) pr = (ra - 32) * 0.12 + (p.str < 55 ? 0.2 : 0);
     if (p.clubId == null && p.idle >= 1) pr = Math.max(pr, a > 23 ? 0.75 : 0.3);
     if (p.clubId == null && p.idle >= 2) pr = 1;
     if (pr > 0 && rng.chance(Math.min(1, pr))) {
@@ -336,7 +339,8 @@ function youthIntake(state: GameState, rng: Rng) {
       p.contractEnd = nextSeason + 2;
       p.wage = roundMoney(Math.max(550, expectedWage(p, nextSeason, c.rep) * 0.6));
       state.players[p.id] = p;
-      if (c.managerId && p.stars >= 4) addNews(state, 'info', `Revelação da base: ${p.name} (${p.pos}, ${'★'.repeat(p.stars)}) sobe ao profissional.`, [c.id], c.managerId);
+      const seen = potentialSeen(p, c.id, state.meta.season).stars;
+      if (c.managerId && seen >= 4) addNews(state, 'info', `Revelação da base: ${p.name} (${p.pos}, ${'★'.repeat(seen)}) sobe ao profissional.`, [c.id], c.managerId);
     }
   }
 }

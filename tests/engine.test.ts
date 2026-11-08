@@ -35,7 +35,12 @@ import { age, kk, parseMoney, sortTable, squadIndex, squadOf } from '../src/engi
 import { endSeason, ensureKeepers, seasonVerdict } from '../src/engine/season';
 import { boardAfterMatch, boardChecks, fireManager } from '../src/engine/board';
 import { juniorsOf, youthMatches } from '../src/engine/youth';
-import { ELITE_GROWTH } from '../src/engine/development';
+import { careerBonus, clubGrowthFactor, dailyPlayers, ELITE_GROWTH } from '../src/engine/development';
+import { potentialSeen, scoutRound } from '../src/engine/potential';
+import { injuryAgeRisk, injuryLength } from '../src/engine/match/core';
+import { banLength } from '../src/engine/advance';
+import { cupRotation } from '../src/engine/matchday';
+import { contractFactor, expectedWage, marketValue, playerValue } from '../src/engine/util';
 import { coachRanking, matchWeight, rankAward, rankMatch, rankTitle, sackCoach, titleWeight } from '../src/engine/coaches';
 import { PITCH_FX, pitchLevel, pitchRound } from '../src/engine/pitch';
 import { effective, laneOf } from '../src/engine/match/ratings';
@@ -1307,5 +1312,149 @@ describe('flanks, attack focus and pitch condition', () => {
       }
     }
     expect(bad).toBeLessThan(good);
+  });
+});
+
+describe('contracts, growth, scouting, careers and injuries', () => {
+  it('a player is worth less as his contract runs out; his wage demand does not change', () => {
+    const s = world();
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const p = squadOf(s, club.id).sort((a, b) => b.str - a.str)[0];
+    const season = s.meta.season;
+    p.contractEnd = season + 3;
+    const full = marketValue(p, s);
+    expect(full).toBe(playerValue(p, season));
+    p.contractEnd = season;
+    s.meta.date = 70;
+    const late = marketValue(p, s);
+    expect(late / full).toBeLessThan(0.6);
+    expect(late / full).toBeGreaterThan(0.45);
+    expect(contractFactor(p, season, 0, 78)).toBeGreaterThan(contractFactor(p, season, 70, 78));
+    expect(expectedWage(p, season, club.rep)).toBe(expectedWage({ ...p, contractEnd: season + 3 }, season, club.rep));
+  });
+
+  it('a talent well above his club grows more slowly there', () => {
+    expect(clubGrowthFactor({ str: 70, junior: false }, { power: 70 })).toBe(1);
+    expect(clubGrowthFactor({ str: 80, junior: false }, { power: 70 })).toBeCloseTo(0.5, 5);
+    expect(clubGrowthFactor({ str: 90, junior: false }, { power: 70 })).toBe(0.35);
+    const s = world();
+    const clubs = Object.values(s.clubs).filter((c) => c.league);
+    const big = clubs.sort((a, b) => b.power - a.power)[0];
+    const small = clubs[clubs.length - 1];
+    const [a, b] = [squadOf(s, big.id)[3], squadOf(s, small.id)[3]];
+    for (const p of [a, b]) {
+      p.str = big.power - 2;
+      p.birth = s.meta.season - 18;
+      p.stars = 5;
+      p.pot = 91;
+      p.s.apps = 0;
+    }
+    for (let i = 0; i < 30; i++) {
+      s.meta.date = i + 1;
+      dailyPlayers(s, Rng.fromSeed(`g${i}`), new Set());
+    }
+    expect(a.str - (big.power - 2)).toBeGreaterThan(b.str - (big.power - 2));
+  });
+
+  it("a young player's potential is a scout's estimate until his own club knows him", () => {
+    const s = world();
+    const season = s.meta.season;
+    const [c1, c2] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const p = squadOf(s, c1.id)[5];
+    p.birth = season - 18;
+    p.stars = 3;
+    p.potErr = 1;
+    // another club sees the estimate
+    expect(potentialSeen(p, c2.id, season)).toMatchObject({ stars: 4, exact: false });
+    // his own club learns him round by round (faster with a better training centre)
+    let rounds = 0;
+    while (!potentialSeen(p, c1.id, season).exact && rounds < 200) {
+      scoutRound(p, season, 5);
+      rounds++;
+    }
+    expect(rounds).toBeGreaterThan(30);
+    expect(rounds).toBeLessThan(60);
+    expect(potentialSeen(p, c1.id, season)).toMatchObject({ stars: 3, exact: true });
+    // a move starts it again
+    p.clubId = c2.id;
+    scoutRound(p, season, 1);
+    expect(potentialSeen(p, c2.id, season).exact).toBe(false);
+    // from 24 everyone sees it
+    p.birth = season - 24;
+    expect(potentialSeen(p, c1.id, season)).toMatchObject({ stars: 3, exact: true });
+  });
+
+  it('keepers and great players have longer careers; older and tired players get longer injuries', () => {
+    expect(careerBonus({ pos: 'GOL', str: 70 })).toBe(3);
+    expect(careerBonus({ pos: 'ATA', str: 85 })).toBe(1);
+    expect(careerBonus({ pos: 'GOL', str: 85 })).toBe(4);
+    expect(careerBonus({ pos: 'MEI', str: 70 })).toBe(0);
+    expect(injuryAgeRisk(28)).toBe(1);
+    expect(injuryAgeRisk(35)).toBeCloseTo(1.3, 5);
+    expect(injuryLength(25, 90)).toBe(1);
+    expect(injuryLength(33, 50)).toBeCloseTo(1.2 * 1.3, 5);
+  });
+});
+
+describe('match engine: keepers, routs, own goals, cards and cup rotation', () => {
+  it('keepers barely tire, routs are rarer, and about 3% of goals are own goals', () => {
+    let gkFit = 0;
+    let outFit = 0;
+    let goals = 0;
+    let og = 0;
+    let routs = 0;
+    const n = 300;
+    for (let i = 0; i < n; i++) {
+      const st = synthSetup(85, 60, 7000 + i);
+      const sim = new MatchSim(st);
+      const r = sim.runToEnd();
+      gkFit += r.players[st.home.players[0].id].fitness;
+      outFit += r.players[st.home.players[5].id].fitness;
+      goals += r.hg + r.ag;
+      og += sim.goals.filter((g) => g.og).length;
+      if (r.hg - r.ag >= 7) routs++;
+      // an own goal is credited to a player of the side that conceded, and not as his goal
+      for (const g of sim.goals.filter((x) => x.og)) {
+        const p = sim.player(g.pid)!;
+        expect(p.side).toBe(1 - g.side);
+        expect(r.players[g.pid].goals).toBe(sim.goals.filter((x) => x.pid === g.pid && !x.og).length);
+      }
+    }
+    expect(gkFit / n).toBeGreaterThan(outFit / n + 4);
+    expect(og / goals).toBeGreaterThan(0.01);
+    expect(og / goals).toBeLessThan(0.07);
+    expect(routs / n).toBeLessThan(0.03);
+  });
+
+  it('a second yellow is a one-match ban; a straight red usually one or two, rarely more', () => {
+    const rng = Rng.fromSeed('bans');
+    const bans = Array.from({ length: 4000 }, () => banLength(rng));
+    const share = (k: number) => bans.filter((b) => b === k).length / bans.length;
+    expect(share(1)).toBeGreaterThan(0.5);
+    expect(share(2)).toBeGreaterThan(0.2);
+    expect(share(4) + share(5)).toBeGreaterThan(0.02);
+    expect(share(4) + share(5)).toBeLessThan(0.1);
+    expect(Math.max(...bans)).toBe(5);
+  });
+
+  it('an AI favourite rests starters early in a national cup against a much weaker side', () => {
+    const s = world();
+    const cup = Object.values(s.comps).find((c) => c.cfg.kind === 'cup' && c.cfg.scope === 'national')!;
+    const big = Object.values(s.clubs).filter((c) => c.league === 'BRA1').sort((a, b) => b.power - a.power)[0];
+    const small = Object.values(s.clubs).filter((c) => c.league === 'BRA3').sort((a, b) => a.power - b.power)[0];
+    const base = Object.values(s.fixtures).find((f) => f.comp === cup.id) ?? Object.values(s.fixtures)[0];
+    const f = { ...base, comp: cup.id, home: small.id, away: big.id, stage: 0 };
+    const squad = squadOf(s, big.id);
+    expect(big.power - small.power).toBeGreaterThanOrEqual(8);
+    const rested = cupRotation(s, f, big, squad, small);
+    expect(rested.length).toBeGreaterThanOrEqual(3);
+    expect(rested.every((p) => p.pos !== 'GOL')).toBe(true);
+    // the best players are the ones rested
+    const best = [...squad].filter((p) => p.pos !== 'GOL').sort((a, b) => b.str - a.str)[0];
+    expect(rested).toContain(best);
+    // not in a league match, and not when the sides are close
+    expect(cupRotation(s, { ...f, comp: 'BRA1' }, big, squad, small)).toHaveLength(0);
+    const near = Object.values(s.clubs).filter((c) => c.league === 'BRA1').sort((a, b) => b.power - a.power)[1];
+    expect(cupRotation(s, { ...f, home: near.id }, big, squad, near)).toHaveLength(0);
   });
 });

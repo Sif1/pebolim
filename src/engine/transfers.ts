@@ -3,7 +3,7 @@ import { DATES_PER_SEASON, homeGameCounts, wageBudget } from './economy';
 import { assignNumbers, SQUAD_SHAPE } from './generator';
 import type { Rng } from './rng';
 import type { AuctionResult, Bid, Club, GameState, Player, Pos } from './types';
-import { absDate, addNews, age, clamp, dateLabel, expectedWage, playerValue, roundMoney, squadIndex, squadOf } from './util';
+import { absDate, addNews, age, clamp, dateLabel, expectedWage, marketValue, roundMoney, squadIndex, squadOf } from './util';
 
 export function windowOpen(state: GameState): boolean {
   return windowOpenAt(state, state.meta.date);
@@ -109,7 +109,7 @@ export function moneyShort(v: number) {
 export function askingPrice(state: GameState, p: Player): number {
   if (p.clubId == null) return 0;
   if (p.salePrice != null) return p.salePrice;
-  const v = playerValue(p, state.meta.season);
+  const v = marketValue(p, state);
   const squad = squadOf(state, p.clubId).sort((a, b) => b.str - a.str);
   const rank = squad.findIndex((x) => x.id === p.id);
   const factor = rank < 11 ? 1.6 : rank < 16 ? 1.2 : 1.0;
@@ -203,7 +203,7 @@ function medianAt(squad: Player[], pos: Pos, fallback: number): number {
 
 /** Most an AI club pays for a player: his value, a bit more when it really needs him, never silly prices. */
 function aiMaxPrice(state: GameState, p: Player, need: boolean): number {
-  return playerValue(p, state.meta.season) * (need ? 1.15 : 1.0);
+  return marketValue(p, state) * (need ? 1.15 : 1.0);
 }
 
 /** Squads by club plus cached per-position medians and wage budgets, updated as players move during one date. */
@@ -278,7 +278,7 @@ function buyListed(state: GameState, rng: Rng, view: MarketView, closing = false
     const loan = p.salePrice == null;
     const a = age(p, season);
     if (a > (loan ? 30 : 33)) continue;
-    const value = playerValue(p, season);
+    const value = marketValue(p, state);
     const buyers = view.aiClubs.filter((c) => {
       if (c.id === seller.id || view.squad(c.id).length >= 30) return false;
       if (p.str > c.power + 8 || statureGap(state, p, c) > STATURE_MAX_GAP) return false;
@@ -465,7 +465,7 @@ function aiListings(state: GameState, rng: Rng, view: MarketView, eve = false) {
     const stars = club ? view.squad(club.id).filter((p) => !p.loan && p.salePrice == null && !p.auction && !p.loanListed).sort((a, b) => b.str - a.str).slice(0, 6) : [];
     const p = stars.find((x) => x.contractEnd <= season || age(x, season) >= 29);
     if (club && p) {
-      p.salePrice = roundMoney(playerValue(p, season) * rng.range(1.0, 1.25));
+      p.salePrice = roundMoney(marketValue(p, state) * rng.range(1.0, 1.25));
       addNews(state, 'transfer', `Mercado: o ${club.name} aceita negociar ${p.name} (${p.pos}, força ${Math.round(p.str)}) por ${moneyShort(p.salePrice)}.`, [club.id]);
       listed++;
     }
@@ -479,7 +479,7 @@ function aiListings(state: GameState, rng: Rng, view: MarketView, eve = false) {
     const starters = new Set([...squad].sort((a, b) => b.str - a.str).slice(0, 11).map((p) => p.id));
     const p = squad.filter((x) => !starters.has(x.id) && !x.auction && !x.loanListed).sort((a, b) => b.wage - a.wage)[0];
     if (!p) continue;
-    p.salePrice = roundMoney(playerValue(p, season) * rng.range(0.75, 0.9));
+    p.salePrice = roundMoney(marketValue(p, state) * rng.range(0.75, 0.9));
     listed++;
   }
   for (let i = 0; i < 24 && listed < AI_LISTED_MAX; i++) {
@@ -494,7 +494,7 @@ function aiListings(state: GameState, rng: Rng, view: MarketView, eve = false) {
       .sort((a, b) => a.str - view.median(club, a.pos) - (b.str - view.median(club, b.pos)));
     const p = surplus[rng.int(0, Math.min(2, surplus.length - 1))];
     if (!p) continue;
-    const v = playerValue(p, season);
+    const v = marketValue(p, state);
     const a = age(p, season);
     if (a <= 22 && p.stars >= 2 && rng.chance(0.55)) p.loanListed = rng.chance(0.5) ? 6 : 12;
     else if (canAuction && auctions < AUCTIONS_MAX && rng.chance(0.16)) {
@@ -525,12 +525,12 @@ function aiBidsForHumans(state: GameState, rng: Rng, idx: Map<number, Player[]>,
           c.id !== hc.id &&
           (c.league || c.contOnly) &&
           c.power >= target.str - 6 &&
-          c.balance > playerValue(target, state.meta.season) &&
+          c.balance > marketValue(target, state) &&
           statureGap(state, target, c) <= STATURE_MAX_GAP,
       );
       if (!buyers.length) continue;
       const buyer = rng.pick(buyers);
-      const value = playerValue(target, state.meta.season);
+      const value = marketValue(target, state);
       // listed players get offers near the asking price when it is fair, unlisted ones a premium to tempt the manager
       const fee = roundMoney(
         (target.salePrice != null ? Math.min(target.salePrice, value * 1.15) * rng.range(0.85, 1) : value * rng.range(0.95, 1.45)) * (eve ? rng.range(1.05, 1.2) : 1),
@@ -603,7 +603,7 @@ export function resolveAuctions(state: GameState, rng: Rng) {
       if (c && c.id !== owner.id && c.balance >= amount && amount >= a.min && !refusesClub(state, p, c)) bids.push({ club: c, amount });
     }
     // AI clubs that need the position and can afford it
-    const value = playerValue(p, state.meta.season);
+    const value = marketValue(p, state);
     const ai = Object.values(state.clubs).filter((c) => {
       if (c.managerId || c.id === owner.id || !(c.league || c.contOnly)) return false;
       const sq = idx.get(c.id) ?? [];

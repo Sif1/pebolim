@@ -34,7 +34,7 @@ export function FixtureRow({ f, state, highlight }: { f: Fixture; state: GameSta
           <td colSpan={3} className="small muted">
             {f.goals.map((g, i) => (
               <span key={i} style={{ marginRight: 12 }}>
-                ⚽ {g.min}' {state.players[g.pid]?.name ?? '?'} ({g.side === 0 ? h.short : a.short}){g.pen ? ' pên.' : ''}
+                ⚽ {g.min}' {state.players[g.pid]?.name ?? '?'} ({g.side === 0 ? h.short : a.short}){g.pen ? ' pên.' : ''}{g.og ? ' (contra)' : ''}
               </span>
             ))}
             {f.att > 0 && <span>· público {f.att.toLocaleString('pt-BR')}</span>}
@@ -84,6 +84,7 @@ export function Resumo() {
             {myFixture.goals.map((g, i) => (
               <span key={i} style={{ marginRight: 12 }}>
                 ⚽ {g.min}' {state.players[g.pid]?.name}
+                {g.og ? ' (contra)' : ''}
               </span>
             ))}
           </div>

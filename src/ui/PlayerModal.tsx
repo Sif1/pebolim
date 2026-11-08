@@ -1,12 +1,14 @@
+import { clubGrowthFactor } from '../engine/development';
 import { useState, type ReactNode } from 'react';
 import { preContractBlock } from '../engine/commands';
 import { askingPrice, auctionCanClose, refusesClub, statureGap, wageDemand, windowOpen } from '../engine/transfers';
 import type { Club, GameState, Player } from '../engine/types';
-import { absDateLabel, age, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from '../engine/util';
+import { absDateLabel, age, contractFactor, expectedWage, formatMoney, marketValue, roundMoney, squadOf } from '../engine/util';
 import { command, useMe } from '../store';
 import { ask } from './Confirm';
 import { Portrait } from './Portrait';
-import { Bar, ClubName, compLabel, Energy, Flag, Modal, MoneyField, PosTag, Stars, Str } from './common';
+import { Bar, ClubName, compLabel, Energy, Flag, Modal, MoneyField, PosTag, PotStars, seenStars, Str } from './common';
+import { ceilingFor, potentialSeen } from '../engine/potential';
 
 const TRAIT_LABEL: Record<string, string> = {
   finalizacao: 'Finalização',
@@ -85,7 +87,9 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
   if (!state || !p) return null;
   const season = state.meta.season;
   const a = age(p, season);
-  const value = playerValue(p, season);
+  const value = marketValue(p, state);
+  const cf = contractFactor(p, season, state.meta.date, state.calendar.length || 78);
+  const potSeen = potentialSeen(p, club?.id ?? null, season);
   const mine = club && p.clubId === club.id;
   const owner = p.clubId != null ? state.clubs[p.clubId] : null;
   const banned = Object.entries(p.ban).filter(([, n]) => n > 0);
@@ -118,6 +122,11 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
         <div className="stat">
           <span className="label">Valor de mercado</span>
           <span className="value">{formatMoney(value)}</span>
+          {cf < 0.99 && (
+            <span className="small warn" title="Com o contrato acabando, o clube não consegue pedir o valor cheio: no fim da temporada ele pode sair de graça">
+              {`contrato acabando: ${Math.round(cf * 100)}% do valor`}
+            </span>
+          )}
         </div>
         <div className="stat">
           <span className="label">Salário</span>
@@ -138,8 +147,8 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
         <div className="stat">
           <span className="label">Potencial (olheiros)</span>
           <span className="value">
-            <Stars n={p.stars} />
-            <span className="small muted"> até {Math.round(p.pot)}</span>
+            <PotStars p={p} />
+            <span className="small muted">{potSeen.exact ? ` até ${Math.round(p.pot)}` : ` até ~${ceilingFor(potSeen.stars)}`}</span>
           </span>
         </div>
       </div>
@@ -149,6 +158,11 @@ export function PlayerModal({ pid, onClose }: { pid: number; onClose: () => void
         {p.flank && p.pos !== 'GOL' && (
           <span className="pill" title="Pelas pontas, quem joga do lado que não é o seu rende um pouco menos (no meio, tanto faz)">
             {p.flank === 'L' ? 'Prefere a esquerda' : p.flank === 'R' ? 'Prefere a direita' : 'Joga pelo meio'}
+          </span>
+        )}
+        {owner && !p.junior && a <= 27 && p.pot > p.str + 1 && clubGrowthFactor(p, owner) < 1 && (
+          <span className="pill warn" title="Num clube bem abaixo do nível dele, o treino e os jogos não puxam: ele evolui mais devagar (até um terço do normal)">
+            Acima do nível do clube: evolui mais devagar
           </span>
         )}
         {p.injury > 0 && <span className="pill bad">Lesionado ({p.injury} jogos)</span>}
@@ -204,7 +218,7 @@ function Compare({ p, club, state }: { p: Player; club: Club; state: GameState }
   const rows: { k: string; a: ReactNode; b: ReactNode; better?: 0 | 1 | null }[] = [
     { k: 'Força', a: <Str v={p.str} />, b: <Str v={mine.str} />, better: cmp(p.str, mine.str) },
     { k: 'Idade', a: age(p, season), b: age(mine, season), better: cmp(age(mine, season), age(p, season)) },
-    { k: 'Potencial', a: <Stars n={p.stars} />, b: <Stars n={mine.stars} />, better: cmp(p.stars, mine.stars) },
+    { k: 'Potencial', a: <PotStars p={p} />, b: <PotStars p={mine} />, better: cmp(seenStars(state, club.id, p), seenStars(state, club.id, mine)) },
     { k: 'Salário', a: formatMoney(p.clubId != null ? wageDemand(state, p, club) : expectedWage(p, season, club.rep)), b: formatMoney(mine.wage), better: null },
     { k: 'Temporada', a: `${p.s.apps} j · ${p.s.goals} g · nota ${rt(p)}`, b: `${mine.s.apps} j · ${mine.s.goals} g · nota ${rt(mine)}`, better: null },
     { k: 'Características', a: <Traits traits={p.traits} small />, b: <Traits traits={mine.traits} small />, better: null },
@@ -246,7 +260,7 @@ const cmp = (a: number, b: number): 0 | 1 | null => (a > b + 0.5 ? 0 : b > a + 0
 function Offer({ p, club, state, onDone }: { p: Player; club: Club; state: GameState; onDone: () => void }) {
   const season = state.meta.season;
   const owner = p.clubId != null ? state.clubs[p.clubId] : null;
-  const value = playerValue(p, season);
+  const value = marketValue(p, state);
   const ask = owner && !owner.managerId ? askingPrice(state, p) : p.salePrice;
   const demand = wageDemand(state, p, club);
   const preOk = owner != null && !preContractBlock(state, p) && !p.pre;
@@ -366,7 +380,7 @@ function AuctionBid({ p, club, state }: { p: Player; club: Club; state: GameStat
   const a = p.auction!;
   const mineBid = state.auctionBids[p.id]?.[club.id] ?? null;
   const [amount, setAmount] = useState(mineBid ?? a.min);
-  const value = playerValue(p, state.meta.season);
+  const value = marketValue(p, state);
   return (
     <div className="panel auction" style={{ marginTop: 14 }}>
       <h3>Leilão</h3>
@@ -398,7 +412,7 @@ function AuctionBid({ p, club, state }: { p: Player; club: Club; state: GameStat
 
 /** Your own player: set a sale price, offer him on loan, or put him up for auction. */
 function Listing({ p, club, state }: { p: Player; club: Club; state: GameState }) {
-  const value = playerValue(p, state.meta.season);
+  const value = marketValue(p, state);
   const [price, setPrice] = useState(p.salePrice ?? roundMoney(value));
   const [months, setMonths] = useState<6 | 12>(p.loanListed ?? 12);
   const [min, setMin] = useState(roundMoney(value * 0.6));

@@ -10,6 +10,28 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.11.0',
+    date: '07/11/2026',
+    pt: [
+      'O valor segue o contrato: com o contrato acabando, o clube só consegue pedir parte do valor (até a metade no fim). Comprar quem está saindo fica mais barato; o salário que ele pede não muda.',
+      'O potencial dos jovens é uma estimativa do olheiro (marcada com ?), que pode errar uma estrela: fica exata depois de uma temporada no seu clube (mais rápido com CT melhor). A partir dos 24 anos todo mundo vê.',
+      'Um talento muito acima do nível do clube evolui mais devagar lá (até um terço do normal): as promessas querem subir, e o clube pequeno tem motivo para vender.',
+      'Goleiros jogam uns três anos a mais (e começam a cair dois anos depois); craques, um ano a mais.',
+      'Lesões: jogadores mais velhos e cansados se machucam mais e ficam mais tempo fora; aos 35 ou mais, uma lesão longa tira de 1 a 3 de força.',
+      'No jogo: goleiros quase não cansam; quem abre três gols de vantagem tira o pé (goleadas enormes ficam raras); uns 3% dos gols são gols contra; os juízes dão mais cartões no fim do jogo e um pouco mais para o visitante; segundo amarelo é um jogo de suspensão, vermelho direto de um a cinco.',
+      'Time misto: na Copa (antes da semifinal) e no estadual, um favorito da IA contra um time bem mais fraco poupa titulares, que ficam no banco. O relatório do adversário avisa: é a hora da zebra.',
+    ],
+    en: [
+      'Value follows the contract: as a contract runs out, the club can only ask part of the value (down to half at the end). Buying a player on his way out is cheaper; his wage demand does not change.',
+      'Young players’ potential is a scout’s estimate (marked with ?) that can be a star off: it becomes exact after about a season at your club (faster with a better training centre). From 24, everyone sees it.',
+      'A talent far above his club’s level develops more slowly there (down to a third): promising players want to move up, and small clubs have a reason to sell.',
+      'Keepers play about three years longer (and start declining two years later); great players one year longer.',
+      'Injuries: older and tired players get injured more often and for longer; at 35 or more, a long injury costs 1 to 3 strength.',
+      'In the match: keepers hardly tire; a side three goals up eases off (huge routs become rare); about 3% of goals are own goals; referees book more late in the game and the away side a little more; a second yellow is a one-match ban, a straight red one to five.',
+      'Rotation: in the cup (before the semi-finals) and in the state championships, an AI favourite against a much weaker side rests starters, who sit on the bench. The scouting report warns you: it is the time for an upset.',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '07/11/2026',
     pt: [

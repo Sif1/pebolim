@@ -2,7 +2,7 @@
 // Juniors train and play youth matches (their stats hint at how good they are), but their força stays hidden
 // until the manager promotes them. They age out at 20: promoted if promising, released otherwise.
 import { academyLevel, generatePlayer } from './generator';
-import { ceilingFor, starsFor } from './potential';
+import { ceilingFor, potentialSeen, starsFor } from './potential';
 import type { Rng } from './rng';
 import type { Club, GameState, Player, Pos } from './types';
 import { addNews, age, expectedWage, roundMoney, squadOf } from './util';
@@ -89,9 +89,11 @@ export function youthSeasonEnd(state: GameState, rng: Rng, club: Club) {
   const m = club.managerId;
   for (const p of juniorsOf(state, club.id)) {
     if (age(p, next) < 20) continue;
-    if (p.stars >= 2 && squadOf(state, club.id).length < 34) {
+    // the club decides on what it knows of him (by 20, usually everything)
+    const seen = potentialSeen(p, club.id, state.meta.season).stars;
+    if (seen >= 2 && squadOf(state, club.id).length < 34) {
       promote(state, p);
-      addNews(state, 'info', `${p.name} completou 20 anos e subiu da base para o profissional (${'★'.repeat(p.stars) || 'sem estrelas'}).`, [club.id], m);
+      addNews(state, 'info', `${p.name} completou 20 anos e subiu da base para o profissional (${'★'.repeat(seen) || 'sem estrelas'}).`, [club.id], m);
     } else {
       release(state, p);
       addNews(state, 'info', `${p.name} completou 20 anos sem espaço no profissional e deixa a base.`, [club.id], m);
@@ -100,8 +102,10 @@ export function youthSeasonEnd(state: GameState, rng: Rng, club: Club) {
   const n = rng.int(2, 4) + (club.tc.level >= 4 ? 1 : 0);
   const fresh: Player[] = [];
   for (let i = 0; i < n; i++) fresh.push(makeJunior(state, rng, club, rng.int(15, 16)));
-  const best = fresh.sort((a, b) => b.stars - a.stars)[0];
-  if (m && best) addNews(state, 'info', `Peneira da base: ${n} garotos chegam ao ${club.name}; o mais promissor é ${best.name} (${best.pos}, ${'★'.repeat(best.stars) || 'sem estrelas'}).`, [club.id], m);
+  // the most promising as the scouts see them: a first impression, it can be a star off
+  const est = (x: Player) => potentialSeen(x, club.id, state.meta.season).stars;
+  const best = fresh.sort((a, b) => est(b) - est(a))[0];
+  if (m && best) addNews(state, 'info', `Peneira da base: ${n} garotos chegam ao ${club.name}; o mais promissor é ${best.name} (${best.pos}, ${'★'.repeat(est(best)) || 'sem estrelas'}).`, [club.id], m);
   const all = juniorsOf(state, club.id);
   if (all.length > YOUTH_MAX) {
     const cut = [...all].sort((a, b) => a.stars - b.stars || b.birth - a.birth).slice(0, all.length - YOUTH_MAX);

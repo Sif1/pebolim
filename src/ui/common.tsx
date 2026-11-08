@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import type { Club, GameState, Pos, Side } from '../engine/types';
+import type { Club, GameState, Player, Pos, Side } from '../engine/types';
 import { formatMoney, kk, parseMoney } from '../engine/util';
-import { STAR_CEILING } from '../engine/potential';
+import { potentialSeen, STAR_CEILING } from '../engine/potential';
 
 export { kk, parseMoney };
-import { useApp } from '../store';
+import { useApp, useMe } from '../store';
 
 /** Crest images that failed to load (offline, moved file): draw the shield instead. */
 const brokenCrests = new Set<string>();
@@ -243,6 +243,31 @@ export function Bar({ v, max = 100, color }: { v: number; max?: number; color?: 
 /** Potential as 0-5 stars. */
 export const starsTip = (k: number) =>
   `Potencial: ${k} de 5 estrelas. Até onde ele pode chegar: força máxima por volta de ${STAR_CEILING[k]}. Mais estrelas também = cresce mais rápido quando jovem e cai mais devagar quando veterano.`;
+
+/** Potential stars as the viewer's club sees them: exact, or the scout's estimate (marked with "?"). */
+export function PotStars({ p }: { p: Player }) {
+  const { state, club } = useMe();
+  if (!state) return null;
+  const v = potentialSeen(p, club?.id ?? null, state.meta.season);
+  if (v.exact) return <Stars n={v.stars} />;
+  const tip =
+    club && p.clubId === club.id
+      ? `Estimativa do olheiro: pode ser uma estrela a mais ou a menos. Conhecimento ${Math.round(v.known)}%: fica exata com o tempo no clube (mais rápido com um CT melhor).`
+      : 'Estimativa do olheiro: pode ser uma estrela a mais ou a menos. Só fica exata com o tempo no seu clube (ou quando ele passar dos 23 anos).';
+  return (
+    <span className="pot-est nowrap">
+      <Stars n={v.stars} title={tip} />
+      <span className="faint" title={tip}>
+        ?
+      </span>
+    </span>
+  );
+}
+
+/** The potential stars the viewer's club sees (for sorting and filtering, so they don't give the real value away). */
+export function seenStars(state: GameState | null, clubId: number | null, p: Player): number {
+  return state ? potentialSeen(p, clubId, state.meta.season).stars : p.stars;
+}
 
 export function Stars({ n, title }: { n: number; title?: string }) {
   const k = Math.max(0, Math.min(5, Math.round(n ?? 0)));

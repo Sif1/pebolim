@@ -52,6 +52,10 @@ export interface Player {
   traits: Trait[];
   /** preferred flank: left, right or central (central players don't mind where they play) */
   flank?: Side;
+  /** young players: the scouts' bias about his potential (−1, 0 or +1 star), and how well his club knows him (0-100) */
+  potErr?: number;
+  scouted?: number;
+  scoutClub?: number;
   clubId: number | null;
   /** monthly wage in US$ */
   wage: number;

@@ -1,4 +1,4 @@
-import { ceilingFor, starsFor } from './potential';
+import { ceilingFor, potErrFor, starsFor } from './potential';
 import type { Rng } from './rng';
 import { poolFor } from './names';
 import type { Club, GameState, Player, Pos, Side, Trait } from './types';
@@ -72,6 +72,8 @@ export function generatePlayer(state: GameState, rng: Rng, o: GenOpts): Player {
   p.pot = ceilingFor(p.stars);
   p.traits = randomTraits(o.pos, p.str, rng);
   p.flank = randomFlank(o.pos, rng);
+  const err = potErrFor(o.ageY, rng);
+  if (err) p.potErr = err;
   p.wage = expectedWage(p, season, o.clubRep);
   return p;
 }

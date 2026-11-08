@@ -7,7 +7,7 @@ import { FORMATIONS, slotsFor, validShape } from './match/formations';
 import { Rng } from './rng';
 import { auctionCanClose, executeTransfer, refusesClub, resolveAiBid, unlist, wageDemand, windowOpen } from './transfers';
 import type { Bid, GameState, Lineup, Manager, PitchCare, Player, SectorPrices, Tactics, TrainingFocus, TravelMode } from './types';
-import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, playerValue, roundMoney, squadOf } from './util';
+import { absDate, addNews, age, clamp, emptyLedger, expectedWage, formatMoney, marketValue, playerValue, roundMoney, squadOf } from './util';
 
 export type Command =
   | { c: 'setTactics'; tactics: Tactics }
@@ -569,7 +569,7 @@ export function bidSuggestion(state: GameState, pid: number, buyerId: number) {
   const p = state.players[pid];
   const buyer = state.clubs[buyerId];
   return {
-    value: playerValue(p, state.meta.season),
+    value: marketValue(p, state),
     wage: wageDemand(state, p, buyer),
   };
 }

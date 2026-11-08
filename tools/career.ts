@@ -18,7 +18,7 @@ import { MatchSim, type MatchResult } from '../src/engine/match/core';
 import { prepareMatchday } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
 import type { Club, GameState, Manager, Player } from '../src/engine/types';
-import { age, playerValue, squadOf } from '../src/engine/util';
+import { age, marketValue, squadOf } from '../src/engine/util';
 import { createWorld } from '../src/engine/world';
 
 const args = process.argv.slice(2);
@@ -310,7 +310,7 @@ for (let season = 0; season < SEASONS; season++) {
         if (b.seller !== c.id || b.status !== 'pendente') continue;
         t.bids++;
         const p = s.players[b.player];
-        const good = p && b.fee >= playerValue(p, year) * 1.25 && !starters.has(p.id);
+        const good = p && b.fee >= marketValue(p, s) * 1.25 && !starters.has(p.id);
         if (good) {
           const r = runCommand(s, h.m.id, { c: 'respondBid', bid: b.id, action: 'aceitar' });
           if (r.ok) {

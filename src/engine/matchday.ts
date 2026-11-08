@@ -1,5 +1,5 @@
 import { resolveAuctions } from './transfers';
-import { autoLineup, bestFormation, lineupRating, repairLineup } from './ai/lineup';
+import { autoLineup, BENCH_SIZE, bestFormation, isAvailable, lineupRating, repairLineup } from './ai/lineup';
 import { AI_COACH, aiPlan, naturalStyle, preferredFormations, strengthEdge } from './ai/tactics';
 import { deciderFor } from './competitions';
 import { applyTravel } from './economy';
@@ -77,6 +77,37 @@ export function aiPreMatchTactics(
   return { formation, mentality: plan.mentality, style: plan.style, marking: plan.marking, shape: null, ...(focus ? { focus } : {}) };
 }
 
+/** Força gap from which an AI favourite rests starters in an early cup round or a state-championship match. */
+export const ROTATE_GAP = 8;
+
+/**
+ * Rotation ("time misto"): an AI favourite in a national cup (before the semi-finals) or a state championship
+ * (before its last two rounds), facing a side at least 8 força weaker, rests its 3 best outfield players (5 from
+ * 14 weaker), as long as the squad has cover and the tie is not close. They start on the bench.
+ */
+export function cupRotation(state: GameState, f: Fixture, club: Club, squad: Player[], opp: Club): Player[] {
+  const comp = state.comps[f.comp];
+  if (!comp) return [];
+  const cfg = comp.cfg;
+  const cup = cfg.kind === 'cup' && cfg.scope === 'national';
+  if (!cup && cfg.scope !== 'state') return [];
+  if (f.stage != null && comp.stages.length && f.stage >= comp.stages.length - 2) return [];
+  const gap = club.power - opp.power;
+  if (gap < ROTATE_GAP) return [];
+  // a second leg: only with a comfortable lead from the first
+  const dec = f.leg === 2 ? deciderFor(state, f) : null;
+  if (dec) {
+    const lead = f.home === club.id ? dec.aggHome - dec.aggAway : dec.aggAway - dec.aggHome;
+    if (lead < 2) return [];
+  }
+  const avail = squad.filter((p) => isAvailable(p, f.comp));
+  const rest = avail
+    .filter((p) => p.pos !== 'GOL')
+    .sort((a, b) => b.str - a.str)
+    .slice(0, gap >= 14 ? 5 : 3);
+  return avail.length - rest.length >= 16 ? rest : [];
+}
+
 /** How much better one channel must look than the other before the AI coach concentrates its attacks there. */
 export const AI_FOCUS_EDGE = 1.08;
 
@@ -103,12 +134,18 @@ export function aiFocus(state: GameState, avail: Player[], formation: Tactics['f
   return undefined;
 }
 
-function teamSetup(state: GameState, club: Club, squad: Player[], compId: string, human: boolean, aiTactics?: Tactics): TeamSetup {
+function teamSetup(state: GameState, club: Club, squad: Player[], compId: string, human: boolean, aiTactics?: Tactics, rested: Player[] = []): TeamSetup {
   const tactics = !human && aiTactics ? aiTactics : club.tactics;
-  const lineup =
+  let lineup =
     human && !club.autoLineup
       ? repairLineup(squad, club.lineup, club.tactics, compId)
-      : autoLineup(squad, tactics, compId);
+      : autoLineup(rested.length ? squad.filter((p) => !rested.includes(p)) : squad, tactics, compId);
+  // rested starters sit on the bench, ready if the match goes wrong
+  if (rested.length) {
+    const gk = lineup.bench.find((id) => squad.find((p) => p.id === id)?.pos === 'GOL');
+    const bench = [...rested.map((p) => p.id), ...lineup.bench.filter((id) => id !== gk)].slice(0, BENCH_SIZE - (gk != null ? 1 : 0));
+    lineup = { ...lineup, bench: gk != null ? [...bench, gk] : bench };
+  }
   if (human) club.lineup = lineup;
   const ids = new Set([...lineup.xi.filter((x): x is number => x != null), ...lineup.bench]);
   const season = state.meta.season;
@@ -125,6 +162,7 @@ function teamSetup(state: GameState, club: Club, squad: Player[], compId: string
       traits: p.traits,
       flank: p.flank,
       tire: age(p, season) >= 32 ? 1.15 : age(p, season) <= 21 ? 0.95 : 1,
+      age: age(p, season),
     }));
   return {
     clubId: club.id,
@@ -169,13 +207,17 @@ export function prepareMatchday(state: GameState, rng: Rng, present: Set<string>
     const aHuman = isHumanClub(state, away.id, present);
     const hSquad = idx.get(home.id) ?? [];
     const aSquad = idx.get(away.id) ?? [];
-    const hT = hHuman || !AI_COACH.enabled ? undefined : aiPreMatchTactics(state, f, home, hSquad, away, aSquad, aHuman);
-    const aT = aHuman || !AI_COACH.enabled ? undefined : aiPreMatchTactics(state, f, away, aSquad, home, hSquad, hHuman);
+    // an AI favourite may rest starters in an early cup round or a state championship
+    const hRest = hHuman ? [] : cupRotation(state, f, home, hSquad, away);
+    const aRest = aHuman ? [] : cupRotation(state, f, away, aSquad, home);
+    const without = (sq: Player[], rest: Player[]) => (rest.length ? sq.filter((p) => !rest.includes(p)) : sq);
+    const hT = hHuman || !AI_COACH.enabled ? undefined : aiPreMatchTactics(state, f, home, without(hSquad, hRest), away, aSquad, aHuman);
+    const aT = aHuman || !AI_COACH.enabled ? undefined : aiPreMatchTactics(state, f, away, without(aSquad, aRest), home, hSquad, hHuman);
     const setup: MatchSetup = {
       fixtureId: f.id,
       compId: f.comp,
-      home: teamSetup(state, home, hSquad, f.comp, hHuman, hT),
-      away: teamSetup(state, away, aSquad, f.comp, aHuman, aT),
+      home: teamSetup(state, home, hSquad, f.comp, hHuman, hT, hRest),
+      away: teamSetup(state, away, aSquad, f.comp, aHuman, aT, aRest),
       seed: rng.fork(),
       homeAdv: HOME_ADV,
       decider: deciderFor(state, f),

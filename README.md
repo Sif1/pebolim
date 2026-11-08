@@ -22,6 +22,7 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 - Drag a substitute onto a player (or a starter onto the bench) to make a change, or drag players to new positions mid-match
 - Penalty shootouts you play: pick your five takers, then choose the corner for each kick and the side your keeper dives, with a pixel-art run-up and shot. Penalties during a match work the same way: pick the taker, then the corner
 - Match sounds (Web Audio, no files): whistles for cards, penalties, half-time and full time; a crowd murmur that swells with the pressure and roars at the chances; the crowd cheers a home goal and boos an away goal. Mute with the 🔊 button
+- Football's small truths: keepers barely tire, a side three goals up eases off (routs are rarer), about 3% of goals are own goals, referees book more as the match goes on and the away side a little more, and a straight red can cost one to five matches. In early cup rounds and state-championship games, an AI favourite against a much weaker side rests a few starters (the scouting report warns you): the time to cause an upset
 - Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
 
 **Your club**
@@ -35,11 +36,14 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 - Named AI coaches (the real ones where known, see `coaches.csv`) that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics
 - Contracts with automatic renewal (like Brasfoot's) that respects the wage budget, finances in US$, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions and player development
 - Players have potential (0–5 stars: how far and how fast they grow, how slowly they decline) and traits (finalização, cabeceio, drible, passe…) that matter in the match engine
+- A young player's potential is a scout's estimate (marked ?) that can be a star off: it becomes exact after about a season at your club (faster with a better training centre), and everyone sees it from 24. A talent well above his club's level grows more slowly there, down to a third, so promising players want to move up
+- Keepers retire about three years later and start declining two years later; great players (força 80+) retire a year later. Older and tired players get injured more often and for longer, and a long injury at 35 or more costs 1–3 força for good
 
 **The market**
 - Brasfoot-style search (position, age, força, potential, trait, nationality with flags, for sale / for loan / in auction / free / expiring, "within my budget"), sortable columns, bids between humans and the AI with expiry dates
 - Put players up for sale at your price, offer them on loan for 6 or 12 months, or auction them: sealed bids from every manager and the AI, decided at the next round, with a history of past auctions. The AI lists, loans and auctions its surplus players too, and big AI clubs sometimes put a star up for sale
 - Pre-contracts: sign a player in the last six months of his contract for free, to join when it ends
+- Transfer values follow the contract: a club can ask the full value with a season and a half or more to go, falling to half as the contract runs out (wage demands don't change)
 - A "vs. squad" column (força against your best in that position) and, on the player card, a side-by-side comparison with your starter
 - Players have standards: a star refuses a club far below his level and asks for more from one a little below it; veterans happily go home. The player card warns you before you bid
 - Transfer deadline day: the last round of each window is busier (twice the AI deals, stars put up for sale), late bids arrive that can only be answered that round, and the news rounds up the day's deals
@@ -131,7 +135,7 @@ If a friend can't connect (some mobile or corporate networks block direct WebRTC
 npm test
 ```
 
-Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development, the AI's contract renewals, coaches and the coaching ranking, flanks, the attack focus and pitch condition; plus the translation layer.
+Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development, the AI's contract renewals, coaches and the coaching ranking, flanks, the attack focus, pitch condition, contract values, growth at small clubs, the scouting estimate, longer careers and injuries, keepers' fatigue, routs, own goals, card bans and cup rotation; plus the translation layer.
 
 ```bash
 npm run sim -- 2
