@@ -5,10 +5,26 @@ import type { Club, GameState, Player } from './types';
 import { age } from './util';
 
 /**
- * Energy back per date (before training centre and focus). A starter loses about 9.5 per match once the "match
- * legs" are gone, so a club that plays every date has to rotate; one that plays every other date recovers fully.
+ * Energy back per day of rest until the next date (before training centre and focus; a little less the day after
+ * playing). Dates alternate Sunday and Wednesday: Wednesday's match comes three days after Sunday's (6 back),
+ * Sunday's four days after Wednesday's (8 back). A starter loses about 9.5 per match once the "match legs" are
+ * gone, so a club that plays both ends of the week has to rotate; one that plays once a week recovers fully.
  */
-export const REST = { base: 8, playedFactor: 0.85 };
+export const REST = { perDay: 2, playedFactor: 0.85 };
+
+/** Days between two dates of the current season's calendar. */
+export function daysBetween(state: GameState, a: number, b: number): number {
+  const t = (i: number) => {
+    const c = state.calendar[Math.max(0, Math.min(state.calendar.length - 1, i))];
+    return Date.UTC(state.meta.season, c.month - 1, c.day);
+  };
+  return Math.round((t(b) - t(a)) / 86400000);
+}
+
+/** Days of rest after a date: until the next date (a week after the season's last). */
+export function restDays(state: GameState, date: number): number {
+  return date + 1 < state.calendar.length ? daysBetween(state, date, date + 1) : 7;
+}
 
 /** Yearly strength change by age (before training-centre and playing-time factors). */
 function yearlyDelta(a: number): number {
@@ -44,13 +60,14 @@ export const ELITE_GROWTH = (str: number) => Math.min(1, Math.max(0.15, (93 - st
 export function dailyPlayers(state: GameState, rng: Rng, playedToday: Set<number>) {
   const season = state.meta.season;
   const date = Math.max(1, state.meta.date);
+  const rest = restDays(state, state.meta.date);
   for (const id in state.players) {
     const p = state.players[id];
     const club = p.clubId != null ? state.clubs[p.clubId] : null;
     const lvl = club?.tc.level ?? 1;
     const focus = club?.focus ?? 'equilibrado';
     // recovery
-    let rec = REST.base * TC_REC[lvl] * (focus === 'fisico' ? 1.2 : focus === 'tecnico' ? 0.9 : 1);
+    let rec = REST.perDay * rest * TC_REC[lvl] * (focus === 'fisico' ? 1.2 : focus === 'tecnico' ? 0.9 : 1);
     if (playedToday.has(p.id)) rec *= REST.playedFactor;
     if (p.injury > 0) {
       p.injury--;

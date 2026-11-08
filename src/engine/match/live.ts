@@ -1,5 +1,5 @@
 import type { Tactics } from '../types';
-import { matchRating, MatchSim, PITCH_H, PITCH_W, type ActionKind, type MatchEvent, type MatchResult, type MatchSetup } from './core';
+import { matchRating, MatchSim, PITCH_H, PITCH_W, type ActionKind, type MatchEvent, type MatchResult, type MatchSetup, type TeamTalk } from './core';
 import { aiDive, aiShot, autoShootout, kickOutcome, Shootout, type PkDir, type PkOutcome, type PkTaker } from './shootout';
 
 /** Real-time length of each shootout step, in ms. */
@@ -36,6 +36,8 @@ export interface PkFrame {
 
 export const MAX_PAUSES = 3;
 export const PAUSE_LIMIT_MS = 90_000;
+/** The half-time break in a match with a human: time for the team talk and changes (not one of the 3 pauses). */
+export const HT_BREAK_MS = 20_000;
 
 /**
  * Highlights, Championship Manager style. The simulation runs a few game seconds ahead of the screen, so
@@ -113,6 +115,8 @@ export interface LiveFrame {
   ac?: LiveAction;
   paused: boolean;
   pausedBy: 0 | 1 | null;
+  /** the half-time break: any human in the match can end it */
+  ht?: boolean;
   ended: boolean;
   /** events since the previous frame */
   ev: MatchEvent[];
@@ -140,6 +144,8 @@ export interface LiveDetail {
     yel: number[];
     off: number[];
     pauses: number;
+    /** the half-time team talk given, if any */
+    talk: TeamTalk | null;
   }[];
 }
 
@@ -157,6 +163,8 @@ export class LiveMatch {
   pausedBy: 0 | 1 | null = null;
   pausedAt = 0;
   pauses: [number, number] = [0, 0];
+  /** paused for the half-time break */
+  htBreak = false;
   quickReq: [boolean, boolean] = [false, false];
   private bodies = new Map<number, Body>();
   detailDirty = true;
@@ -391,7 +399,22 @@ export class LiveMatch {
     if (s.ev.length) {
       this.evQueue.push(...s.ev);
       this.detailDirty = true;
+      // half-time on screen: a short break for the humans' team talks and changes
+      if (s.ev.some((e) => e.kind === 'ht') && (this.humans[0] || this.humans[1]) && !this.paused) {
+        this.paused = true;
+        this.pausedBy = null;
+        this.htBreak = true;
+        this.pausedAt = performance.now();
+      }
     }
+  }
+
+  /** A human's half-time team talk; the break ends once every human in the match has given one. */
+  talk(side: 0 | 1, kind: TeamTalk): string | null {
+    const err = this.sim.teamTalk(side, kind);
+    this.detailDirty = true;
+    if (!err && this.htBreak && ([0, 1] as const).every((x) => !this.humans[x] || this.sim.sides[x].talk)) this.resume();
+    return err;
   }
 
   private placeKickoff() {
@@ -500,7 +523,7 @@ export class LiveMatch {
       return this.tickShootout(realMs);
     }
     if (this.paused) {
-      if (performance.now() - this.pausedAt > PAUSE_LIMIT_MS) this.resume();
+      if (performance.now() - this.pausedAt > (this.htBreak ? HT_BREAK_MS : PAUSE_LIMIT_MS)) this.resume();
       return;
     }
     // play the buffer back, one snapshot at a time, at the speed each moment deserves
@@ -650,9 +673,10 @@ export class LiveMatch {
 
   resume(side?: 0 | 1): string | null {
     if (!this.paused) return null;
-    if (side != null && this.pausedBy !== side && this.humans[this.pausedBy ?? 0]) return 'Só quem pausou pode retomar';
+    if (side != null && !this.htBreak && this.pausedBy !== side && this.humans[this.pausedBy ?? 0]) return 'Só quem pausou pode retomar';
     this.paused = false;
     this.pausedBy = null;
+    this.htBreak = false;
     this.detailDirty = true;
     return null;
   }
@@ -677,6 +701,7 @@ export class LiveMatch {
       ...f,
       paused: this.paused,
       pausedBy: this.pausedBy,
+      ...(this.htBreak ? { ht: true } : {}),
       ended: this.ended,
       hl: this.live,
       ev: this.evQueue.splice(0),
@@ -768,6 +793,7 @@ export class LiveMatch {
           yel,
           off,
           pauses: this.pauses[side],
+          talk: s.talk ?? null,
         };
       }),
     };

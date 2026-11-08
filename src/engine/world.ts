@@ -175,6 +175,12 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
   idx = squadIndex(state);
   for (const club of Object.values(state.clubs)) {
     const squad = idx.get(club.id) ?? [];
+    // a club's young core rarely starts in the final year of a contract: as at every season end (earlyRenewal in
+    // season.ts), three in four have been extended already. Before, the stars of the first season were all free
+    // to sign a pre-contract from mid-season
+    for (const p of [...squad].sort((a, b) => b.str - a.str).slice(0, CORE_PLAYERS)) {
+      if (p.contractEnd === season && season - p.birth < 30 && rng.chance(0.75)) p.contractEnd = season + rng.int(2, 3);
+    }
     balanceFullBacks(squad);
     assignNumbers(squad);
     club.tactics.formation = bestFormation(squad);
@@ -187,6 +193,9 @@ export function createWorld(db: Database, opts: NewWorldOptions): GameState {
   state.meta.rng = rng.state();
   return state;
 }
+
+/** An AI club's core: its best players, the ones it extends before they reach the final year of a contract. */
+export const CORE_PLAYERS = 6;
 
 /** Build competitions, calendar and objectives for state.meta.season. */
 export function startSeason(state: GameState, rng: Rng) {
@@ -237,10 +246,12 @@ export function setObjectives(state: GameState) {
       if (level === 1) {
         if (pos <= 2) goal = 'titulo';
         else if (pos <= Math.round(n * 0.3)) goal = 'continental';
-        else if (hasDown && pos > n - 6) goal = 'rebaixamento';
+        else if (pos > n - 6) goal = hasDown ? 'rebaixamento' : 'digno';
       } else {
         if (hasUp && pos <= 5) goal = 'acesso';
-        else if (hasDown && pos > n - 5) goal = 'rebaixamento';
+        // with no division below there is no relegation to escape: the weakest clubs are asked for a respectable
+        // season (before, they were asked for mid-table, out of their reach, and their managers sacked)
+        else if (pos > n - 5) goal = hasDown ? 'rebaixamento' : 'digno';
       }
       c.board.goal = goal;
       c.board.conf = Math.round((c.board.conf + 60) / 2);
@@ -257,4 +268,5 @@ export const OBJECTIVE_LABEL: Record<Objective, string> = {
   meio: 'Campanha segura no meio da tabela',
   rebaixamento: 'Evitar o rebaixamento',
   acesso: 'Conquistar o acesso',
+  digno: 'Campanha digna, longe da lanterna',
 };

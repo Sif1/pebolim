@@ -5,6 +5,7 @@ export const EN_SCREENS: Record<string, string> = {
   'Vaga continental': 'Continental place',
   'Campanha segura no meio da tabela': 'Safe mid-table season',
   'Evitar o rebaixamento': 'Avoid relegation',
+  'Campanha digna, longe da lanterna': 'Respectable season, off the bottom',
   'Conquistar o acesso': 'Win promotion',
 
   // ---- dashboard
@@ -49,6 +50,20 @@ export const EN_SCREENS: Record<string, string> = {
   '(humano)': '(human)',
   'Treinador: IA': 'Manager: AI',
   'Provável esquema:': 'Likely shape:',
+  'Na última partida:': 'Last match:',
+  '{0} dos seus 14 melhores jogadores estão abaixo de 85% de energia, e o jogo seguinte é {1} dias depois deste: pense em poupar alguém.':
+    '{0} of your 14 best players are below 85% energy, and the following match is {1} days after this one: think about resting someone.',
+  '{0} dos seus 14 melhores jogadores estão abaixo de 85% de energia: pense em poupar alguém.': '{0} of your 14 best players are below 85% energy: think about resting someone.',
+  'A defesa deles não tem um corredor claramente mais fraco para o seu time: concentrar os ataques não compensa.':
+    'Their defence has no channel clearly weaker for your team: concentrating the attacks will not pay.',
+  'Defesa deles: o ponto fraco é {0}, com {1}. Com o seu time, concentre os ataques {2}.':
+    'Their defence: the weak spot is {0}, with {1}. With your team, concentrate the attacks {2}.',
+  'Defesa deles: o ponto fraco é {0}. Com o seu time, concentre os ataques {1}.': 'Their defence: the weak spot is {0}. With your team, concentrate the attacks {1}.',
+  'o lado esquerdo': 'their left side',
+  'o miolo': 'the centre',
+  'o lado direito': 'their right side',
+  'pelas pontas': 'down the flanks',
+  'pelo meio': 'through the middle',
   '· postura': '· posture',
   '· pressão alta': '· high press',
   'Forma:': 'Form:',

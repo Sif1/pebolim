@@ -10,6 +10,7 @@ export function objectiveDelta(goal: Objective, pos: number, n: number): number 
   if (goal === 'continental') return pos <= Math.round(n * 0.3) ? 15 : pos <= n / 2 ? -5 : -25;
   if (goal === 'meio') return pos <= n - 4 ? 8 : -30;
   if (goal === 'rebaixamento') return pos <= n - 4 ? 15 : -20;
+  if (goal === 'digno') return pos <= n - 2 ? 12 : -15;
   return pos <= 4 ? 25 : pos <= 8 ? -5 : -25;
 }
 

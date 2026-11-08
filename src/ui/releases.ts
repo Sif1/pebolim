@@ -10,6 +10,46 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.12.0',
+    date: '07/11/2026',
+    pt: [
+      'Preleção no intervalo: elogiar, cobrar ou incentivar, numa pausa curta no intervalo. A certa para o placar, para quem é o favorito e para o primeiro tempo do time faz o time voltar melhor; a errada atrapalha um pouco. As dicas dos botões explicam quando cada uma funciona.',
+      'O técnico da IA não vê mais a sua escalação antes do jogo: ele se prepara para o que você fez na última partida. O relatório do adversário mostra o plano dele, e responder a esse plano é vantagem sua.',
+      'Durante o jogo, o técnico da IA percebe as suas mudanças com atraso (na leitura seguinte): uma mudança no intervalo fica sem resposta até uns 75 minutos.',
+      'O relatório do adversário aponta o ponto fraco da defesa deles (e quem joga ali) e o corredor em que concentrar os ataques com o seu time.',
+      'Calendário apertado cansa: a energia volta por dia de descanso, então o jogo de quarta depois do domingo pega as pernas pesadas. O painel avisa quando os titulares precisam de descanso.',
+      'Os clubes ricos da IA gastam o dinheiro: contratam reforços para o time titular, pagam melhor os titulares e fazem mais propostas (e mais altas) pelos seus.',
+    ],
+    en: [
+      'Half-time team talk: praise, demand more or encourage, in a short break at half-time. The right one for the score, the odds and your first half sends the side out better; the wrong one hurts a little. The buttons’ tips explain when each one works.',
+      'The AI coach no longer sees your line-up before the match: it prepares for what you did in your last one. The scouting report shows its plan, and answering it is your edge.',
+      'During the match, the AI coach notices your changes late (at its next look): a half-time change goes unanswered until about the 75th minute.',
+      'The scouting report points out the weak spot of their defence (and who plays there) and the channel to concentrate your attacks on with your team.',
+      'A packed calendar tires: energy comes back per day of rest, so the Wednesday match after a Sunday one finds heavy legs. The dashboard warns you when your regulars need a rest.',
+      'Rich AI clubs spend their money: they sign players for their first team, pay their regulars better and bid more often (and more) for yours.',
+    ],
+  },
+  {
+    version: '0.11.1',
+    date: '07/11/2026',
+    pt: [
+      'Correções de dez carreiras de cinco temporadas simuladas:',
+      'Um clube que acabou de demitir você não te oferece o cargo de volta (antes isso podia acontecer na mesma temporada).',
+      'Não existe divisão nacional abaixo da Série C: um clube com treinador humano que termina na zona continua nela, e o clube logo acima cai no lugar. Antes, o técnico ficava uma temporada inteira com um a dez jogos.',
+      'Quem assume um clube depois da metade da temporada não responde pelo objetivo daquela temporada.',
+      'Nas divisões sem rebaixamento, os clubes mais fracos têm como objetivo uma campanha digna, longe da lanterna (antes era o meio da tabela, fora do alcance deles).',
+      'Os clubes da IA renovam antes com os seus principais jogadores jovens: as estrelas não chegam mais tão fácil ao último ano de contrato, livres para um pré-contrato.',
+    ],
+    en: [
+      'Fixes from ten simulated five-season careers:',
+      'A club that has just sacked you no longer offers you the job back (before, this could happen in the same season).',
+      'There is no national division below Série C: a club with a human manager that finishes in the drop zone stays up, and the club just above goes down instead. Before, the manager spent a whole season with one to ten matches.',
+      'A manager who takes over after the halfway point of a season is not held to that season’s objective.',
+      'In divisions without relegation, the weakest clubs are asked for a respectable season off the bottom two (before, mid-table, out of their reach).',
+      'AI clubs renew their key young players earlier: stars no longer reach the final year of their contract so easily, free to sign a pre-contract.',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '07/11/2026',
     pt: [

@@ -4,7 +4,7 @@
 import type { Formation, Marking, Mentality, Player, Style, Tactics } from '../types';
 
 /** Switch for experiments (tools/leaguecheck): false = AI keeps its default tactics and only makes tired substitutions. */
-export const AI_COACH = { enabled: true, matchups: true, rules: { early: true, numbers: true, gameState: true, readOpp: true } };
+export const AI_COACH = { enabled: true, matchups: true, rules: { early: true, numbers: true, gameState: true, readOpp: true, lag: true } };
 
 /** What the AI coach knows at a given moment. */
 export interface Situation {

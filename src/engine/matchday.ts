@@ -7,7 +7,7 @@ import type { MatchSetup, MPlayerInit, TeamSetup } from './match/core';
 import type { Rng } from './rng';
 import type { Club, Fixture, GameState, Player, Tactics } from './types';
 import { slotsFor } from './match/formations';
-import { laneStrengths } from './match/ratings';
+import { laneOf, laneStrengths } from './match/ratings';
 import { age, squadIndex } from './util';
 
 export const HOME_ADV = 1.055;
@@ -31,7 +31,8 @@ function matchPower(state: GameState, club: Club, squad: Player[]): number {
 
 /**
  * The AI coach's plan for a match: favourite or underdog, home or away, a knockout aggregate to chase or protect,
- * and what the opponent usually does.
+ * and what the opponent usually does. Against a human it knows only how he lined up last time (Club.shown), never
+ * the team sheet for this match: reading the AI's plan in the scouting report and answering it is the human's edge.
  */
 export function aiPreMatchTactics(
   state: GameState,
@@ -50,7 +51,7 @@ export function aiPreMatchTactics(
   const energy = top.length ? top.reduce((a, p) => a + p.fitness, 0) / top.length : 90;
   const natural = naturalStyle(top);
   const oppNatural = naturalStyle([...oppSquad].sort((a, b) => b.str - a.str).slice(0, 11));
-  const oppT = oppHuman ? opp.tactics : { mentality: 'equilibrada' as const, style: oppNatural, marking: 'zona' as const };
+  const oppT = oppHuman && opp.shown ? opp.shown.tactics : { mentality: 'equilibrada' as const, style: oppNatural, marking: 'zona' as const };
   const plan = aiPlan({
     minute: 0,
     diff,
@@ -122,16 +123,63 @@ export function aiFocus(state: GameState, avail: Player[], formation: Tactics['f
   const byId = new Map(avail.map((p) => [p.id, p]));
   const my = laneStrengths(slots, mine.xi.map((id) => (id != null ? (byId.get(id) ?? null) : null)));
   const oppAvail = oppSquad.filter((p) => p.injury === 0 && !(p.ban[comp] > 0));
-  const oppForm = oppHuman ? opp.tactics.formation : bestFormation(oppAvail, comp);
-  const theirs = oppHuman && !opp.autoLineup ? opp.lineup : autoLineup(oppAvail, oppForm, comp);
-  const oppById = new Map(oppSquad.map((p) => [p.id, p]));
-  const their = laneStrengths(slotsFor(oppHuman ? opp.tactics : { formation: oppForm }), theirs.xi.map((id) => (id != null ? (oppById.get(id) ?? null) : null)));
-  // our left attacks their right, and the other way round
+  // a human side: as it lined up last time (those still available), else as the AI would pick it
+  const shown = oppHuman ? opp.shown : undefined;
+  const oppShape = shown ? shown.tactics : { formation: bestFormation(oppAvail, comp) };
+  const availIds = new Set(oppAvail.map((p) => p.id));
+  const theirs = shown && shown.xi.filter((id) => id != null && availIds.has(id)).length >= 9 ? shown : autoLineup(oppAvail, oppShape, comp);
+  const oppById = new Map(oppAvail.map((p) => [p.id, p]));
+  const their = laneStrengths(slotsFor(oppShape), theirs.xi.map((id) => (id != null ? (oppById.get(id) ?? null) : null)));
+  return focusFrom(my, their).focus;
+}
+
+/**
+ * Which channel to attack, from both sides' lanes (each side's own view: 0 = its left): our left attacks their
+ * right and the other way round. The flanks or the middle when one clearly beats the other (AI_FOCUS_EDGE).
+ */
+export function focusFrom(my: LaneStrengths, their: LaneStrengths): { focus: Tactics['focus']; flanks: number; middle: number } {
   const flanks = (my.att[0] / their.def[2] + my.att[2] / their.def[0]) / 2;
   const middle = my.att[1] / their.def[1];
-  if (flanks > middle * AI_FOCUS_EDGE) return 'lados';
-  if (middle > flanks * AI_FOCUS_EDGE) return 'meio';
-  return undefined;
+  return { focus: flanks > middle * AI_FOCUS_EDGE ? 'lados' : middle > flanks * AI_FOCUS_EDGE ? 'meio' : undefined, flanks, middle };
+}
+
+type LaneStrengths = ReturnType<typeof laneStrengths>;
+
+/**
+ * The scout's read of the opponent's defence for a human manager: its weakest lane (their own view), the player
+ * there, and the attack focus that would pay against it with your current line-up (the same judgement the AI
+ * coach makes for itself).
+ */
+export function scoutLanes(
+  state: GameState,
+  f: Fixture,
+  club: Club,
+  squad: Player[],
+  opp: Club,
+  oppSquad: Player[],
+  oppPlan: Pick<Tactics, 'formation' | 'shape'>,
+): { focus: Tactics['focus']; weak: 0 | 1 | 2; player: Player | null } {
+  const comp = f.comp;
+  const avail = squad.filter((p) => p.injury === 0 && !(p.ban[comp] > 0));
+  const lineup = club.autoLineup ? autoLineup(avail, club.tactics, comp) : repairLineup(squad, club.lineup, club.tactics, comp);
+  const byId = new Map(avail.map((p) => [p.id, p]));
+  const mySlots = slotsFor(club.tactics);
+  const my = laneStrengths(mySlots, lineup.xi.map((id) => (id != null ? (byId.get(id) ?? null) : null)));
+  const oppAvail = oppSquad.filter((p) => p.injury === 0 && !(p.ban[comp] > 0));
+  const theirs = autoLineup(oppAvail, oppPlan, comp);
+  const oppById = new Map(oppAvail.map((p) => [p.id, p]));
+  const oppSlots = slotsFor(oppPlan);
+  const xi = theirs.xi.map((id) => (id != null ? (oppById.get(id) ?? null) : null));
+  const their = laneStrengths(oppSlots, xi);
+  const weak = ([0, 1, 2] as const).reduce((a, b) => (their.def[b] < their.def[a] ? b : a));
+  // the weakest defender in that lane
+  let player: Player | null = null;
+  oppSlots.forEach((sl, i) => {
+    const p = xi[i];
+    if (!p || sl.pos === 'GOL' || laneOf(sl.y) !== weak || !['ZAG', 'LAT', 'VOL'].includes(sl.pos)) return;
+    if (!player || p.str < player.str) player = p;
+  });
+  return { focus: focusFrom(my, their).focus, weak, player };
 }
 
 function teamSetup(state: GameState, club: Club, squad: Player[], compId: string, human: boolean, aiTactics?: Tactics, rested: Player[] = []): TeamSetup {
@@ -225,6 +273,10 @@ export function prepareMatchday(state: GameState, rng: Rng, present: Set<string>
     };
     plan.setups.push(setup);
     if (hHuman || aHuman) plan.live.push(f.id);
+    // what the next opponents' coaches will know about the human sides
+    for (const [club, ts, human] of [[home, setup.home, hHuman], [away, setup.away, aHuman]] as const) {
+      if (human) club.shown = { tactics: { ...ts.tactics, shape: ts.tactics.shape ? [...ts.tactics.shape] : null }, xi: [...ts.xi] };
+    }
   }
   return plan;
 }

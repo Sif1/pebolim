@@ -134,7 +134,8 @@ export interface TicketPrices {
   comps: Record<string, SectorPrices>;
 }
 export type TrainingFocus = 'equilibrado' | 'fisico' | 'tecnico';
-export type Objective = 'titulo' | 'continental' | 'meio' | 'rebaixamento' | 'acesso';
+/** digno: the weakest clubs of a division with nothing below it, where survival is not at stake: stay off the bottom two */
+export type Objective = 'titulo' | 'continental' | 'meio' | 'rebaixamento' | 'acesso' | 'digno';
 
 export interface Ledger {
   tickets: number;
@@ -205,6 +206,11 @@ export interface Club {
   ledger: Ledger;
   /** last results, most recent last: V/E/D */
   form: string;
+  /**
+   * How a human-managed side lined up at the start of its last match: all an opposing AI coach knows before
+   * kick-off (it never sees the team sheet for the match itself)
+   */
+  shown?: { tactics: Tactics; xi: (number | null)[] };
 }
 
 export type CompKind = 'league' | 'cup' | 'groups';

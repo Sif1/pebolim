@@ -140,6 +140,8 @@ export function validMatchAction(v: unknown): MatchAction | null {
       return Array.isArray(v.order) && v.order.length <= 11 && v.order.every((x) => int(x, 0, ID)) ? { a: 'pkOrder', order: [...(v.order as number[])] } : null;
     case 'pkAim':
       return v.dir === 0 || v.dir === 1 || v.dir === 2 ? { a: 'pkAim', dir: v.dir } : null;
+    case 'talk':
+      return oneOf(v.kind, ['elogiar', 'cobrar', 'incentivar'] as const) ? { a: 'talk', kind: v.kind } : null;
     default:
       return null;
   }

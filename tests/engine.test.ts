@@ -2,15 +2,15 @@ import { applyPatches, enablePatches, produceWithPatches, setAutoFreeze } from '
 import { describe, expect, it } from 'vitest';
 import { finishDate, simulateBackground } from '../src/engine/advance';
 import { createCustomClub, createManager, PRE_CONTRACT_FROM, runCommand } from '../src/engine/commands';
-import { clubComps, sectorRefs, tcClubCost, tcUpgradeCost } from '../src/engine/economy';
+import { clubComps, roughIncome, sectorRefs, tcClubCost, tcUpgradeCost } from '../src/engine/economy';
 import { headToHead, isDerby, recordHeadToHead, rivalsOf } from '../src/engine/rivals';
-import { recordCareer } from '../src/engine/review';
+import { objectiveDelta, recordCareer } from '../src/engine/review';
 import { presetCells, slotsFor } from '../src/engine/match/formations';
 import { aiPlan, type Situation } from '../src/engine/ai/tactics';
 import { aiPreMatchTactics } from '../src/engine/matchday';
-import { validClientMsg, validCommand } from '../src/net/validate';
+import { validClientMsg, validCommand, validMatchAction } from '../src/net/validate';
 import { roundRobin, tieWinner } from '../src/engine/competitions';
-import { MatchSim } from '../src/engine/match/core';
+import { MatchSim, TALK_TUNE, talkFit } from '../src/engine/match/core';
 import { LiveMatch } from '../src/engine/match/live';
 import { prepareMatchday } from '../src/engine/matchday';
 import { Rng } from '../src/engine/rng';
@@ -32,10 +32,10 @@ import {
 import { autoLineup, lineupIssues } from '../src/engine/ai/lineup';
 import { autoShootout, Shootout } from '../src/engine/match/shootout';
 import { age, kk, parseMoney, sortTable, squadIndex, squadOf } from '../src/engine/util';
-import { endSeason, ensureKeepers, seasonVerdict } from '../src/engine/season';
-import { boardAfterMatch, boardChecks, fireManager } from '../src/engine/board';
+import { aiPayRises, endSeason, ensureKeepers, seasonVerdict } from '../src/engine/season';
+import { boardAfterMatch, boardChecks, fireManager, offerJob } from '../src/engine/board';
 import { juniorsOf, youthMatches } from '../src/engine/youth';
-import { careerBonus, clubGrowthFactor, dailyPlayers, ELITE_GROWTH } from '../src/engine/development';
+import { careerBonus, clubGrowthFactor, dailyPlayers, ELITE_GROWTH, restDays } from '../src/engine/development';
 import { potentialSeen, scoutRound } from '../src/engine/potential';
 import { injuryAgeRisk, injuryLength } from '../src/engine/match/core';
 import { banLength } from '../src/engine/advance';
@@ -46,7 +46,7 @@ import { PITCH_FX, pitchLevel, pitchRound } from '../src/engine/pitch';
 import { effective, laneOf } from '../src/engine/match/ratings';
 import { starsFor } from '../src/engine/potential';
 import { academyLevel, fillerLevel } from '../src/engine/generator';
-import { createWorld } from '../src/engine/world';
+import { createWorld, setObjectives } from '../src/engine/world';
 import { synthSetup } from './helpers';
 import { synthDb } from './synthDb';
 
@@ -332,6 +332,8 @@ describe('in-match penalties', () => {
       let spots = 0;
       let guard = 0;
       while (!m.ended && guard++ < 20000) {
+        // the managers go straight back out after the half-time break
+        if (m.htBreak) m.resume(0);
         m.tick(200, 19);
         const pk = m.frame().pk;
         if (pk?.mode === 'spot') {
@@ -1305,6 +1307,9 @@ describe('flanks, attack focus and pitch condition', () => {
       for (const pitch of [90, 20]) {
         const st = synthSetup(70, 70, 400 + i);
         st.pitch = pitch;
+        // no coaches' changes: only the pitch differs (substitutes would muddy the energy totals)
+        st.home.ai = false;
+        st.away.ai = false;
         const r = new MatchSim(st).runToEnd();
         const fit = Object.values(r.players).reduce((x, p) => x + p.fitness, 0);
         if (pitch === 90) good += fit;
@@ -1456,5 +1461,243 @@ describe('match engine: keepers, routs, own goals, cards and cup rotation', () =
     expect(cupRotation(s, { ...f, comp: 'BRA1' }, big, squad, small)).toHaveLength(0);
     const near = Object.values(s.clubs).filter((c) => c.league === 'BRA1').sort((a, b) => b.power - a.power)[1];
     expect(cupRotation(s, { ...f, home: near.id }, big, squad, near)).toHaveLength(0);
+  });
+});
+
+describe('five-season check fixes', () => {
+  it('a club that sacked a manager does not offer him its job again for a season', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const club = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', club.id);
+    m.rep = 90;
+    fireManager(s, m, 'teste');
+    offerJob(s, rng, club);
+    expect(m.offers.some((o) => o.clubId === club.id)).toBe(false);
+    for (let i = 0; i < 40; i++) boardChecks(s, rng, new Set([m.id]));
+    expect(m.offers.some((o) => o.clubId === club.id)).toBe(false);
+    // two seasons on, the club may call again
+    s.meta.season += 2;
+    offerJob(s, rng, club);
+    expect(m.offers.some((o) => o.clubId === club.id)).toBe(true);
+  });
+
+  it('does not blame a manager who arrived after the halfway point for the season objective', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const [late, early] = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const ml = createManager(s, rng, 'A', late.id);
+    const me = createManager(s, rng, 'B', early.id);
+    ml.since = s.meta.season * 100 + Math.ceil(s.calendar.length * 0.6);
+    me.since = s.meta.season * 100 + 10;
+    for (const c of [late, early]) {
+      c.board.goal = 'titulo';
+      c.board.conf = 30;
+    }
+    seasonVerdict(s, late, 15, 20, new Set([ml.id, me.id]));
+    seasonVerdict(s, early, 15, 20, new Set([ml.id, me.id]));
+    expect(ml.clubId).toBe(late.id);
+    expect(late.board.conf).toBe(30);
+    // one who was there from early on still answers for it (half the blame in his first season)
+    expect(me.clubId).toBeNull();
+  });
+
+  it('AI clubs extend their young core players before the final year of a contract, not the rest', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const next = s.meta.season + 1;
+    const core: number[] = [];
+    const rest: number[] = [];
+    for (const c of Object.values(s.clubs).filter((x) => x.league === 'BRA1' || x.league === 'ENG1')) {
+      const sq = squadOf(s, c.id).filter((p) => !p.loan).sort((a, b) => b.str - a.str);
+      const star = sq.find((p) => age(p, s.meta.season) < 29);
+      const fringe = sq[sq.length - 3];
+      if (!star || !fringe || star === fringe) continue;
+      star.contractEnd = next;
+      fringe.contractEnd = next;
+      core.push(star.id);
+      rest.push(fringe.id);
+    }
+    endSeason(s, rng, new Set());
+    const extended = (ids: number[]) => ids.filter((id) => s.players[id] && s.players[id].contractEnd > next).length / ids.length;
+    expect(extended(core)).toBeGreaterThan(0.5);
+    expect(extended(rest)).toBe(0);
+  });
+
+  it('a new world starts with few young core players in the final year of a contract', () => {
+    const s = world();
+    let core = 0;
+    let lastYear = 0;
+    for (const sq of squadIndex(s).values()) {
+      for (const p of [...sq].sort((a, b) => b.str - a.str).slice(0, 6)) {
+        if (age(p, s.meta.season) >= 30) continue;
+        core++;
+        if (p.contractEnd === s.meta.season) lastYear++;
+      }
+    }
+    // a quarter of all contracts end in the first season; for the young core, a quarter of that
+    expect(core).toBeGreaterThan(100);
+    expect(lastYear / core).toBeLessThan(0.12);
+  });
+
+  it('asks the weakest clubs of a division with nothing below it for a respectable season, not mid-table', () => {
+    const s = world();
+    setObjectives(s);
+    const lg = s.config.find((c) => c.kind === 'league' && (c.level ?? 1) > 1 && !c.down && Object.values(s.clubs).some((x) => x.league === c.id))!;
+    const clubs = Object.values(s.clubs).filter((c) => c.league === lg.id).sort((a, b) => a.power - b.power || a.rep - b.rep);
+    expect(clubs[0].board.goal).toBe('digno');
+    expect(Object.values(s.clubs).some((c) => c.league === 'BRA3' && c.board.goal === 'rebaixamento')).toBe(true);
+    const n = clubs.length;
+    expect(objectiveDelta('digno', n - 2, n)).toBeGreaterThan(0);
+    expect(objectiveDelta('digno', n, n)).toBeLessThan(0);
+  });
+
+  it('keeps a club with a human manager in Série C, the last national division, and sends the next club down', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const bra3 = Object.values(s.clubs).filter((c) => c.league === 'BRA3');
+    const club = bra3[0];
+    const m = createManager(s, rng, 'A', club.id);
+    // the human's club last, everyone else in table order
+    bra3.forEach((c, i) => {
+      const w = c.id === club.id ? 0 : 30 - i;
+      s.comps.BRA3.table[c.id] = { p: 30, w, d: 0, l: 30 - w, gf: w, ga: 30 - w, pts: 3 * w };
+    });
+    club.board.conf = 100;
+    endSeason(s, rng, new Set([m.id]));
+    expect(m.clubId).toBe(club.id);
+    expect(club.league).toBe('BRA3');
+    // still four clubs out and four in, so the division keeps its size
+    expect(bra3.filter((c) => c.league == null)).toHaveLength(4);
+    expect(Object.values(s.clubs).filter((c) => c.league === 'BRA3')).toHaveLength(20);
+    expect(s.news.some((n) => n.to === m.id && n.text.includes('Não há divisão nacional abaixo'))).toBe(true);
+  });
+});
+
+describe('management, AI spending and congestion', () => {
+  it('the AI coach plans against how a human lined up last time, never his team sheet for the match', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const league = Object.values(s.clubs).filter((c) => c.league === 'BRA1');
+    const me = league[0];
+    const m = createManager(s, rng, 'A', me.id);
+    const f = Object.values(s.fixtures).find((x) => x.comp === 'BRA1' && (x.home === me.id || x.away === me.id))!;
+    const opp = s.clubs[f.home === me.id ? f.away : f.home];
+    const plan = () => aiPreMatchTactics(s, f, opp, squadOf(s, opp.id), me, squadOf(s, me.id), true);
+    const before = plan();
+    // the human changes his team sheet: the AI's plan does not move
+    me.tactics = { ...me.tactics, mentality: 'ofensiva', marking: 'pressao', style: 'toque' };
+    expect(plan()).toEqual(before);
+    // once he has played that way, the next coach knows it: against a side that pushes forward, it counter-attacks
+    me.shown = { tactics: { ...me.tactics, mentality: 'ofensiva', style: 'toque', marking: 'zona' }, xi: me.lineup.xi };
+    expect(plan().style).toBe('contra');
+    void m;
+  });
+
+  it('records how a human side lined up for the next opponents', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const me = Object.values(s.clubs).find((c) => c.league === 'BRA1')!;
+    const m = createManager(s, rng, 'A', me.id);
+    me.tactics = { ...me.tactics, mentality: 'defensiva', style: 'contra' };
+    const first = Math.min(...Object.values(s.fixtures).filter((x) => x.home === me.id || x.away === me.id).map((x) => x.date));
+    playDates(s, first + 1, new Set([m.id]));
+    expect(me.shown?.tactics).toMatchObject({ mentality: 'defensiva', style: 'contra' });
+    expect(me.shown?.xi.filter((x) => x != null).length).toBe(11);
+  });
+
+  it('recovers energy by days of rest: less before a Wednesday match than before a Sunday one', () => {
+    const s = world();
+    const sun = s.calendar.findIndex((c, i) => c.wd === 'dom' && restDays(s, i) === 3);
+    const wed = s.calendar.findIndex((c, i) => c.wd === 'qua' && restDays(s, i) === 4);
+    expect(sun).toBeGreaterThanOrEqual(0);
+    expect(wed).toBeGreaterThanOrEqual(0);
+    const gain = (date: number) => {
+      s.meta.date = date;
+      const p = Object.values(s.players).find((x) => x.clubId != null && x.injury === 0)!;
+      p.fitness = 50;
+      dailyPlayers(s, Rng.fromSeed('rest'), new Set());
+      return p.fitness - 50;
+    };
+    expect(gain(sun)).toBeLessThan(gain(wed));
+    // a week off (the break after the state championships) brings much more back
+    const brk = s.calendar.findIndex((_, i) => restDays(s, i) >= 7);
+    expect(gain(brk)).toBeGreaterThan(gain(wed) * 1.5);
+  });
+
+  it('rich AI clubs raise their core players to what they are worth', () => {
+    const s = world();
+    const club = Object.values(s.clubs).find((c) => c.league === 'ENG1')!;
+    club.balance = 50 * roughIncome(club);
+    const core = squadOf(s, club.id).sort((a, b) => b.str - a.str).slice(0, 6);
+    for (const p of core) p.wage = 1000;
+    aiPayRises(s, squadIndex(s), s.meta.season + 1);
+    for (const p of core) expect(p.wage).toBeGreaterThan(1000);
+    // a club without money in the bank does not
+    const poor = Object.values(s.clubs).find((c) => c.league === 'BRA3')!;
+    poor.balance = 0;
+    const p0 = squadOf(s, poor.id).sort((a, b) => b.str - a.str)[0];
+    p0.wage = 1000;
+    aiPayRises(s, squadIndex(s), s.meta.season + 1);
+    expect(p0.wage).toBe(1000);
+  });
+
+  it('rich AI clubs sign players who walk into their first team', () => {
+    const s = world();
+    const rng = new Rng(s.meta.rng);
+    const rich = Object.values(s.clubs).filter((c) => c.league === 'ENG1').sort((a, b) => b.power - a.power).slice(0, 6);
+    for (const c of rich) c.balance = 40 * roughIncome(c);
+    const before = new Map(rich.map((c) => [c.id, new Set(squadOf(s, c.id).map((p) => p.id))]));
+    const weakest = new Map(rich.map((c) => [c.id, Math.min(...autoLineup(squadOf(s, c.id), c.tactics, null).xi.map((id) => s.players[id!].str))]));
+    for (let d = 0; d < 20 && s.calendar[d]?.window; d++) {
+      s.meta.date = d;
+      aiTransfers(s, rng);
+    }
+    const signed = rich.flatMap((c) => squadOf(s, c.id).filter((p) => !before.get(c.id)!.has(p.id) && p.str > weakest.get(c.id)! + 1));
+    expect(signed.length).toBeGreaterThan(0);
+  });
+});
+
+describe('half-time team talk', () => {
+  it('fits the moment: praise a side doing well, demand more from an underperforming favourite, encourage an underdog', () => {
+    // winning without playing poorly
+    expect(talkFit('elogiar', 1, 0, 6.7)).toBe(1);
+    expect(talkFit('cobrar', 1, 0, 6.7)).toBe(-1);
+    // a favourite level at the break
+    expect(talkFit('cobrar', 0, 5, 6.6)).toBe(1);
+    expect(talkFit('elogiar', 0, 5, 6.6)).toBe(-1);
+    // behind against a stronger side
+    expect(talkFit('incentivar', -1, -4, 6.5)).toBe(1);
+    expect(talkFit('cobrar', -1, -4, 6.5)).toBe(-1);
+    // a poor half without the lead: demand more, not praise
+    expect(talkFit('cobrar', 0, 0, 6.2)).toBe(1);
+    expect(talkFit('elogiar', 0, 0, 6.2)).toBe(-1);
+  });
+
+  it('is given once, at half-time, and changes the side for the second half', () => {
+    const sim = new MatchSim(synthSetup(72, 72, 41));
+    expect(sim.teamTalk(0, 'incentivar')).not.toBeNull();
+    while (sim.half === 1) sim.step(20);
+    const before = sim.sides[0].ratings.mid;
+    expect(sim.teamTalk(0, 'elogiar')).toBeNull();
+    expect(sim.teamTalk(0, 'cobrar')).not.toBeNull();
+    const fx = sim.sides[0].talkFx;
+    expect([TALK_TUNE.good, 1, TALK_TUNE.bad]).toContain(fx);
+    expect(sim.sides[0].ratings.mid).toBeCloseTo(before * fx, 5);
+    expect(sim.events.some((e) => e.kind === 'tactic' && e.text.startsWith('Preleção'))).toBe(true);
+  });
+
+  it('a live match with a human stops for the half-time break, which the talks end', () => {
+    const m = new LiveMatch(synthSetup(72, 72, 43), [true, false]);
+    let guard = 0;
+    while (!m.paused && !m.ended && guard++ < 20000) m.tick(200, 60);
+    expect(m.paused).toBe(true);
+    expect(m.htBreak).toBe(true);
+    expect(m.frame().ht).toBe(true);
+    expect(m.talk(0, 'incentivar')).toBeNull();
+    expect(m.paused).toBe(false);
+    expect(m.detail().sides[0].talk).toBe('incentivar');
+    expect(validMatchAction({ a: 'talk', kind: 'cobrar' })).toEqual({ a: 'talk', kind: 'cobrar' });
+    expect(validMatchAction({ a: 'talk', kind: 'gritar' })).toBeNull();
   });
 });

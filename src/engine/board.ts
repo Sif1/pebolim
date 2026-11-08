@@ -127,7 +127,7 @@ export function boardChecks(state: GameState, rng: Rng, present: Set<string>) {
   for (const m of Object.values(state.managers)) {
     m.offers = m.offers.filter((o) => o.until > state.meta.date && state.clubs[o.clubId] && !state.clubs[o.clubId].managerId);
     if (m.clubId == null && present.has(m.id) && m.offers.length === 0 && rng.chance(0.5)) {
-      const free = Object.values(state.clubs).filter((c) => c.league && !c.managerId);
+      const free = Object.values(state.clubs).filter((c) => c.league && !c.managerId && !sackedBy(state, m, c.id));
       const near = free.filter((c) => c.rep <= m.rep + 8);
       const cands = near.length >= 3 ? near : [...free].sort((a, b) => a.rep - b.rep).slice(0, 12);
       if (cands.length) {
@@ -150,6 +150,7 @@ const GOAL_TEXT: Record<string, string> = {
   meio: 'uma temporada tranquila no meio da tabela',
   rebaixamento: 'escapar do rebaixamento',
   acesso: 'conseguir o acesso',
+  digno: 'uma campanha digna, longe da lanterna',
 };
 
 /** Highest league position that meets the season's objective. */
@@ -157,6 +158,7 @@ export function goalPosition(goal: string, n: number): number {
   if (goal === 'titulo') return 1;
   if (goal === 'continental') return Math.round(n * 0.3);
   if (goal === 'acesso') return 4;
+  if (goal === 'digno') return n - 2;
   return n - 4;
 }
 
@@ -250,8 +252,13 @@ function settleUltimatum(state: GameState, c: Club, m: Manager): boolean {
   return true;
 }
 
+/** A club that sacked this manager this season or the last does not call him back. */
+export function sackedBy(state: GameState, m: Manager, clubId: number): boolean {
+  return m.history.some((h) => h.clubId === clubId && h.season >= state.meta.season - 1 && h.note.startsWith('Demitido'));
+}
+
 function giveOffer(state: GameState, m: Manager, c: Club) {
-  if (m.offers.some((o) => o.clubId === c.id)) return;
+  if (m.offers.some((o) => o.clubId === c.id) || sackedBy(state, m, c.id)) return;
   m.offers.push({ clubId: c.id, until: Math.min(state.calendar.length, state.meta.date + OFFER_DATES) });
   addNews(state, 'offer', `Proposta de emprego: o ${c.name} quer contratar você.`, [c.id], m.id);
 }

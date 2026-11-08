@@ -458,6 +458,9 @@ export class HostSession {
         if (m.inShootout) return;
         m.sim.setTactics(s, action.tactics);
         break;
+      case 'talk':
+        err = m.inShootout ? null : m.talk(s, action.kind);
+        break;
       case 'pkOrder':
         err = m.pkOrder(s, action.order);
         break;

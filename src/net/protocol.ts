@@ -1,6 +1,7 @@
 import type { Patch } from 'immer';
 import type { Command, CustomClubSpec } from '../engine/commands';
 import type { LiveDetail, LiveFrame } from '../engine/match/live';
+import type { TeamTalk } from '../engine/match/core';
 import type { Tactics } from '../engine/types';
 
 export type SessionPhase = 'lobby' | 'manage' | 'matchday';
@@ -17,6 +18,8 @@ export type MatchAction =
   | { a: 'sub'; out: number; in: number }
   | { a: 'swap'; s1: number; s2: number }
   | { a: 'tactics'; tactics: Tactics }
+  /** the half-time team talk */
+  | { a: 'talk'; kind: TeamTalk }
   | { a: 'quick' }
   /** penalty shootout: your takers in order, then where you shoot or dive (0 left, 1 middle, 2 right) */
   | { a: 'pkOrder'; order: number[] }

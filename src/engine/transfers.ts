@@ -1,5 +1,6 @@
-import { squadStrength } from './ai/lineup';
-import { DATES_PER_SEASON, homeGameCounts, wageBudget } from './economy';
+import { autoLineup, squadStrength } from './ai/lineup';
+import { DATES_PER_SEASON, homeGameCounts, roughIncome, wageBudget } from './economy';
+import { slotsFor } from './match/formations';
 import { assignNumbers, SQUAD_SHAPE } from './generator';
 import type { Rng } from './rng';
 import type { AuctionResult, Bid, Club, GameState, Player, Pos } from './types';
@@ -361,6 +362,7 @@ export function aiTransfers(state: GameState, rng: Rng) {
     moved.add(pick.id);
     moves++;
   }
+  richSignings(state, rng, view, pool, moved, closing);
   aiListings(state, rng, view, eve);
   // bids for the humans' players only while they can still answer them (the window is open next round)
   if (windowOpenAt(state, state.meta.date + 1)) aiBidsForHumans(state, rng, idx, eve);
@@ -387,6 +389,55 @@ export function aiTransfers(state: GameState, rng: Rng) {
     );
   }
   deals = null;
+}
+
+/** An AI club with more than this many years of income in the bank is rich: it spends on its first team. */
+export const RICH_CASH = 1.2;
+
+/** Is this AI club rich enough to go after first-team players and pay over the odds? */
+export function isRich(club: Club): boolean {
+  return club.balance > RICH_CASH * roughIncome(club);
+}
+
+/**
+ * How far over the going wage a club pays its first team: 1 normally, 1.15 when rich, up to 1.45 with four years of
+ * income or more in the bank. Fees only move money between clubs; wages are where it leaves the game.
+ */
+export function richPay(club: Club): number {
+  const years = club.balance / Math.max(1, roughIncome(club));
+  return years <= RICH_CASH ? 1 : 1.15 + 0.1 * Math.min(3, years - RICH_CASH);
+}
+
+/**
+ * Rich AI clubs spend their money: with more than a year of income in the bank and room in the wage budget, a club
+ * goes after a player who walks into its first team at its weakest position (clearly better than the starter
+ * there), from a club no bigger than itself, the best one who would come, paying up to 1.6× his value out of half
+ * its cash. Most such clubs are the big European ones, which kept their leagues from fading.
+ */
+function richSignings(state: GameState, rng: Rng, view: MarketView, pool: Map<Pos, Player[]>, moved: Set<number>, closing: boolean) {
+  let done = 0;
+  const rich = view.aiClubs.filter((c) => isRich(c) && view.squad(c.id).length < 30 && view.room(c) > 0.05 * view.budget(c));
+  for (const club of rng.shuffle(rich)) {
+    if (done >= (closing ? 12 : 6)) return;
+    if (!rng.chance(closing ? 0.25 : 0.1)) continue;
+    const squad = view.squad(club.id);
+    const slots = slotsFor(club.tactics);
+    const xi = autoLineup(squad, club.tactics, null).xi;
+    let weak: { p: Player; pos: Pos } | null = null;
+    xi.forEach((id, i) => {
+      const p = id != null ? squad.find((x) => x.id === id) : undefined;
+      if (p && (!weak || p.str < weak.p.str)) weak = { p, pos: slots[i].pos };
+    });
+    const w = weak as { p: Player; pos: Pos } | null;
+    if (!w) continue;
+    const pick = shopFor(state, view, pool.get(w.pos) ?? [], club, w.p.str + 1, club.balance * 0.5, false, moved)[0];
+    if (!pick) continue;
+    const fromId = pick.clubId!;
+    executeTransfer(state, pick, club, askingPrice(state, pick), wageDemand(state, pick, club), rng.int(2, 4));
+    view.move(pick, fromId, club.id);
+    moved.add(pick.id);
+    done++;
+  }
 }
 
 /** The AI clubs' players by position, strongest first: the pool AI clubs shop from. */
@@ -513,7 +564,7 @@ function aiBidsForHumans(state: GameState, rng: Rng, idx: Map<number, Player[]>,
   for (const hc of humanClubs) {
     // the eve of deadline day: late bids, up to two per club, a little more generous
     for (let k = 0; k < (eve ? 2 : 1); k++) {
-      if (!rng.chance(eve ? 0.55 : 0.18)) continue;
+      if (!rng.chance(eve ? 0.55 : 0.24)) continue;
       const squad = (idx.get(hc.id) ?? []).filter((p) => !p.loan && !p.auction);
       if (squad.length < 17) continue;
       const taken = new Set(Object.values(state.bids).filter((b) => b.seller === hc.id && b.status === 'pendente').map((b) => b.player));
@@ -529,11 +580,15 @@ function aiBidsForHumans(state: GameState, rng: Rng, idx: Map<number, Player[]>,
           statureGap(state, target, c) <= STATURE_MAX_GAP,
       );
       if (!buyers.length) continue;
-      const buyer = rng.pick(buyers);
+      // clubs with money in the bank bid more often, and a rich one pays over the odds
+      const buyer = rng.weighted(buyers, (c) => 1 + clamp(c.balance / Math.max(1, roughIncome(c)), 0, 3));
+      const rich = isRich(buyer);
       const value = marketValue(target, state);
       // listed players get offers near the asking price when it is fair, unlisted ones a premium to tempt the manager
       const fee = roundMoney(
-        (target.salePrice != null ? Math.min(target.salePrice, value * 1.15) * rng.range(0.85, 1) : value * rng.range(0.95, 1.45)) * (eve ? rng.range(1.05, 1.2) : 1),
+        (target.salePrice != null
+          ? Math.min(target.salePrice, value * (rich ? 1.3 : 1.15)) * rng.range(0.85, 1)
+          : value * (rich ? rng.range(1.15, 1.6) : rng.range(0.95, 1.45))) * (eve ? rng.range(1.05, 1.2) : 1),
       );
       const id = state.meta.next.bid++;
       state.bids[id] = {

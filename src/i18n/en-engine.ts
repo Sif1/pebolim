@@ -104,6 +104,12 @@ export const EN_ENGINE: Record<string, string> = {
   'uma temporada tranquila no meio da tabela': 'a quiet mid-table season',
   'escapar do rebaixamento': 'survival',
   'conseguir o acesso': 'promotion',
+  'uma campanha digna, longe da lanterna': 'a respectable season, off the bottom two',
+  'O objetivo do {0} não foi cumprido, mas você chegou com a temporada em andamento: a diretoria julga o seu trabalho a partir da próxima.':
+    "{0}'s objective was missed, but you arrived with the season under way: the board will judge your work from next season.",
+  'Não há divisão nacional abaixo da {0}: o {1} continua nela e o {2} cai no lugar dele.':
+    'There is no national division below the {0}: {1} stay up and {2} go down in their place.',
+  'Não há divisão nacional abaixo da {0}: o {1} continua nela.': 'There is no national division below the {0}: {1} stay up.',
   'a diretoria está satisfeita e pede para manter o ritmo': 'the board is pleased and asks you to keep it up',
   'ainda dá, mas a diretoria quer ver o time subir na tabela': 'still possible, but the board wants to see the team climb the table',
   'a diretoria está insatisfeita e cobra resultados já': 'the board is unhappy and demands results now',

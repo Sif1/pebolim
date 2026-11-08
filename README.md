@@ -20,20 +20,22 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 - Derbies (clássicos): the famous rivalries (Fla-Flu, Gre-Nal, Boca v River, Real v Barça…) and the big clubs of each city. They are marked on the scoreboard, have their own commentary lines, fill the stadium, and count double for the fans and more for the board
 - Momentum graph (minute by minute, in the teams' kits), live stats (possession, shots, xG, clear-cut chances, passes, tackles, saves) and a rating for every player next to his energy and strength
 - Drag a substitute onto a player (or a starter onto the bench) to make a change, or drag players to new positions mid-match
+- A half-time team talk (praise, demand more or encourage) in a short break at half-time: the right one for the score, the odds and the first half lifts the side for the second half, the wrong one costs a little. AI coaches don't give one
 - Penalty shootouts you play: pick your five takers, then choose the corner for each kick and the side your keeper dives, with a pixel-art run-up and shot. Penalties during a match work the same way: pick the taker, then the corner
 - Match sounds (Web Audio, no files): whistles for cards, penalties, half-time and full time; a crowd murmur that swells with the pressure and roars at the chances; the crowd cheers a home goal and boos an away goal. Mute with the 🔊 button
 - Football's small truths: keepers barely tire, a side three goals up eases off (routs are rarer), about 3% of goals are own goals, referees book more as the match goes on and the away side a little more, and a straight red can cost one to five matches. In early cup rounds and state-championship games, an AI favourite against a much weaker side rests a few starters (the scouting report warns you): the time to cause an upset
 - Matches last 1, 2, 3, 5 or 8 real minutes; the host can change it at any time under Opções
 
 **Your club**
-- Dashboard: next match with travel cost (and the head-to-head record, marked when it's a derby), an opponent scouting report (likely shape and style, form, key players, absentees, tips), the next fixtures, your part of the league table, the board and the fans
+- Dashboard: next match with travel cost (and the head-to-head record, marked when it's a derby), an opponent scouting report (the AI coach's plan for the match, which knows only how you lined up last time, the weakest lane of their defence and the attack focus that pays against it, likely shape and style, form, key players, absentees, tips), the next fixtures, your part of the league table, the board and the fans
+- A busy calendar costs energy: players recover per day of rest, so the Wednesday match after a Sunday one finds tired legs, and the dashboard warns you when your regulars need a rest
 - A season review when the season ends: final position and objective, record, cup runs, biggest win, player of the season, top scorer, best signing, and the league's team of the season on a pitch. The manager screen keeps a trophy room and career numbers (matches, points won, goals, biggest win and heaviest defeat, derbies)
 - Squad with summary chips (best-14 strength, average age, injured, suspended, tired, expiring contracts) and a youth team (Elenco → Base): rename your juniors and follow their age, potential stars and youth-match stats; their força shows only after promotion
 - Line-ups on a drawn pitch: drag players between the field, bench and reserves, and to any of 25 positions (the role follows the area of the pitch)
 - Attack focus (through the middle, down the flanks, or wherever the play goes): about 70% of the play goes through the chosen channel, and every duel there is that part of your team against the matching part of theirs, so it pays when it suits the line-up (strong wingers and full-backs and heading strikers for the flanks; strong midfielders and strikers for the middle). The line-up screen shows how strong each channel is
 - Players have a preferred side: full-backs show as LE/LD, wide players carry an arrow, and anyone on his wrong flank plays a little worse (marked on the tactics board)
 - Every stadium has a pitch condition that wears with each home match and recovers between rounds; choose its care in the stadium screen (basic saves money, premium recovers twice as fast). A poor pitch tires both teams more and makes passing a little harder, so long balls gain a little
-- Named AI coaches (the real ones where known, see `coaches.csv`) that plan each match (favourite or underdog, home or away, knockout aggregate, what you usually play) and react live to the score, the clock, red cards and your tactics
+- Named AI coaches (the real ones where known, see `coaches.csv`) that plan each match (favourite or underdog, home or away, knockout aggregate, how you lined up last time) and react live to the score, the clock, red cards and your tactics (a review late: a change of yours goes unanswered for a while)
 - Contracts with automatic renewal (like Brasfoot's) that respects the wage budget, finances in US$, ticket prices per stadium sector and per competition, stadium expansion and training-centre works that take several rounds, travel logistics, injuries, suspensions and player development
 - Players have potential (0–5 stars: how far and how fast they grow, how slowly they decline) and traits (finalização, cabeceio, drible, passe…) that matter in the match engine
 - A young player's potential is a scout's estimate (marked ?) that can be a star off: it becomes exact after about a season at your club (faster with a better training centre), and everyone sees it from 24. A talent well above his club's level grows more slowly there, down to a third, so promising players want to move up
@@ -42,19 +44,21 @@ The game is in Portuguese (BR) or English: switch with the PT / EN buttons on th
 **The market**
 - Brasfoot-style search (position, age, força, potential, trait, nationality with flags, for sale / for loan / in auction / free / expiring, "within my budget"), sortable columns, bids between humans and the AI with expiry dates
 - Put players up for sale at your price, offer them on loan for 6 or 12 months, or auction them: sealed bids from every manager and the AI, decided at the next round, with a history of past auctions. The AI lists, loans and auctions its surplus players too, and big AI clubs sometimes put a star up for sale
-- Pre-contracts: sign a player in the last six months of his contract for free, to join when it ends
+- Pre-contracts: sign a player in the last six months of his contract for free, to join when it ends. AI clubs extend their best young players a season early, so a star rarely gets that far
 - Transfer values follow the contract: a club can ask the full value with a season and a half or more to go, falling to half as the contract runs out (wage demands don't change)
 - A "vs. squad" column (força against your best in that position) and, on the player card, a side-by-side comparison with your starter
+- Rich AI clubs spend: they sign players who walk into their first team, pay their best players more, and bid more (and more generously) for yours
 - Players have standards: a star refuses a club far below his level and asks for more from one a little below it; veterans happily go home. The player card warns you before you bid
 - Transfer deadline day: the last round of each window is busier (twice the AI deals, stars put up for sale), late bids arrive that can only be answered that round, and the news rounds up the day's deals
 
 **Board and fans**
-- A season objective from the club's standing, board confidence that moves with every result, mid-season board meetings and written warnings before a sacking
+- A season objective from the club's standing (the weakest clubs of a division with no relegation below are asked for a respectable season, off the bottom two), board confidence that moves with every result, mid-season board meetings and written warnings before a sacking
 - The last warning is an ultimatum with a clear target ("at least 6 points from the next 5 matches"), shown on the dashboard and in the notifications: meet it and the board trusts you again
-- A manager in his first season at the club, or one who won a trophy with it in the last three seasons, takes half the blame for a missed objective
+- A manager in his first season at the club, or one who won a trophy with it in the last three seasons, takes half the blame for a missed objective; one who arrived after the halfway point isn't judged on that season's objective at all
 - Fan mood that fills or empties the stadium, lifted by wins and big signings, hurt by defeats and by selling stars (and twice as much by a derby)
 - The board pays half of the training-centre works when it trusts the manager (a quarter when it's unsure)
-- Sacked managers stay in the game and keep receiving job offers, mostly from the country they last worked in
+- Sacked managers stay in the game and keep receiving job offers, mostly from the country they last worked in (never from the club that sacked them, for that season and the next)
+- Série C is the last national division: a club with a human manager that finishes in its drop zone stays in it, and the club just above goes down instead
 - AI clubs sack their coaches too, and hire someone out of work or a new name
 - A coaching ranking of every human and AI coach (Competições → Técnicos): wins and draws weighted by the competition and the league's level, titles, and the manager of the month and of the season awards; all-time and this season
 - If the squad is short at the end of a season, the board only tops it up to 18 players with free agents at the club's level and within the wage budget, else local youngsters, and always keeps two goalkeepers
@@ -135,7 +139,7 @@ If a friend can't connect (some mobile or corporate networks block direct WebRTC
 npm test
 ```
 
-Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development, the AI's contract renewals, coaches and the coaching ranking, flanks, the attack focus, pitch condition, contract values, growth at small clubs, the scouting estimate, longer careers and injuries, keepers' fatigue, routs, own goals, card bans and cup rotation; plus the translation layer.
+Engine tests: fixtures, a full season, knockouts, commands, patch replication, the save round-trip, live matches (highlights, penalties, the commentary feed), the board, the youth team, the season-end housekeeping, derbies and head-to-head records, player stature, deadline day, the season review, the training-centre share, the board's ultimatum, player development, the AI's contract renewals (and early extensions), sackings and job offers, the last national division, coaches and the coaching ranking, flanks, the attack focus, pitch condition, contract values, growth at small clubs, the scouting estimate, longer careers and injuries, keepers' fatigue, routs, own goals, card bans and cup rotation; plus the translation layer.
 
 ```bash
 npm run sim -- 2

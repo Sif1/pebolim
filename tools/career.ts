@@ -88,6 +88,8 @@ interface Track {
   /** the club and the board's objective at the start of the season */
   clubId: number | null;
   goal: string | null;
+  /** the squad's strength rank in its league at the start of the season */
+  rank: string | null;
 }
 const top14 = (c: Club) => {
   const sq = squadOf(s, c.id).sort((a, b) => b.str - a.str).slice(0, 14);
@@ -127,6 +129,7 @@ const newTrack = (m: Manager): Track => {
     invest: 0,
     clubId: c?.id ?? null,
     goal: c?.board.goal ?? null,
+    rank: c?.league ? `${byPower(c.league).findIndex((x) => x.id === c.id) + 1}ª/${byPower(c.league).length}` : null,
   };
 };
 
@@ -425,10 +428,10 @@ for (let season = 0; season < SEASONS; season++) {
     const lg0 = c0 ? Object.entries(s.prev.ranks).find(([, order]) => order.includes(c0.id)) : null;
     const sacked = h.m.history.filter((x) => x.season === year && x.note.startsWith('Demitido')).map((x) => `${s.clubs[x.clubId]?.short}: ${x.note}`);
     console.log(
-      `    início: ${c0?.name ?? '—'} · objetivo ${t.goal ?? '—'} · terminou ${lg0 ? `${lg0[0]} ${lg0[1].indexOf(c0!.id) + 1}º` : '—'}${sacked.length ? ` · ${sacked.join('; ')}` : ''}`,
+      `    início: ${c0?.name ?? '—'} · objetivo ${t.goal ?? '—'}${t.rank ? ` (força ${t.rank})` : ''} · terminou ${lg0 ? `${lg0[0]} ${lg0[1].indexOf(c0!.id) + 1}º` : '—'}${sacked.length ? ` · ${sacked.join('; ')}` : ''}`,
     );
     console.log(
-      `    diretoria mín. ${t.confMin.toFixed(0)} · fim ${c ? c.board.conf.toFixed(0) : '—'} | caixa ${mi(t.startBal)} → ${mi(c?.balance ?? 0)} mi · folha ${c ? Math.round((wages / Math.max(1, wageBudget(s, c))) * 100) : 0}% do orçamento | força top14 ${t.startStr.toFixed(1)} → ${c ? top14(c).toFixed(1) : '—'}`,
+      `    diretoria mín. ${t.confMin.toFixed(0)} · fim ${c ? c.board.conf.toFixed(0) : '—'} | caixa ${mi(t.startBal)} → ${mi(c?.balance ?? 0)} mi · folha ${c && wageBudget(s, c) > 0 ? `${Math.round((wages / wageBudget(s, c)) * 100)}%` : '—'} do orçamento | força top14 ${t.startStr.toFixed(1)} → ${c ? top14(c).toFixed(1) : '—'}`,
     );
     console.log(
       `    ${t.matches} jogos · atenção ${(t.attention / 78).toFixed(1)}/rodada (máx ${t.attentionMax}) · energia média dos 14 ${(t.fitSum / Math.max(1, t.fitN)).toFixed(0)}% (pior rodada ${t.fitMin.toFixed(0)}%) · ${t.injuries} lesões · ${t.bids} propostas da IA (${t.sold} vendas, ${mi(t.soldFee)} mi) · ${(t.opportunities / Math.max(1, t.oppDates)).toFixed(1)} reforços acessíveis por rodada de janela · ${young.length} jovens da base (${young.map((p) => p.stars).join(',') || '—'}★) · ${t.news} notícias (${(t.news / 78).toFixed(1)}/rodada)`,

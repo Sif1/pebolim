@@ -4,13 +4,14 @@ import { dateLabel, distanceKm, formatMoney, sortTable, squadOf } from '../../en
 import { OBJECTIVE_LABEL } from '../../engine/world';
 import { command, useApp, useMe } from '../../store';
 import { fansLabel } from '../../engine/board';
-import { aiPreMatchTactics, cupRotation } from '../../engine/matchday';
+import { aiPreMatchTactics, cupRotation, scoutLanes } from '../../engine/matchday';
 import { Bar, ClubBadge, ClubName, compLabel, Empty, FormDots, PosTag, Str } from '../common';
 import { Traits } from '../PlayerModal';
 import { nextFixture } from '../Shell';
 import { headToHead, isDerby } from '../../engine/rivals';
 import { inCharge } from '../../engine/coaches';
 import { pitchLevel } from '../../engine/pitch';
+import { daysBetween } from '../../engine/development';
 import { deadlineDay } from '../../engine/transfers';
 
 export function visibleNews(state: GameState, managerId: string | null, clubId: number | null): News[] {
@@ -185,6 +186,16 @@ function NextMatch() {
   const opp = state.clubs[home ? f.away : f.home];
   const derby = isDerby(state, f.home, f.away);
   const [w, d, l, gf, ga] = headToHead(state, club.id, opp.id);
+  // a busy week: tired regulars, and how soon the match after this one comes
+  const tired = squadOf(state, club.id)
+    .filter((p) => p.injury === 0)
+    .sort((a, b) => b.str - a.str)
+    .slice(0, 14)
+    .filter((p) => p.fitness < 85).length;
+  const after = Object.values(state.fixtures)
+    .filter((x) => (x.home === club.id || x.away === club.id) && x.hg == null && x.date > f.date)
+    .sort((a, b) => a.date - b.date)[0];
+  const gap = after ? daysBetween(state, f.date, after.date) : null;
   return (
     <div className={`panel col ${derby ? 'derby' : ''}`}>
       <h3>
@@ -212,6 +223,13 @@ function NextMatch() {
           <span>{state.clubs[f.away].name}</span>
         </div>
       </div>
+      {tired >= 2 && (
+        <div className="small warn">
+          {gap != null && gap <= 4
+            ? `${tired} dos seus 14 melhores jogadores estão abaixo de 85% de energia, e o jogo seguinte é ${gap} dias depois deste: pense em poupar alguém.`
+            : `${tired} dos seus 14 melhores jogadores estão abaixo de 85% de energia: pense em poupar alguém.`}
+        </div>
+      )}
       {derby && <div className="small warn">É clássico: a vitória vale o dobro para a torcida, e a derrota dói o dobro. A diretoria também cobra mais.</div>}
       {w + d + l > 0 && (
         <div className="small muted">
@@ -319,6 +337,9 @@ const MENT: Record<string, string> = { defensiva: 'defensiva', equilibrada: 'equ
 const STY: Record<string, string> = { toque: 'toque de bola', contra: 'contra-ataque', longa: 'bola longa' };
 
 /** What the scouts say about the next opponent: likely plan, form, key players, absences and a tip. */
+/** A defence's lanes from its own point of view. */
+const LANE_TXT = ['o lado esquerdo', 'o miolo', 'o lado direito'] as const;
+
 function ScoutReport() {
   const { state, club } = useMe();
   if (!state || !club) return null;
@@ -328,9 +349,14 @@ function ScoutReport() {
   const mine = squadOf(state, club.id);
   const theirs = squadOf(state, opp.id);
   const human = opp.managerId ? state.managers[opp.managerId] : null;
-  // the AI decides its plan before kick-off from the same information: this is what it will do
+  // the AI decides its plan before kick-off from the same information: this is what it will do. It knows only how
+  // you lined up last time, so changing your plan after reading this is your edge. A human opponent: how he
+  // lined up last time (never his team sheet for this match)
   const rested = human ? [] : cupRotation(state, f, opp, theirs, club);
-  const plan = human ? opp.tactics : aiPreMatchTactics(state, f, opp, rested.length ? theirs.filter((p) => !rested.includes(p)) : theirs, club, mine, true);
+  const plan = human
+    ? (opp.shown?.tactics ?? aiPreMatchTactics(state, f, opp, theirs, club, mine, true))
+    : aiPreMatchTactics(state, f, opp, rested.length ? theirs.filter((p) => !rested.includes(p)) : theirs, club, mine, true);
+  const lanes = scoutLanes(state, f, club, mine, opp, rested.length ? theirs.filter((p) => !rested.includes(p)) : theirs, plan);
   const avail = theirs.filter((p) => p.injury === 0 && !((p.ban[f.comp] ?? 0) > 0) && !rested.includes(p));
   const key = [...avail].sort((a, b) => b.str - a.str).slice(0, 3);
   const out = [...theirs]
@@ -351,6 +377,13 @@ function ScoutReport() {
   if (rested.length) tips.push(`Deve vir com time misto e poupar ${rested.map((p) => p.name).join(', ')} (no banco): a chance de surpreender é agora.`);
   if (plan.focus === 'lados') tips.push('Ataca pelas pontas: laterais fortes (e no lado certo) e zagueiros que cabeceiam seguram.');
   if (plan.focus === 'meio') tips.push('Ataca pelo meio: volantes e zagueiros fortes fecham o caminho.');
+  {
+    const lane = LANE_TXT[lanes.weak];
+    const chan = lanes.focus === 'lados' ? 'pelas pontas' : 'pelo meio';
+    if (!lanes.focus) tips.push('A defesa deles não tem um corredor claramente mais fraco para o seu time: concentrar os ataques não compensa.');
+    else if (lanes.player) tips.push(`Defesa deles: o ponto fraco é ${lane}, com ${lanes.player.name}. Com o seu time, concentre os ataques ${chan}.`);
+    else tips.push(`Defesa deles: o ponto fraco é ${lane}. Com o seu time, concentre os ataques ${chan}.`);
+  }
   const venue = state.clubs[f.home];
   const pl = pitchLevel(venue.pitch);
   if (pl === 3) tips.push(`Gramado péssimo no ${venue.stadium}: cansa mais, e a bola longa rende um pouco mais que o toque.`);
@@ -373,7 +406,7 @@ function ScoutReport() {
             )}
           </div>
           <div className="small">
-            Provável esquema: <b>{plan.formation}</b> · {`postura ${MENT[plan.mentality]}`} · {STY[plan.style]}
+            {human && opp.shown ? 'Na última partida:' : 'Provável esquema:'} <b>{plan.formation}</b> · {`postura ${MENT[plan.mentality]}`} · {STY[plan.style]}
             {plan.marking === 'pressao' ? ' · pressão alta' : ''}
             {plan.focus === 'lados' ? ' · ataques pelas pontas' : plan.focus === 'meio' ? ' · ataques pelo meio' : ''}
           </div>

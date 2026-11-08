@@ -4,8 +4,8 @@
 // Wanted: poor < passive < AI coach < good, with clear gaps.
 import { readFileSync } from 'node:fs';
 import { autoLineup, bestFormation, isAvailable } from '../src/engine/ai/lineup';
-import { aiPlan } from '../src/engine/ai/tactics';
-import { matchRating, MAX_SUBS, MatchSim, type MatchSetup, type TeamSetup } from '../src/engine/match/core';
+import { AI_COACH, aiPlan } from '../src/engine/ai/tactics';
+import { matchRating, MAX_SUBS, MatchSim, talkFit, type MatchSetup, type TeamSetup } from '../src/engine/match/core';
 import { FORMATIONS, slotsFor } from '../src/engine/match/formations';
 import { effective } from '../src/engine/match/ratings';
 import { aiPreMatchTactics, HOME_ADV } from '../src/engine/matchday';
@@ -15,6 +15,7 @@ import { age, squadOf } from '../src/engine/util';
 import { createWorld } from '../src/engine/world';
 
 const N = Number(process.argv[2] ?? 2000);
+let TALKS = true;
 // experiments: npx tsx tools/skill.ts 2000 '{"drain":0.2}'
 import { STYLE_TUNE } from '../src/engine/match/core';
 import { FATIGUE } from '../src/engine/match/ratings';
@@ -22,6 +23,12 @@ import { FATIGUE } from '../src/engine/match/ratings';
   const cfg = JSON.parse(process.argv[3] ?? '{}');
   if (cfg.steep != null) FATIGUE.steep = cfg.steep;
   delete cfg.steep;
+  // "talks": false = the good manager gives no half-time team talk
+  if (cfg.talks != null) TALKS = cfg.talks;
+  delete cfg.talks;
+  // "lag": false = the AI coach answers the other bench's changes at once (as before 0.12)
+  if (cfg.lag != null) AI_COACH.rules.lag = cfg.lag;
+  delete cfg.lag;
   Object.assign(STYLE_TUNE, cfg);
 }
 const db = JSON.parse(readFileSync('public/db/base.json', 'utf8'));
@@ -100,12 +107,13 @@ function tiredSubs(sim: MatchSim, side: 0 | 1, limit: number, max = MAX_SUBS) {
 }
 
 const scout = (c: Ctx): Tactics => {
-  // read the opponent's plan, then plan against it
+  // read the opponent's plan in the scouting report, then plan against it (the AI only knows how you lined up
+  // last time, so it cannot answer)
   const oppPlan = aiPreMatchTactics(state, c.f, c.opp, c.oppSquad, c.club, c.squad, true);
-  const saved = c.opp.tactics;
-  c.opp.tactics = oppPlan;
+  const saved = c.opp.shown;
+  c.opp.shown = { tactics: oppPlan, xi: autoLineup(c.oppSquad, oppPlan, c.f.comp).xi };
   const t = aiPreMatchTactics(state, c.f, c.club, c.squad, c.opp, c.oppSquad, true);
-  c.opp.tactics = saved;
+  c.opp.shown = saved;
   return t;
 };
 const aiPre = (c: Ctx) => aiPreMatchTactics(state, c.f, c.club, c.squad, c.opp, c.oppSquad, false);
@@ -130,6 +138,15 @@ const everyMinute: Policy['live'] = (sim, side, minute) => {
  */
 const goodManager: Policy['live'] = (sim, side, minute, mem) => {
   const s = sim.sides[side];
+  // the half-time team talk that fits the moment (the rules are on the talk buttons' tips), none if none fits
+  if (TALKS && sim.half === 2 && !mem.talked) {
+    mem.talked = 1;
+    const sitHT = sim.situation(side, 45);
+    const best = (['elogiar', 'cobrar', 'incentivar'] as const)
+      .map((k) => ({ k, fit: talkFit(k, sitHT.diff, sitHT.edge, sim.sideRating(side)) }))
+      .sort((a, b) => b.fit - a.fit)[0];
+    if (best.fit > 0) sim.teamTalk(side, best.k);
+  }
   const sit = sim.situation(side, minute);
   const state = Math.sign(sit.diff) * 10 + sit.men;
   const reds = sim.stats[0].red + sim.stats[1].red;
@@ -141,6 +158,7 @@ const goodManager: Policy['live'] = (sim, side, minute, mem) => {
   const pauses = mem.pauses ?? 0;
   if (!halfTime && !((event || scheduled) && pauses < 3 && minute >= 10)) return;
   if (!halfTime) mem.pauses = pauses + 1;
+
   (sim as unknown as { aiReorganise(s: 0 | 1): void }).aiReorganise(side);
   const plan = aiPlan(sim.situation(side, minute));
   const t = s.tactics;
@@ -182,6 +200,7 @@ const LEVERS: Policy[] = [
   { name: 'AI + scouting the opponent', ai: true, pre: scout },
   { name: 'AI + fresh legs from 60\'', ai: true, pre: aiPre, live: freshLegs },
   { name: 'AI + re-reading every minute', ai: true, pre: aiPre, live: everyMinute },
+  { name: 'AI + scouting + re-reading every minute', ai: true, pre: scout, live: everyMinute },
 ];
 
 const POLICIES: Policy[] = EXTRA ? [{ name: 'AI coach', ai: true, pre: aiPre }, ...LEVERS] : [

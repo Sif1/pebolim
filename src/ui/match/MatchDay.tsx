@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { isDerby } from '../../engine/rivals';
 import { gateOf, usableCapacity } from '../../engine/economy';
-import { MAX_SUBS } from '../../engine/match/core';
+import { MAX_SUBS, TALK_TUNE, type TeamTalk } from '../../engine/match/core';
 import { FORMATION_LIST, shapeLabel } from '../../engine/match/formations';
 import type { LiveDetail, LiveFrame } from '../../engine/match/live';
 import type { AttackFocus, Club, Fixture, Formation, GameState, Marking, Mentality, Style, Tactics } from '../../engine/types';
@@ -267,7 +267,7 @@ function MatchView({ f, state, big, crowdNoise }: { f: Fixture; state: GameState
         </div>
         <div className="sb-clock">
           {derby && <span className="sb-derby" title="Clássico: o resultado vale o dobro para a torcida e mais para a diretoria">CLÁSSICO · </span>}
-          {fr ? (fr.ended ? 'FIM' : fr.pk ? (fr.pk.mode === 'spot' ? 'PÊNALTI' : 'PÊNALTIS') : fr.paused ? 'PAUSA' : clock(fr.t, fr.half)) : '0\''}
+          {fr ? (fr.ended ? 'FIM' : fr.pk ? (fr.pk.mode === 'spot' ? 'PÊNALTI' : 'PÊNALTIS') : fr.paused ? (fr.ht ? 'INTERVALO' : 'PAUSA') : clock(fr.t, fr.half)) : '0\''}
           {fr?.pens && ` · pên. ${fr.pens[0]}-${fr.pens[1]}`}
           {fr?.pk && !fr.pens && ` ${fr.pk.score[0]}-${fr.pk.score[1]}`}
         </div>
@@ -318,6 +318,48 @@ function MatchView({ f, state, big, crowdNoise }: { f: Fixture; state: GameState
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const TALKS: { kind: TeamTalk; label: string; tip: string }[] = [
+  {
+    kind: 'elogiar',
+    label: '👏 Elogiar',
+    tip: 'Funciona com o time vencendo sem jogar mal, ou segurando o empate contra um time mais forte. Elogio sem motivo (perdendo, favorito só empatando, primeiro tempo ruim) desliga o time.',
+  },
+  {
+    kind: 'cobrar',
+    label: '📢 Cobrar',
+    tip: 'Funciona com o favorito sem vencer, ou depois de um primeiro tempo ruim sem estar na frente. Cobrar quem está fazendo a sua parte (vencendo, jogando bem, azarão) não cai bem.',
+  },
+  {
+    kind: 'incentivar',
+    label: '💪 Incentivar',
+    tip: 'Funciona atrás no placar contra um time igual ou mais forte, ou empatando como azarão. Fora disso, não muda nada.',
+  },
+];
+
+/**
+ * The half-time team talk: three choices, explained on their tips, with the first half's average rating to judge
+ * by (6.4 or less is a poor half, 6.8 or more a good one). Once given, the feed tells how it went down.
+ */
+function TalkRow({ d, onTalk }: { d: LiveDetail['sides'][number]; onTalk: (k: TeamTalk) => void }) {
+  const on = d.onPitch.filter((x): x is number => x != null && d.rt[x] != null);
+  const avg = on.length ? on.reduce((a, id) => a + d.rt[id] / 10, 0) / on.length : 6;
+  if (d.talk) {
+    return <div className="small muted">Preleção do intervalo: {TALKS.find((t) => t.kind === d.talk)?.label}</div>;
+  }
+  return (
+    <div className="row talk-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+      <span className="small">
+        Preleção (nota média no 1º tempo <b>{avg.toFixed(1)}</b>):
+      </span>
+      {TALKS.map((t) => (
+        <button key={t.kind} className="btn small" title={t.tip} onClick={() => onTalk(t.kind)}>
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -652,8 +694,8 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
     <div className="panel col match-control">
       <div className="row">
         {fr.paused ? (
-          <button className="btn primary" data-shortcut="space" title="Atalho: Espaço" disabled={!pausedByMe || ended} onClick={() => act({ a: 'resume' })}>
-            ▶ Retomar
+          <button className="btn primary" data-shortcut="space" title="Atalho: Espaço" disabled={!(pausedByMe || fr.ht) || ended} onClick={() => act({ a: 'resume' })}>
+            {fr.ht ? '▶ Segundo tempo' : '▶ Retomar'}
           </button>
         ) : (
           <button className="btn" data-shortcut="space" title="Atalho: Espaço" disabled={ended || d.pauses >= 3} onClick={() => act({ a: 'pause' })}>
@@ -674,7 +716,9 @@ function MatchControl({ f, state, side }: { f: Fixture; state: GameState; side: 
           Subst. {d.subs}/{MAX_SUBS}
         </span>
       </div>
-      {fr.paused && !pausedByMe && <div className="small warn">Pausado pelo adversário. Você também pode mexer no time agora.</div>}
+      {fr.paused && !pausedByMe && !fr.ht && <div className="small warn">Pausado pelo adversário. Você também pode mexer no time agora.</div>}
+      {fr.ht && <div className="small warn">Intervalo: faça a preleção e as mudanças. O segundo tempo começa sozinho em alguns segundos.</div>}
+      {!ended && fr.half === 2 && fr.t <= 2700 + TALK_TUNE.window && <TalkRow d={d} onTalk={(kind) => act({ a: 'talk', kind })} />}
       <div className="small muted">
         Arraste um reserva sobre um titular (ou um titular sobre um reserva) para substituir. Arraste uma camisa sobre outra para trocar de lugar,
         ou para um círculo vazio para mudar a posição. Vale na hora, sem precisar pausar.

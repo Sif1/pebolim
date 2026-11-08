@@ -6,8 +6,8 @@ import { seasonCoachAwards } from './awards';
 import { homeGameCounts, wageBudget } from './economy';
 import { juniorsOf, promote, release, youthSeasonEnd } from './youth';
 import { objectiveDelta, seasonReviews } from './review';
-import { statureGap, STATURE_MAX_GAP } from './transfers';
-import { foreignShareFor, startSeason } from './world';
+import { isRich, richPay, statureGap, STATURE_MAX_GAP } from './transfers';
+import { CORE_PLAYERS, foreignShareFor, startSeason } from './world';
 import { academyLevel, assignNumbers, fillerLevel, fillSquad, generatePlayer, SQUAD_SHAPE } from './generator';
 import type { Rng } from './rng';
 import type { Club, GameState, Player, Pos, SeasonHistory } from './types';
@@ -93,7 +93,10 @@ export function seasonVerdict(state: GameState, club: Club, pos: number, n: numb
   const trophy =
     !!m &&
     state.history.some((h) => h.season >= state.meta.season - 2 && h.season >= Math.floor(m.since / 100) && Object.values(h.champions).includes(club.id));
-  if ((firstSeason || trophy) && delta < 0) delta /= 2;
+  // a manager who arrived after the halfway point inherited the season: the objective is not his to answer for
+  const lateArrival = firstSeason && m!.since % 100 >= state.calendar.length / 2;
+  if (lateArrival && delta < 0) delta = 0;
+  else if ((firstSeason || trophy) && delta < 0) delta /= 2;
   club.board.conf = clamp(club.board.conf + delta, 0, 100);
   // an AI coach: his reputation follows the season, and a board this unhappy usually sacks him
   const ai = m ? null : aiCoachOf(state, club);
@@ -108,6 +111,8 @@ export function seasonVerdict(state: GameState, club: Club, pos: number, n: numb
   if (m) {
     m.rep = clamp(m.rep + delta / 6, 5, 100);
     if (club.board.conf < 20 && present.has(m.id)) fireManager(state, m, 'objetivo da temporada não cumprido');
+    else if (lateArrival && objectiveDelta(club.board.goal, pos, n) < 0 && present.has(m.id))
+      addNews(state, 'board', `O objetivo do ${club.name} não foi cumprido, mas você chegou com a temporada em andamento: a diretoria julga o seu trabalho a partir da próxima.`, [club.id], m.id);
     else if ((firstSeason || trophy) && delta < 0 && present.has(m.id))
       addNews(state, 'board', `A diretoria do ${club.name} mantém você no cargo apesar do objetivo não cumprido, mas espera muito mais na próxima temporada.`, [club.id], m.id);
   }
@@ -121,13 +126,35 @@ function promotionsAndRelegations(state: GameState, ranks: Record<string, number
     if (!order) continue;
     if (cfg.up) for (const cid of order.slice(0, cfg.up.n)) moves.push({ club: cid, to: cfg.up.comp });
     if (cfg.down) {
-      const down = order.slice(order.length - cfg.down.n);
+      let down = order.slice(order.length - cfg.down.n);
+      if (cfg.down.comp === 'POOL') {
+        // below this league there are only the estaduais: a few games a year, no career for a human manager.
+        // A club that still has one stays up, and the next club above goes down in its place.
+        const kept = down.filter((cid) => state.clubs[cid].managerId);
+        if (kept.length) {
+          const safe = order.slice(cfg.up?.n ?? 0, order.length - cfg.down.n).filter((cid) => !state.clubs[cid].managerId);
+          const instead = safe.slice(Math.max(0, safe.length - kept.length));
+          down = [...down.filter((cid) => !state.clubs[cid].managerId), ...instead];
+          kept.forEach((cid, i) => {
+            const club = state.clubs[cid];
+            const other = instead[instead.length - 1 - i] != null ? state.clubs[instead[instead.length - 1 - i]] : null;
+            addNews(
+              state,
+              'releg',
+              `Não há divisão nacional abaixo da ${cfg.short}: o ${club.name} continua nela${other ? ` e o ${other.name} cai no lugar dele` : ''}.`,
+              other ? [club.id, other.id] : [club.id],
+              club.managerId,
+            );
+          });
+        }
+      }
       for (const cid of down) moves.push({ club: cid, to: cfg.down.comp === 'POOL' ? null : cfg.down.comp });
       if (cfg.down.comp === 'POOL') {
-        // promote the best estadual-only clubs of the country into this league
+        // promote the best estadual-only clubs of the country into this league (one with a human manager first,
+        // as in older saves where such a club could drop out)
         const pool = Object.values(state.clubs)
           .filter((c) => c.country === cfg.country && !c.league && !c.contOnly)
-          .map((c) => ({ c, k: c.rep + c.power * 0.5 + rng.range(-6, 6) }))
+          .map((c) => ({ c, k: (c.managerId ? 1000 : 0) + c.rep + c.power * 0.5 + rng.range(-6, 6) }))
           .sort((a, b) => b.k - a.k)
           .slice(0, cfg.down.n);
         for (const { c } of pool) moves.push({ club: c.id, to: cfg.id });
@@ -153,9 +180,56 @@ function promotionsAndRelegations(state: GameState, ranks: Record<string, number
   }
 }
 
+/**
+ * An AI club extends a young core player a season early, as real clubs do, at a wage that keeps him: otherwise
+ * every star entering his final year could sign a pre-contract elsewhere from mid-season and leave for free.
+ */
+function earlyRenewal(
+  state: GameState,
+  p: Player,
+  next: number,
+  rng: Rng,
+  idx: Map<number, Player[]>,
+  roomOf: (c: Club) => number,
+  room: Map<number, number>,
+  homes: ReturnType<typeof homeGameCounts>,
+) {
+  const club = p.clubId != null ? state.clubs[p.clubId] : null;
+  if (!club || club.managerId || p.loan || p.pre || age(p, state.meta.season) >= 30) return;
+  const squad = idx.get(club.id) ?? [];
+  const core = squad.filter((x) => x.id !== p.id && x.str > p.str).length < CORE_PLAYERS;
+  if (!core || !rng.chance(roomOf(club) >= 0 ? 0.75 : 0.5)) return;
+  const rich = roomOf(club) > 0.15 * wageBudget(state, club, homes);
+  const wage = roundMoney(Math.max(p.wage, expectedWage(p, next, club.rep) * (rich ? rng.range(1.05, 1.2) : 1)));
+  room.set(club.id, roomOf(club) - (wage - p.wage) * 12);
+  p.contractEnd = next + rng.int(2, 3);
+  p.wage = wage;
+}
+
+/** The players a club counts as its first team: pay rises go to them. */
+export const FIRST_TEAM = 14;
+
+/**
+ * Rich AI clubs pay their first team what it is worth: at the season end, each of the best 14 whose wage lags behind
+ * the going rate × richPay (1.15 for a rich club, up to 1.45 with four years of income in the bank) gets a rise to
+ * it. Money in the bank goes on the team instead of piling up, and less of it as the pile shrinks.
+ */
+export function aiPayRises(state: GameState, idx: Map<number, Player[]>, next: number) {
+  for (const c of Object.values(state.clubs)) {
+    if (c.managerId || !(c.league || c.contOnly) || !isRich(c)) continue;
+    const k = richPay(c);
+    const first = (idx.get(c.id) ?? []).filter((p) => !p.loan && !p.junior).sort((a, b) => b.str - a.str).slice(0, FIRST_TEAM);
+    for (const p of first) {
+      const due = roundMoney(expectedWage(p, next, c.rep) * k);
+      if (p.wage < due) p.wage = due;
+    }
+  }
+}
+
 function contractsAndLoans(state: GameState, rng: Rng) {
   const next = state.meta.season + 1;
   const idx = squadIndex(state);
+  aiPayRises(state, idx, next);
   const homes = homeGameCounts(state);
   // yearly wage room per AI club: over budget, only key players get new contracts
   const room = new Map<number, number>();
@@ -185,7 +259,11 @@ function contractsAndLoans(state: GameState, rng: Rng) {
       p.idle++;
       continue;
     }
-    if (p.junior || p.contractEnd >= next) continue;
+    if (p.junior || p.contractEnd > next) continue;
+    if (p.contractEnd === next) {
+      earlyRenewal(state, p, next, rng, idx, roomOf, room, homes);
+      continue;
+    }
     if (p.pre && state.clubs[p.pre.club] && p.pre.club !== p.clubId) {
       joinOnPreContract(state, p, next);
       continue;

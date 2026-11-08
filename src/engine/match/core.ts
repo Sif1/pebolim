@@ -203,9 +203,57 @@ export interface SideState {
   /** attack and defence of the left, centre and right lanes relative to the team (1 = average) */
   lanes: { att: [number, number, number]; def: [number, number, number] };
   ai: boolean;
+  /** the half-time team talk given (humans only), and what it does to the side for the second half */
+  talk?: TeamTalk;
+  talkFx: number;
 }
 
 export const MAX_SUBS = 5;
+
+/**
+ * Half-time team talks, a human manager's call (AI coaches don't give one): praise, demand more, or encourage.
+ * The right one for the moment lifts the side for the second half, the wrong one costs a little.
+ */
+export type TeamTalk = 'elogiar' | 'cobrar' | 'incentivar';
+export const TALK_TUNE = {
+  /** the side's strength in the second half when the talk lands / backfires */
+  good: 1.04,
+  bad: 0.97,
+  /** a talk that should land doesn't, this often (players are people) */
+  miss: 0.2,
+  /** game seconds into the second half the talk can still be given (the screen runs a little behind the match) */
+  window: 600,
+};
+
+/**
+ * How a talk fits the moment (1 lands, 0 no effect, −1 backfires), from the score (own view, aggregate included),
+ * the strength edge (as the AI coach reads it: ±2 for home and away, a favourite from +3) and the first-half
+ * rating of the side's players (6.4 or less: poor, 6.8 or more: good).
+ *  - Praise works for a side that is winning without playing poorly, or an underdog holding a stronger side level;
+ *    praise that isn't earned (losing, a favourite only drawing, a poor half) switches them off.
+ *  - Demanding more works for a favourite that isn't winning, or after a poor half without the lead; it backfires
+ *    on a side that was doing its job (winning, a good half, an underdog).
+ *  - Encouragement works for a side behind against an equal or stronger opponent, or an underdog level at the
+ *    break; otherwise it changes nothing.
+ */
+export function talkFit(kind: TeamTalk, diff: number, edge: number, rating: number): -1 | 0 | 1 {
+  const fav = edge >= 3;
+  const dog = edge <= -3;
+  const poor = rating <= 6.4;
+  const good = rating >= 6.8;
+  if (kind === 'elogiar') {
+    if (diff < 0 || (fav && diff === 0) || poor) return -1;
+    if (diff > 0 || dog) return 1;
+    return 0;
+  }
+  if (kind === 'cobrar') {
+    if (diff <= 0 && (fav || poor)) return 1;
+    if (diff > 0 || dog || good) return -1;
+    return 0;
+  }
+  if ((diff < 0 && !fav) || (diff === 0 && dog)) return 1;
+  return 0;
+}
 
 /**
  * Playing styles: how often the side on the ball picks each action, and style bonuses.
@@ -319,6 +367,8 @@ interface AiMemory {
   ownReds: number;
   formationChanged: boolean;
   tiredSubAt: number;
+  /** the opponent's posture, style and pressing as this coach saw them at his previous review (kick-off: their plan) */
+  seen?: Pick<Tactics, 'mentality' | 'style' | 'marking'>;
 }
 
 const emptyStats = (): SideStats => ({
@@ -394,6 +444,9 @@ export class MatchSim {
       const xi = s.onPitch.map((id) => (id != null ? s.players.get(id)! : null));
       this.power[side] = overall(computeRatings(s.slots, xi, { ...s.tactics, mentality: 'equilibrada', marking: 'zona' }));
       this.natural[side] = naturalStyle(xi.filter((p): p is MPlayer => !!p));
+      // each coach sees how the other side lines up at kick-off
+      const o = this.sides[1 - side].tactics;
+      this.ai[side].seen = { mentality: o.mentality, style: o.style, marking: o.marking };
     }
     this.carrier = this.pickByPos(0, ['ATA', 'MEI']);
   }
@@ -434,6 +487,7 @@ export class MatchSim {
       avgEff: 60,
       lanes: { att: [1, 1, 1], def: [1, 1, 1] },
       ai: ts.ai,
+      talkFx: 1,
     };
   }
 
@@ -474,6 +528,10 @@ export class MatchSim {
     for (const s of this.sides) {
       const xi = s.onPitch.map((id) => (id != null ? s.players.get(id)! : null));
       s.ratings = computeRatings(s.slots, xi, s.tactics);
+      if (s.talkFx !== 1) {
+        const k = s.talkFx;
+        s.ratings = { gk: s.ratings.gk * k, def: s.ratings.def * k, mid: s.ratings.mid * k, att: s.ratings.att * k };
+      }
       s.lanes = laneStrengths(s.slots, xi);
       let sum = 0;
       let n = 0;
@@ -737,6 +795,32 @@ export class MatchSim {
     return best;
   }
 
+  /** Average match rating of a side's players on the pitch (6.0 when nobody has done anything yet). */
+  sideRating(side: 0 | 1): number {
+    const s = this.sides[side];
+    const on = s.onPitch.filter((x): x is number => x != null).map((id) => matchRating(s.players.get(id)!));
+    return on.length ? on.reduce((a, b) => a + b, 0) / on.length : 6;
+  }
+
+  /**
+   * The half-time team talk (once, in the break or the first minutes of the second half). Returns an error text,
+   * or null; the match feed tells how it went down.
+   */
+  teamTalk(side: 0 | 1, kind: TeamTalk): string | null {
+    const s = this.sides[side];
+    if (s.talk) return 'A preleção do intervalo já foi feita.';
+    if (this.ended || this.half !== 2 || this.t > HALF + TALK_TUNE.window) return 'A preleção só pode ser feita no intervalo.';
+    let fit = talkFit(kind, this.situation(side, 45).diff, strengthEdge(this.power[side], this.power[1 - side], side === 0), this.sideRating(side));
+    if (fit === 1 && this.rng.chance(TALK_TUNE.miss)) fit = 0;
+    s.talk = kind;
+    s.talkFx = fit === 1 ? TALK_TUNE.good : fit === -1 ? TALK_TUNE.bad : 1;
+    this.recalc();
+    const what = kind === 'elogiar' ? 'elogiou o time' : kind === 'cobrar' ? 'cobrou o time' : 'incentivou o time';
+    const how = fit === 1 ? 'os jogadores voltaram ligados' : fit === -1 ? 'a conversa não caiu bem' : 'sem efeito visível';
+    this.events.push({ t: this.t, kind: 'tactic', side, text: `Preleção no ${s.setup.name}: ${what}, e ${how}` });
+    return null;
+  }
+
   /** What the AI coach of `side` sees right now. */
   situation(side: 0 | 1, minute: number): Situation {
     const s = this.sides[side];
@@ -791,6 +875,11 @@ export class MatchSim {
     if (!AI_REVIEW_AT.includes(minute)) return;
 
     const sit = this.situation(side, minute);
+    // a change on the other bench takes a review to be noticed: the coach answers what he saw last time
+    const o = this.sides[1 - side].tactics;
+    const now = { mentality: o.mentality, style: o.style, marking: o.marking };
+    if (AI_COACH.rules.lag && mem.seen) sit.opp = mem.seen;
+    mem.seen = now;
     const plan = aiPlan(sit);
     let formation: Formation = s.tactics.formation;
     // late changes of shape (once per match), with a matching substitution when the bench allows it
